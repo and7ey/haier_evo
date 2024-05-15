@@ -1,0 +1,20 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "already configured"
+        },
+        "error": {
+            "cannot_connect": "cannot connect",
+            "invalid_auth": "invalid_auth",
+            "unknown": "unknown"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "password": "password",
+                    "email": "email"
+                }
+            }
+        }
+   }
+}

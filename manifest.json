@@ -1,0 +1,14 @@
+{
+  "domain": "haier_evo",
+  "name": "Haier Evo Air Conditioner",
+  "codeowners": [""],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "",
+  "homekit": {},
+  "iot_class": "cloud_polling",
+  "issue_tracker": "",
+  "requirements": ["requests"],
+  "version": "0.1.0",
+  "zeroconf": []
+}
