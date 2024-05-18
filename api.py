@@ -251,7 +251,7 @@ class HaierAC:
         elif message_type == "command_response":
             pass
         else:
-            _LOGGER.error(f"Got unknown message of type: {message_type}")
+            _LOGGER.debug(f"Got unknown message of type: {message_type}")
 
 
 
