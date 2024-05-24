@@ -89,7 +89,7 @@ class Haier_AC(ClimateEntity):
 
     def set_hvac_mode(self, hvac_mode: str) -> None:
         """Set new target hvac mode."""
-        _LOGGER.warning(f"set_hvac_mode {hvac_mode}")
+        _LOGGER.debug(f"set_hvac_mode {hvac_mode}")
         if hvac_mode == HVACMode.OFF:
             self._module.switchOff()
         else:

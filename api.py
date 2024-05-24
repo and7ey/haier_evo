@@ -115,6 +115,7 @@ class Haier:
             and "application/json" in resp.headers.get("content-type")
             and resp.json().get("data", {}).get("presentation", {}).get("layout", {}).get('scrollContainer', [])
         ):
+            _LOGGER.debug(resp.text)
             containers = resp.json().get("data", {}).get("presentation", {}).get("layout", {}).get('scrollContainer', [])
             for item in containers:
                 if item.get("contractName", "") == "deviceList":
@@ -179,7 +180,7 @@ class HaierAC:
 
 
         status_url = API_STATUS.replace("{mac}", self._id)
-        _LOGGER.debug(f"Getting initial status of device {self._id}, url: {status_url}")
+        _LOGGER.info(f"Getting initial status of device {self._id}, url: {status_url}")
         resp = requests.get(
             status_url,
             headers={"X-Auth-token": self._haier._token}
@@ -189,6 +190,7 @@ class HaierAC:
             and resp.json().get("attributes", {})
         ):
             _LOGGER.debug(f"Update device {self._id} status code: {resp.status_code}")
+            _LOGGER.debug(resp.text)
             attributes = resp.json().get("attributes", {})
             for attr in attributes:
                 if attr.get('name', '') == "0": # Температура в комнате
@@ -249,6 +251,8 @@ class HaierAC:
         if message_type == "status":
             self._handle_status_update(message_dict)
         elif message_type == "command_response":
+            pass
+        elif message_type == "info":
             pass
         else:
             _LOGGER.debug(f"Got unknown message of type: {message_type}")
