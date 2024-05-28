@@ -72,52 +72,26 @@ class Haier_AC(ClimateEntity):
     @property
     def hvac_mode(self) -> str:
         """Return hvac operation ie. heat, cool mode."""
-
         if self._module.get_status == 1:
-            # (0 - Авто, 1 - Охлаждение, 4 - Нагрев, 6 - Вентилятор, 2 - Осушение)
-            if self._module.get_mode == 0:
-                return HVACMode.AUTO
-            if self._module.get_mode == 1:
-                return HVACMode.COOL
-            if self._module.get_mode == 2:
-                return HVACMode.DRY
-            if self._module.get_mode == 4:
-                return HVACMode.HEAT
-            if self._module.get_mode == 6:
-                return HVACMode.FAN_ONLY
+            return self._module.get_mode
         return HVACMode.OFF
 
     def set_hvac_mode(self, hvac_mode: str) -> None:
         """Set new target hvac mode."""
-        _LOGGER.debug(f"set_hvac_mode {hvac_mode}")
+        _LOGGER.debug(f"Setting HVAC mode to {hvac_mode}")
         if hvac_mode == HVACMode.OFF:
             self._module.switchOff()
         else:
-            if hvac_mode == HVACMode.AUTO:
-                hvac_mode_int = 0
-            elif hvac_mode == HVACMode.COOL:
-                hvac_mode_int = 1
-            elif hvac_mode == HVACMode.DRY:
-                hvac_mode_int = 2
-            elif hvac_mode == HVACMode.HEAT:
-                hvac_mode_int = 4
-            elif hvac_mode == HVACMode.FAN_ONLY:
-                hvac_mode_int = 6
-
-            self._module.switchOn(hvac_mode_int)
+            self._module.switchOn(hvac_mode)
 
     def set_fan_mode(self, fan_mode):
-        # FAN_AUTO - 5, FAN_LOW - 3, FAN_MEDIUM - 2, FAN_HIGH - 1
-        if fan_mode == FAN_HIGH:
-            fan_mode_int = 1
-        if fan_mode == FAN_MEDIUM:
-            fan_mode_int = 2
-        if fan_mode == FAN_LOW:
-            fan_mode_int = 3
-        if fan_mode == FAN_AUTO:
-            fan_mode_int = 5
+        """Set new target fan mode."""
+        _LOGGER.debug(f"Setting fan mode to {fan_mode}")
+        self._module.setFanMode(fan_mode)
 
-        self._module.setFanMode(fan_mode_int)
+    @property
+    def fan_mode(self) -> str:
+        return self._module.get_fan_mode
 
 
     def update(self) -> None:
@@ -144,17 +118,7 @@ class Haier_AC(ClimateEntity):
     def target_temperature(self) -> float:
         return self._module.get_target_temperature
 
-    @property
-    def fan_mode(self) -> str:
-        # FAN_AUTO - 5, FAN_LOW - 3, FAN_MEDIUM - 2, FAN_HIGH - 1
-        if self._module.get_fan_mode == 1:
-            return FAN_HIGH
-        if self._module.get_fan_mode == 2:
-            return FAN_MEDIUM
-        if self._module.get_fan_mode == 3:
-            return FAN_LOW
-        if self._module.get_fan_mode == 5:
-            return FAN_AUTO
+
 
     @property
     def device_info(self):
