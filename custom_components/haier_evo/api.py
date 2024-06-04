@@ -11,10 +11,12 @@ import datetime
 from homeassistant.core import HomeAssistant
 from homeassistant import config_entries, exceptions
 from urllib.parse import urlparse, parse_qs
+from . import yaml_helper
 
 import websocket
-from websocket._exceptions import WebSocketConnectionClosedException
+from websocket._exceptions import WebSocketConnectionClosedException, WebSocketException
 from enum import Enum
+
 
 
 SST_CLOUD_API_URL = "https://api.sst-cloud.com/"
@@ -115,21 +117,24 @@ class Haier:
             and "application/json" in resp.headers.get("content-type")
             and resp.json().get("data", {}).get("presentation", {}).get("layout", {}).get('scrollContainer', [])
         ):
+            _LOGGER.debug(resp.text)
             containers = resp.json().get("data", {}).get("presentation", {}).get("layout", {}).get('scrollContainer', [])
             for item in containers:
                 if item.get("contractName", "") == "deviceList":
                     state_data = item.get("state", {})
                     state_json = json.loads(state_data)
-                    # haierevo://device?deviceId=12:34:56:78:90:68&type=AC&serialNum=AAC0M1E0000000000000&uitype=AC_BASE
-                    device_title = state_json.get('items', [{}])[0].get('title', '') # only one device is supported
-                    device_link = state_json.get('items', [{}])[0].get('action', {}).get('link', '')
-                    parsed_link = urlparse(device_link)
-                    query_params = parse_qs(parsed_link.query)
-                    device_mac = query_params.get('deviceId', [''])[0]
-                    device_mac = device_mac.replace('%3A', ':')
-                    device_serial = query_params.get('serialNum', [''])[0]
-                    _LOGGER.debug(f"Received device successfully, device title {device_title}, device mac {device_mac}, device serial {device_serial}")
-                    self.devices.append(HaierAC(device_mac, device_serial, device_title, self))
+                    devices = state_json.get('items', [{}])
+                    for d in devices:
+                        # haierevo://device?deviceId=12:34:56:78:90:68&type=AC&serialNum=AAC0M1E0000000000000&uitype=AC_BASE
+                        device_title = d.get('title', '') # only one device is supported
+                        device_link = d.get('action', {}).get('link', '')
+                        parsed_link = urlparse(device_link)
+                        query_params = parse_qs(parsed_link.query)
+                        device_mac = query_params.get('deviceId', [''])[0]
+                        device_mac = device_mac.replace('%3A', ':')
+                        device_serial = query_params.get('serialNum', [''])[0]
+                        _LOGGER.debug(f"Received device successfully, device title {device_title}, device mac {device_mac}, device serial {device_serial}")
+                        self.devices.append(HaierAC(device_mac, device_serial, device_title, self))
                     break
 
         else:
@@ -155,6 +160,9 @@ class SocketStatus(Enum):
     NOT_INITIALIZED = 3
 
 
+
+
+
 class HaierAC:
     def __init__(self, device_mac: str, device_serial: str, device_title: str, haier: Haier):
         self._haier = haier
@@ -162,9 +170,10 @@ class HaierAC:
         self._hass:HomeAssistant = haier.hass
 
         self._id = device_mac
-        self.model_name = "AC"
         self._device_name = device_title
+
         # the following values are updated below
+        self.model_name = "AC"
         self._current_temperature = 0
         self._target_temperature = 0
         self._status = None
@@ -173,11 +182,20 @@ class HaierAC:
         self._min_temperature = 7
         self._max_temperature = 35
         self._sw_version = None
+        # config values, updated below
+        self._config = None
+        self._config_current_temperature = None
+        self._config_mode = None
+        self._config_fan_mode = None
+        self._config_status = None
+        self._config_target_temperature = None
+        self._config_command_name = None
 
 
+        self._disconnect_requested = False
 
         status_url = API_STATUS.replace("{mac}", self._id)
-        _LOGGER.debug(f"Getting initial status of device {self._id}, url: {status_url}")
+        _LOGGER.info(f"Getting initial status of device {self._id}, url: {status_url}")
         resp = requests.get(
             status_url,
             headers={"X-Auth-token": self._haier._token}
@@ -187,17 +205,33 @@ class HaierAC:
             and resp.json().get("attributes", {})
         ):
             _LOGGER.debug(f"Update device {self._id} status code: {resp.status_code}")
+            _LOGGER.debug(resp.text)
+            device_info = resp.json().get("info", {})
+            device_model = device_info.get("model", "AC")
+            _LOGGER.debug(f"Device model {device_model}")
+            self.model_name = device_model
+            self._config = yaml_helper.DeviceConfig(device_model)
+
+            # read config values
+            self._config_current_temperature = self._config.get_id_by_name('current_temperature')
+            self._config_mode = self._config.get_id_by_name('mode')
+            self._config_fan_mode = self._config.get_id_by_name('fan_mode')
+            self._config_status = self._config.get_id_by_name('status')
+            self._config_target_temperature = self._config.get_id_by_name('target_temperature')
+            self._config_command_name = self._config.get_command_name()
+            _LOGGER.debug(f"The following values are used: current temp - {self._config_current_temperature}, mode - {self._config_mode}, fan speed - {self._config_fan_mode}, status - {self._config_status}, target temp - {self._config_target_temperature}")
+
             attributes = resp.json().get("attributes", {})
             for attr in attributes:
-                if attr.get('name', '') == "0": # Температура в комнате
+                if attr.get('name', '') == self._config_current_temperature: # Температура в комнате
                     self._current_temperature = int(attr.get('currentValue'))
-                if attr.get('name', '') == "5": # Режимы (0 - Авто, 1 - Охлаждение, 4 - Нагрев, 6 - Вентилятор, 2 - Осушение)
+                elif attr.get('name', '') == self._config_mode: # Режимы
                     self._mode = int(attr.get('currentValue'))
-                if attr.get('name', '') == "6": # Скорость вентилятора (0 - Авто, 1 - Охлаждение, 4 - Нагрев, 6 - Вентилятор, 2 - Осушение)
-                    self._mode = int(attr.get('currentValue'))
-                if attr.get('name', '') == "21": # Включение/выключение
+                elif attr.get('name', '') == self._config_fan_mode: # Скорость вентилятора
+                    self._fan_mode = int(attr.get('currentValue'))
+                elif attr.get('name', '') == self._config_status: # Включение/выключение
                     self._status = int(attr.get('currentValue'))
-                if attr.get('name', '') == "31": # Целевая температура
+                elif attr.get('name', '') == self._config_target_temperature: # Целевая температура
                     self._target_temperature = int(attr.get('currentValue'))
                     self._min_temperature = int(attr.get('range', {}).get('data', {}).get('minValue', 0))
                     self._max_temperature = int(attr.get('range', {}).get('data', {}).get('maxValue', 0))
@@ -248,8 +282,10 @@ class HaierAC:
             self._handle_status_update(message_dict)
         elif message_type == "command_response":
             pass
+        elif message_type == "info":
+            pass
         else:
-            _LOGGER.error(f"Got unknown message of type: {message_type}")
+            _LOGGER.debug(f"Got unknown message of type: {message_type}")
 
 
 
@@ -274,17 +310,16 @@ class HaierAC:
         _LOGGER.debug(f"Received status update, message_id {message_id}")
 
         for key, value in message_statuses[0]['properties'].items():
-            if key == "0": # Температура в комнате
+            if key == self._config_current_temperature: # Температура в комнате
                 self._current_temperature = int(value)
-            if key == "5": # Режимы (0 - Авто, 1 - Охлаждение, 4 - Нагрев, 6 - Вентилятор, 2 - Осушение)
-                self._mode = int(value)
-            if key == "6": # Скорость вентилятора (0 - Авто, 1 - Охлаждение, 4 - Нагрев, 6 - Вентилятор, 2 - Осушение)
-                self._fan_mode = int(value)
-            if key == "21": # Включение/выключение
+            if key == self._config_mode: # Режимы
+                self._mode = self._config.get_value_from_mappings(self._config_mode, int(value))
+            if key == self._config_fan_mode: # Скорость вентилятора
+                self._fan_mode = self._config.get_value_from_mappings(self._config_fan_mode, int(value))
+            if key == self._config_status: # Включение/выключение
                 self._status = int(value)
-            if key == "31": # Целевая температура
+            if key == self._config_target_temperature: # Целевая температура
                 self._target_temperature = int(value)
-
 
 
     def _on_open(self, ws: websocket.WebSocket) -> None:
@@ -319,7 +354,11 @@ class HaierAC:
         ]:
             self._socket_status = SocketStatus.INITIALIZING
             _LOGGER.info(f"Connecting to websocket ({API_WS_PATH})")
-            self._socket_app.run_forever()
+            try:
+                self._socket_app.run_forever()
+            except WebSocketException: # websocket._exceptions.WebSocketException: socket is already opened
+                pass
+
         else:
             _LOGGER.info(
                 f"Can not attempt socket connection because of current "
@@ -385,7 +424,6 @@ class HaierAC:
     def get_status(self) -> str:
         return self._status
 
-
     def setTemperature(self, temp) -> None:
         self._target_temperature = temp
 
@@ -393,29 +431,31 @@ class HaierAC:
             {
                 "action": "operation",
                 "macAddress": self._id,
-                "commandName": "3",
+                "commandName": self._config_command_name,
                 "commands": [
                     {
-                        "commandName": "31",
+                        "commandName": self._config_target_temperature,
                         "value": str(temp)
                     }
                 ]
             }))
 
-    def switchOn(self, hvac_mode=0) -> None:  # default hvac mode is 0 - Авто
+    def switchOn(self, hvac_mode="auto") -> None:
+        hvac_mode_haier = self._config.get_haier_code_from_mappings(self._config_mode, hvac_mode)
+
         self._send_message(json.dumps(
             {
                 "action": "operation",
                 "macAddress": self._id,
-                "commandName": "3",
+                "commandName": self._config_command_name,
                 "commands": [
                     {
-                        "commandName": "21",
+                        "commandName": self._config_status,
                         "value": "1"
                     },
                     {
-                        "commandName": "5",
-                        "value": str(hvac_mode)
+                        "commandName": self._config_mode,
+                        "value": str(hvac_mode_haier)
                     }
                 ]
             }))
@@ -427,10 +467,10 @@ class HaierAC:
             {
                 "action": "operation",
                 "macAddress": self._id,
-                "commandName": "3",
+                "commandName": self._config_command_name,
                 "commands": [
                     {
-                        "commandName": "21",
+                        "commandName": self._config_status,
                         "value": "0"
                     }
                 ]
@@ -438,17 +478,19 @@ class HaierAC:
         self._status = 0
 
     def setFanMode(self, fan_mode) -> None:
+        fan_mode_haier = self._config.get_haier_code_from_mappings(self._config_fan_mode, fan_mode)
+
         self._fan_mode = fan_mode
 
         self._send_message(json.dumps(
             {
                 "action": "operation",
                 "macAddress": self._id,
-                "commandName": "3",
+                "commandName": self._config_command_name,
                 "commands": [
                     {
-                        "commandName": "6",
-                        "value": str(fan_mode)
+                        "commandName": self._config_fan_mode,
+                        "value": str(fan_mode_haier)
                     }
                 ]
             }))
