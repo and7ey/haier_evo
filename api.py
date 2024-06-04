@@ -123,16 +123,18 @@ class Haier:
                 if item.get("contractName", "") == "deviceList":
                     state_data = item.get("state", {})
                     state_json = json.loads(state_data)
-                    # haierevo://device?deviceId=12:34:56:78:90:68&type=AC&serialNum=AAC0M1E0000000000000&uitype=AC_BASE
-                    device_title = state_json.get('items', [{}])[0].get('title', '') # only one device is supported
-                    device_link = state_json.get('items', [{}])[0].get('action', {}).get('link', '')
-                    parsed_link = urlparse(device_link)
-                    query_params = parse_qs(parsed_link.query)
-                    device_mac = query_params.get('deviceId', [''])[0]
-                    device_mac = device_mac.replace('%3A', ':')
-                    device_serial = query_params.get('serialNum', [''])[0]
-                    _LOGGER.debug(f"Received device successfully, device title {device_title}, device mac {device_mac}, device serial {device_serial}")
-                    self.devices.append(HaierAC(device_mac, device_serial, device_title, self))
+                    devices = state_json.get('items', [{}])
+                    for d in devices:
+                        # haierevo://device?deviceId=12:34:56:78:90:68&type=AC&serialNum=AAC0M1E0000000000000&uitype=AC_BASE
+                        device_title = d.get('title', '') # only one device is supported
+                        device_link = d.get('action', {}).get('link', '')
+                        parsed_link = urlparse(device_link)
+                        query_params = parse_qs(parsed_link.query)
+                        device_mac = query_params.get('deviceId', [''])[0]
+                        device_mac = device_mac.replace('%3A', ':')
+                        device_serial = query_params.get('serialNum', [''])[0]
+                        _LOGGER.debug(f"Received device successfully, device title {device_title}, device mac {device_mac}, device serial {device_serial}")
+                        self.devices.append(HaierAC(device_mac, device_serial, device_title, self))
                     break
 
         else:
