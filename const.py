@@ -1,1 +1,0 @@
-DOMAIN = "haier_evo"
