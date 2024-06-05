@@ -58,7 +58,7 @@ class Haier:
             resp = requests.post(refresh_path, data={'refreshToken': self._refreshtoken})
             _LOGGER.debug(f"Refresh ({self._email}) status code: {resp.status_code}")
 
-        _LOGGER.debug(f"{resp.json()}")
+        if resp: _LOGGER.debug(f"{resp.json()}")
 
         if (
             resp.status_code == 200
@@ -120,7 +120,9 @@ class Haier:
             _LOGGER.debug(resp.text)
             containers = resp.json().get("data", {}).get("presentation", {}).get("layout", {}).get('scrollContainer', [])
             for item in containers:
-                if item.get("contractName", "") == "deviceList":
+                component_id = item.get("trackingData", {}).get("component", {}).get("componentId", "")
+                _LOGGER.debug(component_id)
+                if item.get("contractName", "") == "deviceList" and component_id == "72a6d224-cb66-4e6d-b427-2e4609252684": # check for smart devices only
                     state_data = item.get("state", {})
                     state_json = json.loads(state_data)
                     devices = state_json.get('items', [{}])
@@ -224,7 +226,7 @@ class HaierAC:
             attributes = resp.json().get("attributes", {})
             for attr in attributes:
                 if attr.get('name', '') == self._config_current_temperature: # Температура в комнате
-                    self._current_temperature = int(attr.get('currentValue'))
+                    self._current_temperature = float(attr.get('currentValue'))
                 elif attr.get('name', '') == self._config_mode: # Режимы
                     self._mode = int(attr.get('currentValue'))
                 elif attr.get('name', '') == self._config_fan_mode: # Скорость вентилятора
@@ -232,9 +234,9 @@ class HaierAC:
                 elif attr.get('name', '') == self._config_status: # Включение/выключение
                     self._status = int(attr.get('currentValue'))
                 elif attr.get('name', '') == self._config_target_temperature: # Целевая температура
-                    self._target_temperature = int(attr.get('currentValue'))
-                    self._min_temperature = int(attr.get('range', {}).get('data', {}).get('minValue', 0))
-                    self._max_temperature = int(attr.get('range', {}).get('data', {}).get('maxValue', 0))
+                    self._target_temperature = float(attr.get('currentValue'))
+                    self._min_temperature = float(attr.get('range', {}).get('data', {}).get('minValue', 0))
+                    self._max_temperature = float(attr.get('range', {}).get('data', {}).get('maxValue', 0))
 
             settings = resp.json().get("settings", {})
             firmware = settings.get('firmware', {}).get('value', None)
@@ -311,7 +313,7 @@ class HaierAC:
 
         for key, value in message_statuses[0]['properties'].items():
             if key == self._config_current_temperature: # Температура в комнате
-                self._current_temperature = int(value)
+                self._current_temperature = float(value)
             if key == self._config_mode: # Режимы
                 self._mode = self._config.get_value_from_mappings(self._config_mode, int(value))
             if key == self._config_fan_mode: # Скорость вентилятора
@@ -319,7 +321,7 @@ class HaierAC:
             if key == self._config_status: # Включение/выключение
                 self._status = int(value)
             if key == self._config_target_temperature: # Целевая температура
-                self._target_temperature = int(value)
+                self._target_temperature = float(value)
 
 
     def _on_open(self, ws: websocket.WebSocket) -> None:
