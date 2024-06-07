@@ -10,7 +10,7 @@
 
 #### Серия Coral
 <details>
-<summary>AS20HPL1HRA</summary>
+<summary>AS20HPL1HRA, AS20HPL2HRA</summary>
 
 - Поддерживается
   - Отображение текущей температуры
