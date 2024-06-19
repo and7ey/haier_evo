@@ -4,13 +4,12 @@ import json
 import asyncio
 import logging
 import time
-import os
 import threading
 import uuid
 import datetime
 from homeassistant.core import HomeAssistant
 from homeassistant import config_entries, exceptions
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, urljoin, parse_qs
 from . import yaml_helper
 
 import websocket
@@ -41,18 +40,19 @@ class Haier:
         self._refreshtoken = None
         self._tokenexpire = None
         self._refreshexpire = None
+        self._subscription: HaierSubscription = None
 
 
 
     def login(self, refresh=False):
         if not refresh: # initial login
-            login_path = os.path.join(API_PATH, API_LOGIN)
+            login_path = urljoin(API_PATH, API_LOGIN)
             _LOGGER.debug(f"Logging in to {login_path} with email {self._email}")
 
             resp = requests.post(login_path, data={'email': self._email, 'password': self._password})
             _LOGGER.debug(f"Login ({self._email}) status code: {resp.status_code}")
         else: # token refresh
-            refresh_path = os.path.join(API_PATH, API_TOKEN_REFRESH)
+            refresh_path = urljoin(API_PATH, API_TOKEN_REFRESH)
             _LOGGER.debug(f"Refreshing token in to {refresh_path} with email {self._email}")
 
             resp = requests.post(refresh_path, data={'refreshToken': self._refreshtoken})
@@ -103,7 +103,7 @@ class Haier:
     def pull_data(self):
         self.auth()
 
-        devices_path = os.path.join(API_PATH, API_DEVICES)
+        devices_path = urljoin(API_PATH, API_DEVICES)
         _LOGGER.debug(f"Getting devices, url: {devices_path}")
         devices_headers = {
             'X-Auth-Token': self._token,
@@ -119,6 +119,7 @@ class Haier:
         ):
             _LOGGER.debug(resp.text)
             containers = resp.json().get("data", {}).get("presentation", {}).get("layout", {}).get('scrollContainer', [])
+            self._subscription = HaierSubscription(self)
             for item in containers:
                 component_id = item.get("trackingData", {}).get("component", {}).get("componentId", "")
                 _LOGGER.debug(component_id)
@@ -136,8 +137,12 @@ class Haier:
                         device_mac = device_mac.replace('%3A', ':')
                         device_serial = query_params.get('serialNum', [''])[0]
                         _LOGGER.debug(f"Received device successfully, device title {device_title}, device mac {device_mac}, device serial {device_serial}")
-                        self.devices.append(HaierAC(device_mac, device_serial, device_title, self))
+                        device = HaierAC(device_mac, device_serial, device_title, self)
+                        self._subscription.add_device(device_mac, device)
+                        self.devices.append(device)
                     break
+            if len(devices) > 0:
+                self._subscription.connect_in_thread()
 
         else:
             _LOGGER.error(
@@ -161,8 +166,102 @@ class SocketStatus(Enum):
     INITIALIZED = 2
     NOT_INITIALIZED = 3
 
+class HaierSubscription:
+
+    def __init__(self, haier: Haier):
+        self._haier: Haier = haier
+        self._devices: dict = {}
+        self._disconnect_requested = False
+        self._socket_status: SocketStatus = SocketStatus.PRE_INITIALIZATION
 
 
+    def add_device(self, mac:str, device) -> None:
+        self._devices[device._id] = device
+
+    def _init_ws(self) -> None:
+        self._socket_app = websocket.WebSocketApp(
+            urljoin(API_WS_PATH, self._haier._token),
+            on_message=self._on_message,
+            on_open=self._on_open,
+            on_ping=self._on_ping,
+            on_close=self._on_close,
+        )
+
+    def _on_message(self, ws: websocket.WebSocket, message: str) -> None:
+        _LOGGER.debug(f"Received WSS message: {message}")
+
+        message_dict: dict = json.loads(message)
+
+        # {"event":"status","macAddress":"12:34:56:78:90:12","payload":{"statuses":[{"properties":{"22":"0","23":"0","24":"0","25":"0","26":"0","27":"0","28":"0","29":"30","31":"24","10":"0","11":"0","12":"0","13":"1","14":"0","15":"0","16":"0","17":"0","18":"0","19":"0","0":"28","1":"0","2":"18","3":"1","5":"1","6":"2","7":"0","8":"0","9":"0","20":"0","21":"0"},"ts":"1715780063611"}]}}
+
+        message_device = message_dict.get("macAddress")
+
+        device = self._devices.get(message_device)
+        if device is None:
+            _LOGGER.error(f"Got a message for a device we don't know about: {message_device}")
+
+        device.on_message(message_dict)
+
+    def _on_open(self, ws: websocket.WebSocket) -> None:
+        _LOGGER.debug("Websocket opened")
+
+    def _on_ping(self, ws: websocket.WebSocket) -> None:
+        self._socket_app.sock.pong()
+
+    def _on_close(self, ws: websocket.WebSocket, close_code: int, close_message: str):
+        _LOGGER.debug(
+            f"Socket closed. Code: {close_code}, message: {close_message}"
+        )
+        self._auto_reconnect_if_needed()
+
+
+    def _auto_reconnect_if_needed(self, command: str = None):
+        self._socket_status = SocketStatus.NOT_INITIALIZED
+        if not self._disconnect_requested:
+            _LOGGER.debug(
+                f"Automatically reconnecting on unwanted closed socket. {command}"
+            )
+            self.connect_in_thread()
+        else:
+            _LOGGER.debug(
+                "Disconnect was explicitly requested, not attempting to reconnect"
+            )
+
+    def connect(self) -> None:
+        if self._socket_status not in [
+            SocketStatus.INITIALIZED,
+            SocketStatus.INITIALIZING,
+        ]:
+            self._socket_status = SocketStatus.INITIALIZING
+            _LOGGER.info(f"Connecting to websocket ({API_WS_PATH})")
+            self._init_ws()
+            try:
+                self._socket_app.run_forever()
+            except WebSocketException: # websocket._exceptions.WebSocketException: socket is already opened
+                pass
+
+        else:
+            _LOGGER.info(
+                f"Can not attempt socket connection because of current "
+                f"socket status: {self._socket_status}"
+            )
+
+    def connect_in_thread(self) -> None:
+        thread = threading.Thread(target=self.connect)
+        thread.daemon = True
+        thread.start()
+
+
+    def send_message(self, payload: str) -> None:
+        calling_method = inspect.stack()[1].function
+        _LOGGER.debug(
+            f"Sending message for command {calling_method}: "
+            f"{payload}"
+        )
+        try:
+            self._socket_app.send(payload)
+        except WebSocketConnectionClosedException:
+            self._auto_reconnect_if_needed()
 
 
 class HaierAC:
@@ -170,6 +269,7 @@ class HaierAC:
         self._haier = haier
 
         self._hass:HomeAssistant = haier.hass
+        self._subscription = haier._subscription
 
         self._id = device_mac
         self._device_name = device_title
@@ -193,8 +293,6 @@ class HaierAC:
         self._config_target_temperature = None
         self._config_command_name = None
 
-
-        self._disconnect_requested = False
 
         status_url = API_STATUS.replace("{mac}", self._id)
         _LOGGER.info(f"Getting initial status of device {self._id}, url: {status_url}")
@@ -228,9 +326,9 @@ class HaierAC:
                 if attr.get('name', '') == self._config_current_temperature: # Температура в комнате
                     self._current_temperature = float(attr.get('currentValue'))
                 elif attr.get('name', '') == self._config_mode: # Режимы
-                    self._mode = int(attr.get('currentValue'))
+                    self._mode = self._config.get_value_from_mappings(self._config_mode, int(attr.get('currentValue')))
                 elif attr.get('name', '') == self._config_fan_mode: # Скорость вентилятора
-                    self._fan_mode = int(attr.get('currentValue'))
+                    self._fan_mode = self._config.get_value_from_mappings(self._config_fan_mode, int(attr.get('currentValue')))
                 elif attr.get('name', '') == self._config_status: # Включение/выключение
                     self._status = int(attr.get('currentValue'))
                 elif attr.get('name', '') == self._config_target_temperature: # Целевая температура
@@ -244,40 +342,13 @@ class HaierAC:
 
 
 
-        self._socket_status: SocketStatus = SocketStatus.PRE_INITIALIZATION
-        self._socket_app = websocket.WebSocketApp(
-            os.path.join(API_WS_PATH, self._haier._token),
-            on_message=self._on_message,
-            on_open=self._on_open,
-            on_ping=self._on_ping,
-            on_close=self._on_close,
-        )
-
-        self.connect_in_thread()
-
-
-
     def update(self) -> None:
         self._haier.auth()
 
 
 
-    def _on_message(self, ws: websocket.WebSocket, message: str) -> None:
-        _LOGGER.debug(f"Received WSS message: {message}")
-
-        message_dict: dict = json.loads(message)
-
+    def on_message(self, message_dict: dict) -> None:
         # {"event":"status","macAddress":"12:34:56:78:90:12","payload":{"statuses":[{"properties":{"22":"0","23":"0","24":"0","25":"0","26":"0","27":"0","28":"0","29":"30","31":"24","10":"0","11":"0","12":"0","13":"1","14":"0","15":"0","16":"0","17":"0","18":"0","19":"0","0":"28","1":"0","2":"18","3":"1","5":"1","6":"2","7":"0","8":"0","9":"0","20":"0","21":"0"},"ts":"1715780063611"}]}}
-
-        message_device = message_dict.get("macAddress")
-
-        if message_device and message_device != self._id:
-            _LOGGER.error(
-                f"Got a message for a different device. Expected: "
-                f'{self._id}, got: {message_device}'
-            )
-
-            return
 
         message_type = message_dict.get("event", "")
         if message_type == "status":
@@ -323,68 +394,6 @@ class HaierAC:
             if key == self._config_target_temperature: # Целевая температура
                 self._target_temperature = float(value)
 
-
-    def _on_open(self, ws: websocket.WebSocket) -> None:
-        _LOGGER.debug("Websocket opened")
-
-    def _on_ping(self, ws: websocket.WebSocket) -> None:
-        self._socket_app.sock.pong()
-
-    def _on_close(self, ws: websocket.WebSocket, close_code: int, close_message: str):
-        _LOGGER.debug(
-            f"Socket closed. Code: {close_code}, message: {close_message}"
-        )
-        self._auto_reconnect_if_needed()
-
-
-    def _auto_reconnect_if_needed(self, command: str = None):
-        self._socket_status = SocketStatus.NOT_INITIALIZED
-        if not self._disconnect_requested:
-            _LOGGER.debug(
-                f"Automatically reconnecting on unwanted closed socket. {command}"
-            )
-            self.connect_in_thread()
-        else:
-            _LOGGER.debug(
-                "Disconnect was explicitly requested, not attempting to reconnect"
-            )
-
-    def connect(self) -> None:
-        if self._socket_status not in [
-            SocketStatus.INITIALIZED,
-            SocketStatus.INITIALIZING,
-        ]:
-            self._socket_status = SocketStatus.INITIALIZING
-            _LOGGER.info(f"Connecting to websocket ({API_WS_PATH})")
-            try:
-                self._socket_app.run_forever()
-            except WebSocketException: # websocket._exceptions.WebSocketException: socket is already opened
-                pass
-
-        else:
-            _LOGGER.info(
-                f"Can not attempt socket connection because of current "
-                f"socket status: {self._socket_status}"
-            )
-
-    def connect_in_thread(self) -> None:
-        thread = threading.Thread(target=self.connect)
-        thread.daemon = True
-        thread.start()
-
-
-    def _send_message(self, payload: str) -> None:
-        calling_method = inspect.stack()[1].function
-        _LOGGER.debug(
-            f"Sending message for command {calling_method}: "
-            f"{payload}"
-        )
-        try:
-            self._socket_app.send(payload)
-        except WebSocketConnectionClosedException:
-            self._auto_reconnect_if_needed()
-
-
     @property
     def get_device_id(self) -> str:
         return self._id
@@ -425,6 +434,9 @@ class HaierAC:
     @property
     def get_status(self) -> str:
         return self._status
+
+    def _send_message(self, message: str) -> None:
+        self._subscription.send_message(message)
 
     def setTemperature(self, temp) -> None:
         self._target_temperature = temp
