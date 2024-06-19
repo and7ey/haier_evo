@@ -179,6 +179,7 @@ class HaierSubscription:
         self._devices[device._id] = device
 
     def _init_ws(self) -> None:
+        self._haier.auth()
         self._socket_app = websocket.WebSocketApp(
             urljoin(API_WS_PATH, self._haier._token),
             on_message=self._on_message,
