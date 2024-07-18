@@ -38,7 +38,7 @@ class Haier_AC(ClimateEntity):
         self._hass1:HomeAssistant = hass
         self._attr_unique_id = f"{self._module.get_device_id}_{self._module.model_name}"
         self._attr_name = self._module.get_device_name
-        self._attr_hvac_modes = [HVACMode.AUTO, HVACMode.COOL, HVACMode.HEAT, HVACMode.FAN_ONLY, HVACMode.DRY, HVACMode.OFF]
+        self._attr_hvac_modes = [HVACMode.COOL, HVACMode.OFF]
         self._attr_supported_features = (ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TURN_OFF | ClimateEntityFeature.TURN_ON | ClimateEntityFeature.FAN_MODE) # PRESET_MODE, SWING_MODE
         self._attr_fan_modes = [FAN_AUTO, FAN_LOW, FAN_MEDIUM, FAN_HIGH]
         self._enable_turn_on_off_backwards_compatibility = False # https://developers.home-assistant.io/blog/2024/01/24/climate-climateentityfeatures-expanded/
