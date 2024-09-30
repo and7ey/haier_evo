@@ -3,6 +3,8 @@
 
 Неофициальная интеграция для работы с кондиционерами [Haier Evo](https://haieronline.ru/evo-iot/conditioners/) (RU, KZ, BY).
 
+(!) Fork https://github.com/and7ey/haier_evo, добавлена поддержка моделей HSU-07HPL203, HSU-09HPL203, HSU-12HPL203
+
 Бета-версия: может работать некорректно.
 
 ## Поддерживаемые устройства
@@ -10,7 +12,7 @@
 
 #### Серия Coral
 <details>
-<summary>AS20HPL1HRA, AS20HPL2HRA</summary>
+<summary>AS20HPL1HRA, AS20HPL2HRA, HSU-07HPL203, HSU-09HPL203, HSU-12HPL203</summary>
 
 - Поддерживается
   - Отображение текущей температуры

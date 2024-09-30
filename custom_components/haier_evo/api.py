@@ -48,7 +48,6 @@ class Haier:
         if not refresh: # initial login
             login_path = urljoin(API_PATH, API_LOGIN)
             _LOGGER.debug(f"Logging in to {login_path} with email {self._email}")
-
             resp = requests.post(login_path, data={'email': self._email, 'password': self._password})
             _LOGGER.debug(f"Login ({self._email}) status code: {resp.status_code}")
         else: # token refresh
@@ -309,6 +308,7 @@ class HaierAC:
             _LOGGER.debug(resp.text)
             device_info = resp.json().get("info", {})
             device_model = device_info.get("model", "AC")
+            device_model = device_model[:12]
             _LOGGER.debug(f"Device model {device_model}")
             self.model_name = device_model
             self._config = yaml_helper.DeviceConfig(device_model)
