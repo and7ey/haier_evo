@@ -309,6 +309,7 @@ class HaierAC:
             _LOGGER.debug(resp.text)
             device_info = resp.json().get("info", {})
             device_model = device_info.get("model", "AC")
+            device_model = device_model[:11] # ignore symbols after dash
             _LOGGER.debug(f"Device model {device_model}")
             self.model_name = device_model
             self._config = yaml_helper.DeviceConfig(device_model)
