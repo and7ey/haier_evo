@@ -309,7 +309,7 @@ class HaierAC:
             _LOGGER.debug(resp.text)
             device_info = resp.json().get("info", {})
             device_model = device_info.get("model", "AC")
-            device_model = device_model[:11].replace('-','').replace('/', '') # consider first symbols only and ignore some others
+            device_model = device_model.replace('-','').replace('/', '')[:11] # consider first symbols only and ignore some others
             _LOGGER.debug(f"Device model {device_model}")
             self.model_name = device_model
             self._config = yaml_helper.DeviceConfig(device_model)
