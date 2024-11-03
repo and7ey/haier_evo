@@ -15,8 +15,11 @@ from . import yaml_helper
 import websocket
 from websocket._exceptions import WebSocketConnectionClosedException, WebSocketException
 from enum import Enum
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from ratelimit import limits, sleep_and_retry
 
-
+CALLS = 150
+RATE_LIMIT = 60  # секунды
 
 SST_CLOUD_API_URL = "https://api.sst-cloud.com/"
 API_PATH = "https://evo.haieronline.ru"
@@ -45,21 +48,44 @@ class Haier:
 
 
 
+    @sleep_and_retry
+    @limits(calls=CALLS, period=RATE_LIMIT)
+    def make_request(self, method, url, **kwargs):
+        resp = requests.request(method, url, **kwargs)
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", "5"))
+            _LOGGER.warning(f"Rate limited. Retrying after {retry_after} seconds.")
+            time.sleep(retry_after)
+            raise requests.exceptions.HTTPError("429 Too Many Requests")
+        resp.raise_for_status()
+        return resp
+
+    @retry(
+        retry=retry_if_exception_type(requests.exceptions.HTTPError),
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=4, max=10)
+    )
     def login(self, refresh=False):
         if not refresh: # initial login
             login_path = urljoin(API_PATH, API_LOGIN)
             _LOGGER.debug(f"Logging in to {login_path} with email {self._email}")
 
-            resp = requests.post(login_path, data={'email': self._email, 'password': self._password})
+            resp = self.make_request('POST', login_path, data={'email': self._email, 'password': self._password})
             _LOGGER.debug(f"Login ({self._email}) status code: {resp.status_code}")
         else: # token refresh
             refresh_path = urljoin(API_PATH, API_TOKEN_REFRESH)
             _LOGGER.debug(f"Refreshing token in to {refresh_path} with email {self._email}")
 
-            resp = requests.post(refresh_path, data={'refreshToken': self._refreshtoken})
+            resp = self.make_request('POST', refresh_path, data={'refreshToken': self._refreshtoken})
             _LOGGER.debug(f"Refresh ({self._email}) status code: {resp.status_code}")
 
         if resp: _LOGGER.debug(f"{resp.json()}")
+
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", "5"))
+            _LOGGER.warning(f"Rate limited. Retrying after {retry_after} seconds.")
+            time.sleep(retry_after)
+            raise requests.exceptions.HTTPError("429 Too Many Requests")
 
         if (
             resp.status_code == 200
