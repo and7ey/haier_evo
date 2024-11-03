@@ -13,7 +13,10 @@ from urllib.parse import urlparse, urljoin, parse_qs
 from . import yaml_helper
 
 import websocket
+import socket
 from websocket._exceptions import WebSocketConnectionClosedException, WebSocketException
+from requests.exceptions import ConnectionError, Timeout, HTTPError
+from urllib3.exceptions import NewConnectionError
 from enum import Enum
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from ratelimit import limits, sleep_and_retry
@@ -51,14 +54,33 @@ class Haier:
     @sleep_and_retry
     @limits(calls=CALLS, period=RATE_LIMIT)
     def make_request(self, method, url, **kwargs):
-        resp = requests.request(method, url, **kwargs)
-        if resp.status_code == 429:
-            retry_after = int(resp.headers.get("Retry-After", "5"))
-            _LOGGER.warning(f"Rate limited. Retrying after {retry_after} seconds.")
-            time.sleep(retry_after)
-            raise requests.exceptions.HTTPError("429 Too Many Requests")
-        resp.raise_for_status()
-        return resp
+        try:
+            # Setting a default timeout for requests
+            kwargs.setdefault('timeout', 15)  # 10 seconds timeout
+            resp = requests.request(method, url, **kwargs)
+
+            # Handling 429 Too Many Requests with retry
+            if resp.status_code == 429:
+                retry_after = int(resp.headers.get("Retry-After", "5"))
+                _LOGGER.warning(f"Rate limited. Retrying after {retry_after} seconds.")
+                time.sleep(retry_after)
+                raise HTTPError("429 Too Many Requests")
+            
+            # Raise for other HTTP errors
+            resp.raise_for_status()
+            return resp
+
+        except (ConnectionError, NewConnectionError, socket.gaierror) as e:
+            _LOGGER.error(f"Network error occurred: {e}. Retrying...")
+            raise e  # Re-raise to allow retry mechanisms to handle this
+
+        except Timeout as e:
+            _LOGGER.error(f"Request timed out: {e}. Retrying...")
+            raise e
+
+        except HTTPError as e:
+            _LOGGER.error(f"HTTP error occurred: {e}. Retrying...")
+            raise e
 
     @retry(
         retry=retry_if_exception_type(requests.exceptions.HTTPError),
@@ -80,12 +102,6 @@ class Haier:
             _LOGGER.debug(f"Refresh ({self._email}) status code: {resp.status_code}")
 
         if resp: _LOGGER.debug(f"{resp.json()}")
-
-        if resp.status_code == 429:
-            retry_after = int(resp.headers.get("Retry-After", "5"))
-            _LOGGER.warning(f"Rate limited. Retrying after {retry_after} seconds.")
-            time.sleep(retry_after)
-            raise requests.exceptions.HTTPError("429 Too Many Requests")
 
         if (
             resp.status_code == 200
