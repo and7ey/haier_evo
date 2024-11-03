@@ -34,6 +34,7 @@ API_STATUS = "https://iot-platform.evo.haieronline.ru/mobile-backend-service/api
 API_WS_PATH = "wss://iot-platform.evo.haieronline.ru/gateway-ws-service/ws/"
 
 _LOGGER = logging.getLogger(__name__)
+_LOGGER.setLevel(logging.WARNING)
 
 class Haier:
 
@@ -137,10 +138,10 @@ class Haier:
                 # _LOGGER.debug(f"Tokens are valid")
                 pass # token is still valid
             elif self._refreshexpire and self._refreshexpire < now:
-                _LOGGER.debug(f"Token to be refreshed")
+                _LOGGER.warning(f"Token to be refreshed")
                 self.login(True)
             else:
-                _LOGGER.debug(f"Refresh token expired or empty")
+                _LOGGER.warning(f"Refresh token expired or empty")
                 self.login()
 
 
