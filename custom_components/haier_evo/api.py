@@ -41,6 +41,7 @@ class Haier:
         self._tokenexpire = None
         self._refreshexpire = None
         self._subscription: HaierSubscription = None
+        self._lock = threading.Lock()
 
 
 
@@ -85,19 +86,20 @@ class Haier:
             raise InvalidAuth()
 
     def auth(self):
-        timezone_offset = +3.0 # Moscow
-        tzinfo = datetime.timezone(datetime.timedelta(hours=timezone_offset))
-        now = datetime.datetime.now(tzinfo)
-        # _LOGGER.debug(f"Tokens statuses: now {now}, token expire {self._tokenexpire}, refresh expire {self._refreshexpire}")
-        if self._tokenexpire and self._tokenexpire > now:
-            # _LOGGER.debug(f"Tokens are valid")
-            pass # token is still valid
-        elif self._refreshexpire and self._refreshexpire < now:
-            _LOGGER.debug(f"Token to be refreshed")
-            self.refresh()
-        else:
-            _LOGGER.debug(f"Refresh token expired or empty")
-            self.login()
+        with self._lock:
+            timezone_offset = +3.0 # Moscow
+            tzinfo = datetime.timezone(datetime.timedelta(hours=timezone_offset))
+            now = datetime.datetime.now(tzinfo)
+            # _LOGGER.debug(f"Tokens statuses: now {now}, token expire {self._tokenexpire}, refresh expire {self._refreshexpire}")
+            if self._tokenexpire and self._tokenexpire > now:
+                # _LOGGER.debug(f"Tokens are valid")
+                pass # token is still valid
+            elif self._refreshexpire and self._refreshexpire < now:
+                _LOGGER.debug(f"Token to be refreshed")
+                self.refresh()
+            else:
+                _LOGGER.debug(f"Refresh token expired or empty")
+                self.login()
 
 
     def pull_data(self):
