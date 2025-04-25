@@ -13,10 +13,16 @@ from urllib.parse import urlparse, urljoin, parse_qs
 from . import yaml_helper
 
 import websocket
+import socket
 from websocket._exceptions import WebSocketConnectionClosedException, WebSocketException
+from requests.exceptions import ConnectionError, Timeout, HTTPError
+from urllib3.exceptions import NewConnectionError
 from enum import Enum
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from ratelimit import limits, sleep_and_retry
 
-
+CALLS = 150
+RATE_LIMIT = 60  # секунды
 
 SST_CLOUD_API_URL = "https://api.sst-cloud.com/"
 API_PATH = "https://evo.haieronline.ru"
@@ -28,6 +34,7 @@ API_STATUS = "https://iot-platform.evo.haieronline.ru/mobile-backend-service/api
 API_WS_PATH = "wss://iot-platform.evo.haieronline.ru/gateway-ws-service/ws/"
 
 _LOGGER = logging.getLogger(__name__)
+_LOGGER.setLevel(logging.WARNING)
 
 class Haier:
 
@@ -41,21 +48,58 @@ class Haier:
         self._tokenexpire = None
         self._refreshexpire = None
         self._subscription: HaierSubscription = None
+        self._lock = threading.Lock()
 
 
 
+    @sleep_and_retry
+    @limits(calls=CALLS, period=RATE_LIMIT)
+    def make_request(self, method, url, **kwargs):
+        try:
+            # Setting a default timeout for requests
+            kwargs.setdefault('timeout', 15)  # 10 seconds timeout
+            resp = requests.request(method, url, **kwargs)
+
+            # Handling 429 Too Many Requests with retry
+            if resp.status_code == 429:
+                retry_after = int(resp.headers.get("Retry-After", "5"))
+                _LOGGER.warning(f"Rate limited. Retrying after {retry_after} seconds.")
+                time.sleep(retry_after)
+                raise HTTPError("429 Too Many Requests")
+            
+            # Raise for other HTTP errors
+            resp.raise_for_status()
+            return resp
+
+        except (ConnectionError, NewConnectionError, socket.gaierror) as e:
+            _LOGGER.error(f"Network error occurred: {e}. Retrying...")
+            raise e  # Re-raise to allow retry mechanisms to handle this
+
+        except Timeout as e:
+            _LOGGER.error(f"Request timed out: {e}. Retrying...")
+            raise e
+
+        except HTTPError as e:
+            _LOGGER.error(f"HTTP error occurred: {e}. Retrying...")
+            raise e
+
+    @retry(
+        retry=retry_if_exception_type(requests.exceptions.HTTPError),
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=4, max=10)
+    )
     def login(self, refresh=False):
         if not refresh: # initial login
             login_path = urljoin(API_PATH, API_LOGIN)
             _LOGGER.debug(f"Logging in to {login_path} with email {self._email}")
 
-            resp = requests.post(login_path, data={'email': self._email, 'password': self._password})
+            resp = self.make_request('POST', login_path, data={'email': self._email, 'password': self._password})
             _LOGGER.debug(f"Login ({self._email}) status code: {resp.status_code}")
         else: # token refresh
             refresh_path = urljoin(API_PATH, API_TOKEN_REFRESH)
             _LOGGER.debug(f"Refreshing token in to {refresh_path} with email {self._email}")
 
-            resp = requests.post(refresh_path, data={'refreshToken': self._refreshtoken})
+            resp = self.make_request('POST', refresh_path, data={'refreshToken': self._refreshtoken})
             _LOGGER.debug(f"Refresh ({self._email}) status code: {resp.status_code}")
 
         if resp: _LOGGER.debug(f"{resp.json()}")
@@ -85,19 +129,20 @@ class Haier:
             raise InvalidAuth()
 
     def auth(self):
-        timezone_offset = +3.0 # Moscow
-        tzinfo = datetime.timezone(datetime.timedelta(hours=timezone_offset))
-        now = datetime.datetime.now(tzinfo)
-        # _LOGGER.debug(f"Tokens statuses: now {now}, token expire {self._tokenexpire}, refresh expire {self._refreshexpire}")
-        if self._tokenexpire and self._tokenexpire > now:
-            # _LOGGER.debug(f"Tokens are valid")
-            pass # token is still valid
-        elif self._refreshexpire and self._refreshexpire < now:
-            _LOGGER.debug(f"Token to be refreshed")
-            self.refresh()
-        else:
-            _LOGGER.debug(f"Refresh token expired or empty")
-            self.login()
+        with self._lock:
+            timezone_offset = +3.0 # Moscow
+            tzinfo = datetime.timezone(datetime.timedelta(hours=timezone_offset))
+            now = datetime.datetime.now(tzinfo)
+            # _LOGGER.debug(f"Tokens statuses: now {now}, token expire {self._tokenexpire}, refresh expire {self._refreshexpire}")
+            if self._tokenexpire and self._tokenexpire > now:
+                # _LOGGER.debug(f"Tokens are valid")
+                pass # token is still valid
+            elif self._refreshexpire and self._refreshexpire < now:
+                _LOGGER.warning(f"Token to be refreshed")
+                self.login(True)
+            else:
+                _LOGGER.warning(f"Refresh token expired or empty")
+                self.login()
 
 
     def pull_data(self):
