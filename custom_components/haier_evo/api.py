@@ -21,7 +21,7 @@ from enum import Enum
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from ratelimit import limits, sleep_and_retry
 
-CALLS = 150
+CALLS = 5
 RATE_LIMIT = 60  # секунды
 
 SST_CLOUD_API_URL = "https://api.sst-cloud.com/"
@@ -58,6 +58,9 @@ class Haier:
         try:
             # Setting a default timeout for requests
             kwargs.setdefault('timeout', 15)  # 10 seconds timeout
+            headers = kwargs.setdefault("headers", {})
+            headers.setdefault("User-Agent", "curl/7.81.0")
+            headers.setdefault("Accept", "*/*")
             resp = requests.request(method, url, **kwargs)
 
             # Handling 429 Too Many Requests with retry
