@@ -3,11 +3,10 @@ Config parser for Haier Evo devices.
 """
 
 import logging
-
+from os.path import dirname, exists, join
 from homeassistant.util.yaml import load_yaml
-
 import custom_components.haier_evo.devices as config_dir
-from os.path import dirname, exists, join, splitext
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,7 +28,6 @@ class DeviceConfig:
 
     def get_command_name(self):
         return self._config['command_name']
-
 
     def get_name_by_id(self, id):
         attributes = self._config['attributes']
