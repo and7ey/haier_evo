@@ -13,8 +13,6 @@ attributes:
         value: dry
       - haier: 4
         value: heat
-      - haier: 6
-        value: fan_only
   - name: fan_mode
     id: "6"
     mappings:
@@ -30,3 +28,17 @@ attributes:
     id: "21"
   - name: target_temperature
     id: "31"
+  - name: swing_mode
+    id: "8"
+    mappings:
+      - haier: 0
+        value: "off"
+      - haier: 8
+        value: "on"
+  - name: preset_mode
+    id: "26"
+    mappings:
+      - haier: 0
+        value: "none"
+      - haier: 1
+        value: "sleep"

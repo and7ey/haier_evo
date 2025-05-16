@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import logging
 import voluptuous as vol
 from typing import Any
 from homeassistant import config_entries, exceptions
 from homeassistant.core import HomeAssistant
-from .const import DOMAIN  # pylint:disable=unused-import
+from .const import DOMAIN
+from .logger import _LOGGER
 
 
-_LOGGER = logging.getLogger(__name__)
 DATA_SCHEMA = vol.Schema({"email": str, "password": str})
 
 
