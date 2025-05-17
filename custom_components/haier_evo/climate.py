@@ -19,7 +19,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 # https://developers.home-assistant.io/docs/core/entity/climate
 class HaierACEntity(ClimateEntity):
 
-    # _attr_should_poll = False
+    _attr_should_poll = False
 
     def __init__(self, device: api.HaierAC) -> None:
         self._device = device
@@ -134,4 +134,4 @@ class HaierACEntity(ClimateEntity):
         self._device.switch_off()
 
     def update(self) -> None:
-        self._device.update()
+        pass
