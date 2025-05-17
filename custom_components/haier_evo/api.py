@@ -100,6 +100,10 @@ class Haier(object):
         self._refreshexpire = None
         self._save_tokens()
 
+    def stop(self) -> None:
+        self._disconnect_requested = True
+        self._socket_app.close()
+
     @sleep_and_retry
     @limits(calls=C.CALLS, period=C.RATE_LIMIT)
     def make_request(self, method: str, url: str, **kwargs) -> requests.Response:
@@ -433,13 +437,13 @@ class HaierAC(object):
         elif message_type == "command_response":
             pass
         elif message_type == "info":
-            pass
+            self._handle_info(message_dict)
         elif message_type == "deviceStatusEvent":
             self._handle_device_status_update(message_dict)
         else:
             _LOGGER.warning(f"Got unknown message: {message_dict}")
 
-    def _set_attribute(self, key, value) -> None:
+    def _set_attribute(self, key: str, value) -> None:
         if key == self._config_current_temperature:  # Температура в комнате
             self._current_temperature = float(value)
         elif key == self._config_status:  # Включение/выключение
@@ -455,7 +459,7 @@ class HaierAC(object):
         elif key == self._config_preset_mode:
             self._preset_mode = self._config.get_value(self._config_preset_mode, int(value))
 
-    def _get_status(self):
+    def _get_status(self) -> None:
         status_url = C.API_STATUS.replace("{mac}", self.device_id)
         _LOGGER.info(f"Getting initial status of device {self.device_id}, url: {status_url}")
         resp = requests.get(status_url, headers={"X-Auth-token": self._haier.token}, timeout=C.API_TIMEOUT)
@@ -510,7 +514,6 @@ class HaierAC(object):
 
     def _handle_status_update(self, received_message: dict) -> None:
         message_statuses = received_message.get("payload", {}).get("statuses", [{}])
-        # message_id = message_statuses[0].get("ts", 0)
         _LOGGER.info(f"Received status update {self.device_id} {received_message}")
         for key, value in message_statuses[0]['properties'].items():
             self._set_attribute(key, value)
@@ -518,8 +521,11 @@ class HaierAC(object):
 
     def _handle_device_status_update(self, received_message: dict) -> None:
         _LOGGER.info(f"Received status update {self.device_id} {received_message}")
-        # status = received_message.get("payload", {}).get("status")
         self.write_ha_state()
+
+    def _handle_info(self, received_message: dict) -> None:
+        payload = received_message.get("payload", {})
+        self._sw_version = payload.get("swVersion") or self._sw_version
 
     def _send_message(self, message: str) -> None:
         self._haier.send_message(message)
@@ -567,7 +573,8 @@ class HaierAC(object):
         }))
         self._target_temperature = temp
 
-    def switch_on(self, hvac_mode="auto") -> None:
+    def switch_on(self, hvac_mode: str = None) -> None:
+        hvac_mode = hvac_mode or self._mode or "auto"
         mode_haier = self._config.get_haier_code(self._config_mode, hvac_mode)
         self._send_message(json.dumps({
             "action": "operation",
