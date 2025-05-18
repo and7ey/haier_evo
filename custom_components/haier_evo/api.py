@@ -1,5 +1,4 @@
 from __future__ import annotations
-import inspect
 import requests
 import json
 import time
@@ -10,7 +9,7 @@ from enum import Enum
 from datetime import datetime, timezone, timedelta
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from ratelimit import limits, sleep_and_retry
-from websocket import WebSocketConnectionClosedException, WebSocketException, WebSocketApp, WebSocket
+from websocket import WebSocketException, WebSocketApp, WebSocket
 from requests.exceptions import ConnectionError, Timeout, HTTPError
 from urllib.parse import urlparse, urljoin, parse_qs
 from urllib3.exceptions import NewConnectionError
@@ -328,16 +327,19 @@ class Haier(object):
         thread.daemon = True
         thread.start()
 
+    @retry(
+        retry=retry_if_exception_type(Exception),
+        stop=stop_after_attempt(2),
+        retry_error_callback=lambda _: None
+    )
     def send_message(self, payload: str) -> None:
-        calling_method = inspect.stack()[1].function
-        _LOGGER.debug(
-            f"Sending message for command {calling_method}: "
-            f"{payload}"
-        )
+        _LOGGER.debug(f"Sending message: {payload}")
         try:
             self._socket_app.send(payload)
-        except WebSocketConnectionClosedException:
+        except Exception as e:
+            _LOGGER.error(f"Failed to send message: {e}")
             self._auto_reconnect_if_needed()
+            raise e
 
 
 class HaierAC(object):
