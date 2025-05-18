@@ -49,7 +49,7 @@ class Haier(object):
         self._tokenexpire: datetime | None = None
         self._refreshtoken: str | None = None
         self._refreshexpire: datetime | None = None
-        self._socket_app = None
+        self._socket_app: WebSocketApp | None = None
         self._disconnect_requested = False
         self._socket_status: SocketStatus = SocketStatus.PRE_INITIALIZATION
 
@@ -284,6 +284,7 @@ class Haier(object):
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def _on_open(self, ws: WebSocket) -> None:
         _LOGGER.debug("Websocket opened")
+        self._socket_status = SocketStatus.INITIALIZED
 
     # noinspection PyUnusedLocal
     def _on_ping(self, ws: WebSocket) -> None:
@@ -291,7 +292,7 @@ class Haier(object):
 
     # noinspection PyUnusedLocal
     def _on_close(self, ws: WebSocket, close_code: int, close_message: str) -> None:
-        _LOGGER.debug(f"Socket closed. Code: {close_code}, message: {close_message}")
+        _LOGGER.debug(f"Websocket closed. Code: {close_code}, message: {close_message}")
         self._auto_reconnect_if_needed()
 
     def _auto_reconnect_if_needed(self, command: str = None) -> None:
@@ -309,11 +310,13 @@ class Haier(object):
         ]:
             self._socket_status = SocketStatus.INITIALIZING
             _LOGGER.debug(f"Connecting to websocket ({C.API_WS_PATH})")
-            self._init_ws()
             try:
+                self._init_ws()
                 self._socket_app.run_forever()
             except WebSocketException: # socket is already opened
                 pass
+            except Exception:
+                self._auto_reconnect_if_needed()
         else:
             _LOGGER.info(
                 f"Can not attempt socket connection because of current "
