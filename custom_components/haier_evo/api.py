@@ -361,6 +361,7 @@ class HaierAC(object):
         self._min_temperature = 7
         self._max_temperature = 35
         self._sw_version = None
+        self._available = True
         # config values, updated below
         self._config = None
         self._config_current_temperature = None
@@ -428,6 +429,15 @@ class HaierAC(object):
     @property
     def status(self) -> int:
         return self._status
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    @available.setter
+    def available(self, value: bool):
+        self._available = bool(value)
+        self.write_ha_state()
 
     def update(self) -> None:
         self._haier.auth()
@@ -522,10 +532,13 @@ class HaierAC(object):
         _LOGGER.info(f"Received status update {self.device_id} {received_message}")
         for key, value in message_statuses[0]['properties'].items():
             self._set_attribute(key, value)
+        self._available = True
         self.write_ha_state()
 
     def _handle_device_status_update(self, received_message: dict) -> None:
         _LOGGER.info(f"Received status update {self.device_id} {received_message}")
+        status = received_message.get("payload", {}).get("status")
+        self._available = False if str(status).upper() == 'OFFLINE' else True
         self.write_ha_state()
 
     def _handle_info(self, received_message: dict) -> None:
