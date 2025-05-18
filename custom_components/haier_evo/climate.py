@@ -45,7 +45,7 @@ class HaierACEntity(ClimateEntity):
     def hvac_mode(self) -> str:
         """Return hvac operation ie. heat, cool mode."""
         if self._device.status == 1:
-            return self._device.mode
+            return self._device.mode or HVACMode.OFF
         return HVACMode.OFF
 
     @property
@@ -83,6 +83,10 @@ class HaierACEntity(ClimateEntity):
     @property
     def target_temperature_step(self) -> float:
         return 1.0
+
+    @property
+    def available(self) -> bool:
+        return self._device.available
 
     @property
     def device_info(self) -> dict:

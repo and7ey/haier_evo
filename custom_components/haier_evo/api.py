@@ -1,5 +1,4 @@
 from __future__ import annotations
-import inspect
 import requests
 import json
 import time
@@ -10,7 +9,7 @@ from enum import Enum
 from datetime import datetime, timezone, timedelta
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from ratelimit import limits, sleep_and_retry
-from websocket import WebSocketConnectionClosedException, WebSocketException, WebSocketApp, WebSocket
+from websocket import WebSocketException, WebSocketApp, WebSocket
 from requests.exceptions import ConnectionError, Timeout, HTTPError
 from urllib.parse import urlparse, urljoin, parse_qs
 from urllib3.exceptions import NewConnectionError
@@ -49,7 +48,7 @@ class Haier(object):
         self._tokenexpire: datetime | None = None
         self._refreshtoken: str | None = None
         self._refreshexpire: datetime | None = None
-        self._socket_app = None
+        self._socket_app: WebSocketApp | None = None
         self._disconnect_requested = False
         self._socket_status: SocketStatus = SocketStatus.PRE_INITIALIZATION
 
@@ -284,6 +283,7 @@ class Haier(object):
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def _on_open(self, ws: WebSocket) -> None:
         _LOGGER.debug("Websocket opened")
+        self._socket_status = SocketStatus.INITIALIZED
 
     # noinspection PyUnusedLocal
     def _on_ping(self, ws: WebSocket) -> None:
@@ -291,7 +291,7 @@ class Haier(object):
 
     # noinspection PyUnusedLocal
     def _on_close(self, ws: WebSocket, close_code: int, close_message: str) -> None:
-        _LOGGER.debug(f"Socket closed. Code: {close_code}, message: {close_message}")
+        _LOGGER.debug(f"Websocket closed. Code: {close_code}, message: {close_message}")
         self._auto_reconnect_if_needed()
 
     def _auto_reconnect_if_needed(self, command: str = None) -> None:
@@ -309,11 +309,13 @@ class Haier(object):
         ]:
             self._socket_status = SocketStatus.INITIALIZING
             _LOGGER.debug(f"Connecting to websocket ({C.API_WS_PATH})")
-            self._init_ws()
             try:
+                self._init_ws()
                 self._socket_app.run_forever()
             except WebSocketException: # socket is already opened
                 pass
+            except Exception:
+                self._auto_reconnect_if_needed()
         else:
             _LOGGER.info(
                 f"Can not attempt socket connection because of current "
@@ -325,16 +327,19 @@ class Haier(object):
         thread.daemon = True
         thread.start()
 
+    @retry(
+        retry=retry_if_exception_type(Exception),
+        stop=stop_after_attempt(2),
+        retry_error_callback=lambda _: None
+    )
     def send_message(self, payload: str) -> None:
-        calling_method = inspect.stack()[1].function
-        _LOGGER.debug(
-            f"Sending message for command {calling_method}: "
-            f"{payload}"
-        )
+        _LOGGER.debug(f"Sending message: {payload}")
         try:
             self._socket_app.send(payload)
-        except WebSocketConnectionClosedException:
+        except Exception as e:
+            _LOGGER.error(f"Failed to send message: {e}")
             self._auto_reconnect_if_needed()
+            raise e
 
 
 class HaierAC(object):
@@ -356,6 +361,7 @@ class HaierAC(object):
         self._min_temperature = 7
         self._max_temperature = 35
         self._sw_version = None
+        self._available = True
         # config values, updated below
         self._config = None
         self._config_current_temperature = None
@@ -423,6 +429,15 @@ class HaierAC(object):
     @property
     def status(self) -> int:
         return self._status
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    @available.setter
+    def available(self, value: bool):
+        self._available = bool(value)
+        self.write_ha_state()
 
     def update(self) -> None:
         self._haier.auth()
@@ -517,10 +532,13 @@ class HaierAC(object):
         _LOGGER.info(f"Received status update {self.device_id} {received_message}")
         for key, value in message_statuses[0]['properties'].items():
             self._set_attribute(key, value)
+        self._available = True
         self.write_ha_state()
 
     def _handle_device_status_update(self, received_message: dict) -> None:
         _LOGGER.info(f"Received status update {self.device_id} {received_message}")
+        status = received_message.get("payload", {}).get("status")
+        self._available = False if str(status).upper() == 'OFFLINE' else True
         self.write_ha_state()
 
     def _handle_info(self, received_message: dict) -> None:
