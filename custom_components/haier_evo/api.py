@@ -16,6 +16,7 @@ from urllib3.exceptions import NewConnectionError
 from homeassistant.core import HomeAssistant
 from homeassistant import exceptions
 from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode, SWING_OFF, PRESET_NONE
+from homeassistant.components.http import HomeAssistantView
 from .logger import _LOGGER
 from . import yaml_helper
 from . import const as C # noqa
@@ -36,6 +37,18 @@ class SocketStatus(Enum):
     NOT_INITIALIZED = 3
 
 
+class HaierAPI(HomeAssistantView):
+    url = "/api/haier_evo"
+    name = "/api:haier_evo"
+    requires_auth = False
+
+    def __init__(self, haier):
+        self.haier = haier
+
+    async def get(self, request):
+        return self.json(self.haier.to_dict())
+
+
 class Haier(object):
 
     def __init__(self, hass: HomeAssistant, email: str, password: str) -> None:
@@ -51,6 +64,8 @@ class Haier(object):
         self._socket_app: WebSocketApp | None = None
         self._disconnect_requested = False
         self._socket_status: SocketStatus = SocketStatus.PRE_INITIALIZATION
+        self._pull_data = None
+        hass.http.register_view(HaierAPI(self))
 
     @property
     def token(self) -> str | None:
@@ -102,6 +117,13 @@ class Haier(object):
     def stop(self) -> None:
         self._disconnect_requested = True
         self._socket_app.close()
+
+    def to_dict(self) -> dict:
+        return {
+            "socket_status": self._socket_status,
+            "pull_data": self._pull_data,
+            "devices": [device.to_dict() for device in self.devices]
+        }
 
     @sleep_and_retry
     @limits(calls=C.CALLS, period=C.RATE_LIMIT)
@@ -217,6 +239,7 @@ class Haier(object):
         ):
             _LOGGER.debug(resp.text)
             data = resp.json().get("data", {})
+            self._pull_data = data
             containers = data.get("presentation", {}).get("layout", {}).get('scrollContainer', [])
             for item in containers:
                 component_id = item.get("trackingData", {}).get("component", {}).get("componentId", "")
@@ -227,6 +250,7 @@ class Haier(object):
                 ): # check for smart devices only
                     state_data = item.get("state", {})
                     state_json = json.loads(state_data)
+                    item['state'] = state_json
                     devices = state_json.get('items', [{}])
                     for d in devices:
                         # haierevo://device?deviceId=12:34:56:78:90:68&type=AC&serialNum=AAC0M1E0000000000000&uitype=AC_BASE
@@ -362,6 +386,7 @@ class HaierAC(object):
         self._max_temperature = 35
         self._sw_version = None
         self._available = True
+        self._status_data = None
         # config values, updated below
         self._config = None
         self._config_current_temperature = None
@@ -373,6 +398,10 @@ class HaierAC(object):
         self._config_target_temperature = None
         self._config_command_name = None
         self._get_status()
+
+    @property
+    def status_data(self):
+        return self._status_data
 
     @property
     def hass(self) -> HomeAssistant:
@@ -445,6 +474,36 @@ class HaierAC(object):
     def write_ha_state(self) -> None:
         pass
 
+    def to_dict(self) -> dict:
+        return {
+            "device_id": self.device_id,
+            "device_mac": self.device_mac,
+            "device_name": self.device_name,
+            "device_serial": self._device_serial,
+            "sw_version": self.sw_version,
+            "max_temperature": self.max_temperature,
+            "min_temperature": self.min_temperature,
+            "current_temperature": self.current_temperature,
+            "target_temperature": self.target_temperature,
+            "fan_mode": self.fan_mode,
+            "swing_mode": self.swing_mode,
+            "preset_mode": self.preset_mode,
+            "status": self.status,
+            "available": self.available,
+            "mode": self.mode,
+            "status_data": self.status_data,
+            "config": {
+                "command_name": self._config_command_name,
+                "status": self._config_status,
+                "mode": self._config_mode,
+                "current_temperature": self._config_current_temperature,
+                "target_temperature": self._config_target_temperature,
+                "fan_mode": self._config_fan_mode,
+                "swing_mode": self._config_swing_mode,
+                "preset_mode": self._config_preset_mode,
+            }
+        }
+
     def on_message(self, message_dict: dict) -> None:
         message_type = message_dict.get("event", "")
         if message_type == "status":
@@ -474,17 +533,28 @@ class HaierAC(object):
         elif key == self._config_preset_mode:
             self._preset_mode = self._config.get_value(self._config_preset_mode, int(value))
 
+    def _get_status_data(self):
+        if not self._status_data:
+            try:
+                status_url = C.API_STATUS.replace("{mac}", self.device_id)
+                _LOGGER.info(f"Getting initial status of device {self.device_id}, url: {status_url}")
+                resp = requests.get(
+                    url=status_url,
+                    headers={"X-Auth-token": self._haier.token},
+                    timeout=C.API_TIMEOUT
+                )
+                _LOGGER.info(f"Update device {self.device_id} status code: {resp.status_code}")
+                _LOGGER.debug(resp.text)
+                resp.raise_for_status()
+                self._status_data = resp.json()
+            except Exception as e:
+                _LOGGER.error(f"Failed to get status: {e}")
+                self._available = False
+        return self._status_data
+
     def _get_status(self) -> None:
-        status_url = C.API_STATUS.replace("{mac}", self.device_id)
-        _LOGGER.info(f"Getting initial status of device {self.device_id}, url: {status_url}")
-        resp = requests.get(status_url, headers={"X-Auth-token": self._haier.token}, timeout=C.API_TIMEOUT)
-        if (
-            resp.status_code == 200
-            and resp.json().get("attributes", {})
-        ):
-            _LOGGER.info(f"Update device {self.device_id} status code: {resp.status_code}")
-            _LOGGER.debug(resp.text)
-            device_info = resp.json().get("info", {})
+        if data := self._get_status_data():
+            device_info = data.get("info", {})
             device_model = device_info.get("model", "AC")
             # consider first symbols only and ignore some others
             device_model = device_model.replace('-','').replace('/', '')[:11]
@@ -510,7 +580,7 @@ class HaierAC(object):
                 f"status - {self._config_status}, "
                 f"target temp - {self._config_target_temperature}"
             )
-            attributes = resp.json().get("attributes", {})
+            attributes = data.get("attributes", {})
             for attr in attributes:
                 key = attr.get('name', '')
                 value = attr.get('currentValue')
@@ -522,7 +592,7 @@ class HaierAC(object):
                 self._swing_mode = SWING_OFF
             if self._preset_mode is None:
                 self._preset_mode = PRESET_NONE
-            settings = resp.json().get("settings", {})
+            settings = data.get("settings", {})
             firmware = settings.get('firmware', {}).get('value', None)
             self._sw_version = firmware
         self.write_ha_state()
