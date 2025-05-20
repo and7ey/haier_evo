@@ -48,6 +48,11 @@ class HaierAPI(HomeAssistantView):
     async def get(self, request):
         return self.json(self.haier.to_dict())
 
+    async def post(self, request):
+        data = await request.json()
+        self.haier.send_message(json.dumps(data))
+        return self.json({"result": "success"})
+
 
 class Haier(object):
 
