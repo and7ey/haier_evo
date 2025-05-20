@@ -14,7 +14,9 @@ PLATFORMS: list[str] = ["climate"]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     integration = await async_get_integration(hass, DOMAIN)
     _LOGGER.debug(f'Integration version: {integration.version}')
-    haier_object = api.Haier(hass, entry.data["email"], entry.data["password"])
+    username = entry.data.get("email") or ""
+    password = entry.data.get("password") or ""
+    haier_object = api.Haier(hass, username, password)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = haier_object
     await hass.async_add_executor_job(haier_object.load_tokens)
     await hass.async_add_executor_job(haier_object.pull_data)

@@ -7,8 +7,8 @@ import uuid
 import socket
 from enum import Enum
 from datetime import datetime, timezone, timedelta
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from ratelimit import limits, sleep_and_retry
+from tenacity import retry, stop_after_attempt, retry_if_exception_type, wait_fixed
+from ratelimit import sleep_and_retry
 from websocket import WebSocketException, WebSocketApp, WebSocket
 from requests.exceptions import ConnectionError, Timeout, HTTPError
 from urllib.parse import urlparse, urljoin, parse_qs
@@ -18,6 +18,7 @@ from homeassistant import exceptions
 from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode, SWING_OFF, PRESET_NONE
 from homeassistant.components.http import HomeAssistantView
 from .logger import _LOGGER
+from .limits import ResettableLimits
 from . import yaml_helper
 from . import const as C # noqa
 
@@ -25,9 +26,23 @@ from . import const as C # noqa
 class InvalidAuth(exceptions.HomeAssistantError):
     """Error to indicate we cannot connect."""
 
-
 class InvalidDevicesList(exceptions.HomeAssistantError):
     """Error to indicate we cannot connect."""
+
+class AuthError(HTTPError):
+    pass
+
+class AuthUserError(HTTPError):
+    pass
+
+class AuthValidationError(AuthError):
+    pass
+
+class AuthInternalError(AuthError):
+    pass
+
+class ManyRequestsError(HTTPError):
+    pass
 
 
 class SocketStatus(Enum):
@@ -42,7 +57,7 @@ class HaierAPI(HomeAssistantView):
     name = "/api:haier_evo"
     requires_auth = False
 
-    def __init__(self, haier):
+    def __init__(self, haier: Haier):
         self.haier = haier
 
     async def get(self, request):
@@ -54,9 +69,87 @@ class HaierAPI(HomeAssistantView):
         return self.json({"result": "success"})
 
 
+class AuthResponse(object):
+
+    def __init__(self, response: requests.Response):
+        self.response = response
+        self.json_data = response.json() or {}
+        self.data = self.json_data.get("data") or {}
+        self.error = self.json_data.get("error")
+        self.token = self.data.get("token") or {}
+
+    def __getattr__(self, item):
+        if hasattr(self.response, item):
+            return getattr(self.response, item)
+        raise AttributeError(item)
+
+    def __repr__(self) -> str:
+        return self.response.__repr__()
+
+    def raise_for_error(self) -> None:
+        if self.error and isinstance(self.error, dict):
+            validation = self.error.get("validation") or {}
+            if message := validation.get('refreshToken'):
+                # noinspection PyTypeChecker
+                raise AuthValidationError(message, response=self)
+            if message := validation.get('email'):
+                # noinspection PyTypeChecker
+                raise AuthUserError(message, response=self)
+            if message := validation.get('password'):
+                # noinspection PyTypeChecker
+                raise AuthUserError(message, response=self)
+            if message := self.error.get("message"):
+                # noinspection PyTypeChecker
+                raise AuthInternalError(message, response=self)
+            # noinspection PyTypeChecker
+            raise AuthError(str(self.error), response=self)
+        return None
+
+    @property
+    def access_token(self) -> str | None:
+        assert "accessToken" in self.token, f"Bad data: refreshToken not found"
+        value = self.token["accessToken"]
+        assert isinstance(value, str) and value, f"Bad token: {value!r}"
+        return value
+
+    @property
+    def access_expire(self) -> datetime | None:
+        assert "expire" in self.token, f"Bad data: expire not found"
+        value = self.token["expire"]
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S%z")
+
+    @property
+    def refresh_token(self) -> str | None:
+        assert "refreshToken" in self.token, f"Bad data: refreshToken not found"
+        value = self.token["refreshToken"]
+        assert isinstance(value, str) and value, f"Bad token: {value!r}"
+        return value
+
+    @property
+    def refresh_expire(self) -> datetime | None:
+        assert "refreshExpire" in self.token, f"Bad data: refreshExpire not found"
+        value = self.token["refreshExpire"]
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S%z")
+
+
 class Haier(object):
 
-    def __init__(self, hass: HomeAssistant, email: str, password: str) -> None:
+    common_limits = ResettableLimits(
+        calls=C.COMMON_LIMIT_CALLS,
+        period=C.COMMON_LIMIT_PERIOD,
+    )
+    auth_login_limits = ResettableLimits(
+        calls=C.LOGIN_LIMIT_CALLS,
+        period=C.LOGIN_LIMIT_PERIOD,
+        max=C.LOGIN_LIMIT_MAX
+    )
+    auth_refresh_limits = ResettableLimits(
+        calls=C.REFRESH_LIMIT_CALLS,
+        period=C.REFRESH_LIMIT_PERIOD,
+        max=C.REFRESH_LIMIT_MAX
+    )
+
+    def __init__(self, hass: HomeAssistant, email: str, password: str, http: bool = C.API_HTTP_ROUTE) -> None:
         self.hass: HomeAssistant = hass
         self.devices: list[HaierAC] = []
         self._email: str = email
@@ -69,8 +162,10 @@ class Haier(object):
         self._socket_app: WebSocketApp | None = None
         self._disconnect_requested = False
         self._socket_status: SocketStatus = SocketStatus.PRE_INITIALIZATION
+        self._socket_thread = None
         self._pull_data = None
-        hass.http.register_view(HaierAPI(self))
+        if http is True:
+            hass.http.register_view(HaierAPI(self))
 
     @property
     def token(self) -> str | None:
@@ -80,9 +175,18 @@ class Haier(object):
     def load_tokens(self):
         return self._load_tokens
 
+    @property
+    def socket_status(self) -> SocketStatus:
+        return self._socket_status
+
+    @socket_status.setter
+    def socket_status(self, status: SocketStatus):
+        self._socket_status = status
+        # _LOGGER.debug("socket_status: %s", status)
+
     def _load_tokens(self) -> None:
+        filename = self.hass.config.path(C.DOMAIN)
         try:
-            filename = self.hass.config.path(C.DOMAIN)
             with open(filename, "r") as f:
                 data = json.load(f)
             assert isinstance(data, dict), "Bad saved tokens file"
@@ -92,10 +196,11 @@ class Haier(object):
             self._refreshtoken = data.get("refreshtoken", None)
             refreshexpire = data.get("refreshexpire")
             self._refreshexpire = datetime.fromisoformat(refreshexpire) if refreshexpire else None
+            _LOGGER.info(f"Loaded tokens file: {filename}")
+        except FileNotFoundError:
+            _LOGGER.warning(f"No tokens file: {filename}")
         except Exception as e:
             _LOGGER.error(f"Failed to load tokens file: {e}")
-        else:
-            _LOGGER.info(f"Loaded tokens file: {filename}")
 
     def _save_tokens(self) -> None:
         try:
@@ -131,78 +236,108 @@ class Haier(object):
         }
 
     @sleep_and_retry
-    @limits(calls=C.CALLS, period=C.RATE_LIMIT)
+    @common_limits
     def make_request(self, method: str, url: str, **kwargs) -> requests.Response:
         try:
+            assert self._disconnect_requested is False, 'Service already stoped'
             # Setting a default timeout for requests
             kwargs.setdefault('timeout', C.API_TIMEOUT)
             headers = kwargs.setdefault('headers', {})
             headers.setdefault('User-Agent', "curl/7.81.0")
             headers.setdefault('Accept', "*/*")
             resp = requests.request(method, url, **kwargs)
+            _LOGGER.debug(resp.text)
             # Handling 429 Too Many Requests with retry
             if resp.status_code == 429:
-                retry_after = int(resp.headers.get("Retry-After", "5"))
-                _LOGGER.info(f"Rate limited. Retrying after {retry_after} seconds.")
-                time.sleep(retry_after)
-                raise HTTPError("429 Too Many Requests")
+                raise ManyRequestsError("429 Too Many Requests", response=resp)
             # Raise for other HTTP errors
             resp.raise_for_status()
             return resp
         except (ConnectionError, NewConnectionError, socket.gaierror) as e:
-            _LOGGER.error(f"Network error occurred: {e}. Retrying...")
+            _LOGGER.error(f"Network error occurred: {e}")
             raise e  # Re-raise to allow retry mechanisms to handle this
         except Timeout as e:
-            _LOGGER.error(f"Request timed out: {e}. Retrying...")
+            _LOGGER.error(f"Request timed out: {e}")
             raise e
         except HTTPError as e:
-            _LOGGER.error(f"HTTP error occurred: {e}. Retrying...")
+            _LOGGER.error(f"HTTP error occurred: {e}")
             raise e
 
+    @sleep_and_retry
+    @auth_login_limits
+    def auth_login(self) -> AuthResponse:
+        try:
+            path = urljoin(C.API_PATH, C.API_LOGIN)
+            _LOGGER.info(f"Logging in to {path} with email {self._email}")
+            response = AuthResponse(self.make_request('POST', path, data={
+                'email': self._email,
+                'password': self._password
+            }))
+            # _LOGGER.info(f"Login ({self._email}) status code: {response.status_code}")
+            response.raise_for_error()
+        except ManyRequestsError as e:
+            self.auth_login_limits.add_period(C.LOGIN_LIMIT_429)
+            raise e
+        except AuthInternalError as e:
+            _LOGGER.error(str(e))
+            self.auth_login_limits.add_period(C.LOGIN_LIMIT_500)
+            response = AuthResponse(e.response)
+        except AuthUserError as e:
+            self._disconnect_requested = True
+            raise e
+        else:
+            self.auth_login_limits.set_period()
+        finally:
+            self.auth_refresh_limits.reset()
+        return response
+
+    @sleep_and_retry
+    @auth_refresh_limits
+    def auth_refresh(self) -> AuthResponse:
+        try:
+            path = urljoin(C.API_PATH, C.API_TOKEN_REFRESH)
+            _LOGGER.info(f"Refreshing token in to {path} with email {self._email}")
+            response = AuthResponse(self.make_request('POST', path, data={
+                'refreshToken': self._refreshtoken
+            }))
+            # _LOGGER.info(f"Refresh ({self._email}) status code: {response.status_code}")
+            response.raise_for_error()
+        except ManyRequestsError as e:
+            self.auth_refresh_limits.add_period(C.REFRESH_LIMIT_429)
+            raise e
+        except AuthValidationError as e:
+            _LOGGER.error(str(e))
+            self._clear_tokens()
+            raise e
+        except AuthInternalError as e:
+            _LOGGER.error(str(e))
+            self.auth_refresh_limits.add_period(C.REFRESH_LIMIT_500)
+            response = AuthResponse(e.response)
+        else:
+            self.auth_refresh_limits.set_period()
+        finally:
+            self.auth_login_limits.reset()
+        return response
+
     @retry(
-        retry=retry_if_exception_type(requests.exceptions.HTTPError),
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=4, max=10)
+        retry=retry_if_exception_type((AuthValidationError,)),
+        stop=stop_after_attempt(2),
     )
     def login(self, refresh: bool = False) -> None:
-        if refresh and self._refreshtoken: # token refresh
-            refresh_path = urljoin(C.API_PATH, C.API_TOKEN_REFRESH)
-            _LOGGER.info(f"Refreshing token in to {refresh_path} with email {self._email}")
-            resp = self.make_request('POST', refresh_path, data={'refreshToken': self._refreshtoken})
-            _LOGGER.info(f"Refresh ({self._email}) status code: {resp.status_code}")
-        else:  # initial login
-            login_path = urljoin(C.API_PATH, C.API_LOGIN)
-            _LOGGER.info(f"Logging in to {login_path} with email {self._email}")
-            resp = self.make_request('POST', login_path, data={'email': self._email, 'password': self._password})
-            _LOGGER.info(f"Login ({self._email}) status code: {resp.status_code}")
+        resp = None
         try:
+            if refresh and self._refreshtoken:  # token refresh
+                resp = self.auth_refresh()
+            else:  # initial login
+                resp = self.auth_login()
             assert resp, "No response from login"
-            assert resp.status_code == 200, f"Status code is not 200 {resp.status_code}"
-            assert "application/json" in resp.headers.get("content-type"), f"Bad content type"
-            data = resp.json()
-            _LOGGER.debug(f"{data}")
-            assert "data" in data, f"Bad json, data not found"
-            error = data.get("error")
-            if error is not None:
-                self._clear_tokens()
-                raise AssertionError(f"Error {error}")
-            data = data["data"]
-            assert isinstance(data, dict), f"Data is not dict: {data}"
-            assert "token" in data, f"Bad data, token not found"
-            token = data["token"]
-            assert isinstance(token, dict), f"Token is not dict: {token}"
-            assert "accessToken" in token, f"Bad token data, accessToken not found"
-            assert "refreshToken" in token, f"Bad token data, refreshToken not found"
-            self._token = token.get("accessToken")
-            self._tokenexpire = datetime.strptime(token.get("expire"), "%Y-%m-%dT%H:%M:%S%z")
-            self._refreshtoken = token.get("refreshToken")
-            self._refreshexpire = datetime.strptime(token.get("refreshExpire"), "%Y-%m-%dT%H:%M:%S%z")
-            _LOGGER.info(
-                f"Successful refreshed token for email {self._email}"
-                if refresh else
-                f"Successful login for email {self._email}"
-            )
+            self._token = resp.access_token
+            self._tokenexpire = resp.access_expire
+            self._refreshtoken = resp.refresh_token
+            self._refreshexpire = resp.refresh_expire
             self._save_tokens()
+        except AssertionError as e:
+            _LOGGER.error(f"Assertion error: {e}")
         except Exception as e:
             _LOGGER.error(
                 f"Failed to login/refresh token for email {self._email}, "
@@ -210,6 +345,8 @@ class Haier(object):
                 f"err: {e}"
             )
             raise InvalidAuth()
+        else:
+            _LOGGER.info(f"Successful update tokens for email {self._email}")
 
     def auth(self) -> None:
         with self._lock:
@@ -227,76 +364,85 @@ class Haier(object):
             _LOGGER.info(f"Token expired or empty")
             return self.login()
 
+    def pull_data_from_api(self) -> dict:
+        response = None
+        try:
+            devices_path = urljoin(C.API_PATH, C.API_DEVICES)
+            _LOGGER.info(f"Getting devices, url: {devices_path}")
+            response = requests.get(devices_path, headers={
+                'X-Auth-Token': self._token,
+                'User-Agent': 'evo-mobile',
+                'Device-Id': str(uuid.uuid4()),
+                'Content-Type': 'application/json'
+            }, timeout=C.API_TIMEOUT)
+            _LOGGER.debug(response.text)
+            response.raise_for_status()
+            data = response.json().get("data", {})
+            assert isinstance(data, dict), f"Data is not dict: {data}"
+            return data
+        except Exception as e:
+            _LOGGER.error(f"Failed to get devices {e}, response was: {response}")
+            return {}
+
     def pull_data(self) -> None:
         self.auth()
-        devices_path = urljoin(C.API_PATH, C.API_DEVICES)
-        _LOGGER.info(f"Getting devices, url: {devices_path}")
-        resp = requests.get(devices_path, headers={
-            'X-Auth-Token': self._token,
-            'User-Agent': 'evo-mobile',
-            'Device-Id': str(uuid.uuid4()),
-            'Content-Type': 'application/json'
-        }, timeout=C.API_TIMEOUT)
-        if (
-            resp.status_code == 200
-            and "application/json" in resp.headers.get("content-type")
-            and resp.json().get("data", {}).get("presentation", {}).get("layout", {}).get('scrollContainer', [])
-        ):
-            _LOGGER.debug(resp.text)
-            data = resp.json().get("data", {})
-            self._pull_data = data
-            containers = data.get("presentation", {}).get("layout", {}).get('scrollContainer', [])
-            for item in containers:
-                component_id = item.get("trackingData", {}).get("component", {}).get("componentId", "")
-                _LOGGER.debug(component_id)
-                if (
-                    item.get("contractName", "") == "deviceList"
-                    and component_id == "72a6d224-cb66-4e6d-b427-2e4609252684"
-                ): # check for smart devices only
-                    state_data = item.get("state", {})
-                    state_json = json.loads(state_data)
-                    item['state'] = state_json
-                    devices = state_json.get('items', [{}])
-                    for d in devices:
-                        # haierevo://device?deviceId=12:34:56:78:90:68&type=AC&serialNum=AAC0M1E0000000000000&uitype=AC_BASE
-                        device_title = d.get('title', '') # only one device is supported
-                        device_link = d.get('action', {}).get('link', '')
-                        parsed_link = urlparse(device_link)
-                        query_params = parse_qs(parsed_link.query)
-                        device_mac = query_params.get('deviceId', [''])[0]
-                        device_mac = device_mac.replace('%3A', ':')
-                        device_serial = query_params.get('serialNum', [''])[0]
-                        _LOGGER.info(
-                            f"Received device successfully, "
-                            f"device title {device_title}, "
-                            f"device mac {device_mac}, "
-                            f"device serial {device_serial}"
-                        )
-                        self.devices.append(HaierAC(
-                            haier=self,
-                            device_mac=device_mac,
-                            device_serial=device_serial,
-                            device_title=device_title
-                        ))
-                    break
-            if len(self.devices) > 0:
-                self.connect_in_thread()
-        else:
-            _LOGGER.error(f"Failed to get devices, response was: {resp}")
+        self._pull_data = data = self.pull_data_from_api()
+        if not self._pull_data:
             raise InvalidDevicesList()
+        need_container_id = "72a6d224-cb66-4e6d-b427-2e4609252684"
+        presentation = data.setdefault("presentation", {})
+        layout = presentation.setdefault("layout", {})
+        containers = layout.setdefault("scrollContainer", [])
+        for item in containers[:]:
+            tracking_data = item.setdefault("trackingData", {})
+            component = tracking_data.setdefault("component", {})
+            component_id = component.setdefault("componentId", "")
+            # _LOGGER.debug(component_id)
+            component_name = component.setdefault("componentName", "")
+            if not (
+                component_name == "deviceList"
+                and component_id == need_container_id
+            ):
+                containers.remove(item)
+                continue
+            state_data = item.setdefault("state", "{}")
+            state_json = item['state'] = json.loads(state_data)
+            devices = state_json.setdefault("items", [])
+            for d in devices:
+                device_title = d.get('title', '')
+                device_link = d.get('action', {}).get('link', '')
+                parsed_link = urlparse(device_link)
+                query_params = parse_qs(parsed_link.query)
+                device_mac = query_params.get('deviceId', [''])[0]
+                device_mac = device_mac.replace('%3A', ':')
+                device_serial = query_params.get('serialNum', [''])[0]
+                device = HaierAC(
+                    haier=self,
+                    device_mac=device_mac,
+                    device_serial=device_serial,
+                    device_title=device_title
+                )
+                self.devices.append(device)
+                _LOGGER.info(f"Added device: {device}")
+        if len(self.devices) > 0:
+            self.connect_in_thread()
 
     def get_device_by_id(self, id_: str) -> HaierAC | None:
         return next(filter(lambda d: d.device_id == id_, self.devices), None)
 
     def _init_ws(self) -> None:
         self.auth()
-        self._socket_app = WebSocketApp(
-            url=urljoin(C.API_WS_PATH, self.token),
-            on_message=self._on_message,
-            on_open=self._on_open,
-            on_ping=self._on_ping,
-            on_close=self._on_close,
-        )
+        url = urljoin(C.API_WS_PATH, self.token)
+        if self._socket_app is None:
+            self._socket_app = WebSocketApp(
+                url=url,
+                on_message=self._on_message,
+                on_open=self._on_open,
+                on_ping=self._on_ping,
+                on_close=self._on_close,
+            )
+        else:
+            self._socket_app.url = url
 
     # noinspection PyUnusedLocal
     def _on_message(self, ws: WebSocket, message: str) -> None:
@@ -312,16 +458,16 @@ class Haier(object):
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def _on_open(self, ws: WebSocket) -> None:
         _LOGGER.debug("Websocket opened")
-        self._socket_status = SocketStatus.INITIALIZED
+        self.socket_status = SocketStatus.INITIALIZED
 
     # noinspection PyUnusedLocal
     def _on_ping(self, ws: WebSocket) -> None:
         self._socket_app.sock.pong()
 
-    # noinspection PyUnusedLocal
+    # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def _on_close(self, ws: WebSocket, close_code: int, close_message: str) -> None:
         _LOGGER.debug(f"Websocket closed. Code: {close_code}, message: {close_message}")
-        self._auto_reconnect_if_needed()
+        # self._auto_reconnect_if_needed()
 
     def _auto_reconnect_if_needed(self, command: str = None) -> None:
         self._socket_status = SocketStatus.NOT_INITIALIZED
@@ -331,43 +477,52 @@ class Haier(object):
         else:
             _LOGGER.debug("Disconnect was explicitly requested, not attempting to reconnect")
 
+    def _wait_websocket(self, timeout: float) -> None:
+        current = time.time()
+        if self.socket_status == SocketStatus.INITIALIZED:
+            return
+        while time.time() <= (current + timeout):
+            if self.socket_status == SocketStatus.INITIALIZED:
+                return
+            time.sleep(0.1)
+
+    def connect_if_needed(self, timeout: float = 4.0) -> None:
+        if self._socket_thread and self._socket_thread.is_alive():
+            return self._wait_websocket(timeout)
+        return self.connect_in_thread()
+
     def connect(self) -> None:
-        if self._socket_status not in [
-            SocketStatus.INITIALIZED,
-            SocketStatus.INITIALIZING,
-        ]:
-            self._socket_status = SocketStatus.INITIALIZING
+        self.socket_status = SocketStatus.NOT_INITIALIZED
+        while not self._disconnect_requested:
             _LOGGER.debug(f"Connecting to websocket ({C.API_WS_PATH})")
             try:
+                self.socket_status = SocketStatus.INITIALIZING
                 self._init_ws()
                 self._socket_app.run_forever()
             except WebSocketException: # socket is already opened
                 pass
-            except Exception:
-                self._auto_reconnect_if_needed()
-        else:
-            _LOGGER.info(
-                f"Can not attempt socket connection because of current "
-                f"socket status: {self._socket_status}"
-            )
+            except Exception as e:
+                _LOGGER.error(f"Error connecting to websocket: {e}")
+        _LOGGER.info("Connection stoped")
 
     def connect_in_thread(self) -> None:
-        thread = threading.Thread(target=self.connect)
+        self._socket_thread = thread = threading.Thread(target=self.connect)
         thread.daemon = True
         thread.start()
 
     @retry(
         retry=retry_if_exception_type(Exception),
         stop=stop_after_attempt(2),
-        retry_error_callback=lambda _: None
+        retry_error_callback=lambda _: None,
+        wait=wait_fixed(0.5),
     )
     def send_message(self, payload: str) -> None:
         _LOGGER.debug(f"Sending message: {payload}")
         try:
             self._socket_app.send(payload)
         except Exception as e:
-            _LOGGER.error(f"Failed to send message: {e}")
-            self._auto_reconnect_if_needed()
+            _LOGGER.warning(f"Failed to send message: {e} retrying...")
+            self.connect_if_needed()
             raise e
 
 
@@ -403,6 +558,16 @@ class HaierAC(object):
         self._config_target_temperature = None
         self._config_command_name = None
         self._get_status()
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"{self._device_id!r}, "
+            f"name={self._device_name!r}, "
+            f"serial={self._device_serial!r}, "
+            f"model={self.model_name!r}"
+            f")"
+        )
 
     @property
     def status_data(self):
@@ -522,7 +687,7 @@ class HaierAC(object):
         else:
             _LOGGER.warning(f"Got unknown message: {message_dict}")
 
-    def _set_attribute(self, key: str, value) -> None:
+    def _set_attribute_value(self, key: str, value) -> None:
         if key == self._config_current_temperature:  # Температура в комнате
             self._current_temperature = float(value)
         elif key == self._config_status:  # Включение/выключение
@@ -538,61 +703,88 @@ class HaierAC(object):
         elif key == self._config_preset_mode:
             self._preset_mode = self._config.get_value(self._config_preset_mode, int(value))
 
-    def _get_status_data(self):
-        if not self._status_data:
-            try:
-                status_url = C.API_STATUS.replace("{mac}", self.device_id)
-                _LOGGER.info(f"Getting initial status of device {self.device_id}, url: {status_url}")
-                resp = requests.get(
-                    url=status_url,
-                    headers={"X-Auth-token": self._haier.token},
-                    timeout=C.API_TIMEOUT
-                )
-                _LOGGER.info(f"Update device {self.device_id} status code: {resp.status_code}")
-                _LOGGER.debug(resp.text)
-                resp.raise_for_status()
-                self._status_data = resp.json()
-            except Exception as e:
-                _LOGGER.error(f"Failed to get status: {e}")
-                self._available = False
-        return self._status_data
+    def _set_config_attribute(self, attr: dict) -> None:
+        desc = attr.get('description', None)
+        code = attr.get('name', None)
+        if desc in ('Режимы',) and self._config_mode is None:
+            self._config_mode = code
+        if desc in ('Целевая температура',) and self._config_target_temperature is None:
+            self._config_target_temperature = code
+        if desc in ('Температура в комнате',) and self._config_current_temperature is None:
+            self._config_current_temperature = code
+        if desc in ('Скорость вентилятора',) and self._config_fan_mode is None:
+            self._config_fan_mode = code
+        if desc in ('Включение/выключение',) and self._config_status is None:
+            self._config_status = code
+
+    def _load_config_from_attributes(self, attributes: list[dict]):
+        self._load_config()
+        for attr in attributes:
+            command_name = attr.get("command_name")
+            if command_name and self._config_command_name is None:
+                self._config_command_name = command_name
+            self._set_config_attribute(attr)
+            code = attr.get('name', "")
+            curr = attr.get('currentValue')
+            if code == self._config_target_temperature:
+                self._min_temperature = float(attr.get('range', {}).get('data', {}).get('minValue', 0))
+                self._max_temperature = float(attr.get('range', {}).get('data', {}).get('maxValue', 0))
+            self._set_attribute_value(code, curr)
+        _LOGGER.info(
+            f"The following values are used: "
+            f"command_name={self._config_command_name},"
+            f"current_temperature={self._config_current_temperature},"
+            f"mode={self._config_mode},"
+            f"fan_mode={self._config_fan_mode},"
+            f"swing_mode={self._config_swing_mode},"
+            f"preset_mode={self._config_preset_mode},"
+            f"status={self._config_status},"
+            f"target_temperature={self._config_target_temperature}"
+        )
+
+    def _load_config(self) -> None:
+        self._config = yaml_helper.DeviceConfig(self.model_name)
+        self._config_command_name = self._config.get_command_name()
+        self._config_mode = self._config.get_id_by_name('mode')
+        self._config_target_temperature = self._config.get_id_by_name('target_temperature')
+        self._config_current_temperature = self._config.get_id_by_name('current_temperature')
+        self._config_fan_mode = self._config.get_id_by_name('fan_mode')
+        self._config_status = self._config.get_id_by_name('status')
+        self._config_swing_mode = self._config.get_id_by_name('swing_mode')
+        self._config_preset_mode = self._config.get_id_by_name('preset_mode')
+
+    def _get_status_data(self) -> dict | None:
+        response = None
+        try:
+            status_url = C.API_STATUS.replace("{mac}", self.device_id)
+            _LOGGER.info(f"Getting initial status of device {self.device_id}, url: {status_url}")
+            response = requests.get(
+                url=status_url,
+                headers={"X-Auth-token": self._haier.token},
+                timeout=C.API_TIMEOUT
+            )
+            _LOGGER.info(f"Update device {self.device_id} status code: {response.status_code}")
+            _LOGGER.debug(response.text)
+            response.raise_for_status()
+            data = response.json()
+            return data
+        except Exception as e:
+            _LOGGER.error(f"Failed to get status: {e}, response was: {response}")
+            self._available = False
+            return None
 
     def _get_status(self) -> None:
-        if data := self._get_status_data():
-            device_info = data.get("info", {})
-            device_model = device_info.get("model", "AC")
+        self._status_data = data = self._get_status_data()
+        if self._status_data:
+            device_info = data.setdefault("info", {})
+            device_model = device_info.setdefault("model", "AC")
             # consider first symbols only and ignore some others
             device_model = device_model.replace('-','').replace('/', '')[:11]
             _LOGGER.info(f"Device model {device_model}")
             self.model_name = device_model
+            attributes = data.setdefault("attributes", [])
             # read config values
-            self._config = yaml_helper.DeviceConfig(device_model)
-            self._config_current_temperature = self._config.get_id_by_name('current_temperature')
-            self._config_mode = self._config.get_id_by_name('mode')
-            self._config_fan_mode = self._config.get_id_by_name('fan_mode')
-            self._config_swing_mode = self._config.get_id_by_name('swing_mode')
-            self._config_preset_mode = self._config.get_id_by_name('preset_mode')
-            self._config_status = self._config.get_id_by_name('status')
-            self._config_target_temperature = self._config.get_id_by_name('target_temperature')
-            self._config_command_name = self._config.get_command_name()
-            _LOGGER.info(
-                f"The following values are used: "
-                f"current temp - {self._config_current_temperature}, "
-                f"mode - {self._config_mode}, "
-                f"fan speed - {self._config_fan_mode}, "
-                f"swing - {self._config_swing_mode}, "
-                f"preset - {self._config_preset_mode}, "
-                f"status - {self._config_status}, "
-                f"target temp - {self._config_target_temperature}"
-            )
-            attributes = data.get("attributes", {})
-            for attr in attributes:
-                key = attr.get('name', '')
-                value = attr.get('currentValue')
-                if key == self._config_target_temperature:
-                    self._min_temperature = float(attr.get('range', {}).get('data', {}).get('minValue', 0))
-                    self._max_temperature = float(attr.get('range', {}).get('data', {}).get('maxValue', 0))
-                self._set_attribute(key, value)
+            self._load_config_from_attributes(attributes)
             if self._swing_mode is None:
                 self._swing_mode = SWING_OFF
             if self._preset_mode is None:
@@ -606,7 +798,7 @@ class HaierAC(object):
         message_statuses = received_message.get("payload", {}).get("statuses", [{}])
         _LOGGER.info(f"Received status update {self.device_id} {received_message}")
         for key, value in message_statuses[0]['properties'].items():
-            self._set_attribute(key, value)
+            self._set_attribute_value(key, value)
         self._available = True
         self.write_ha_state()
 
@@ -622,6 +814,14 @@ class HaierAC(object):
 
     def _send_message(self, message: str) -> None:
         self._haier.send_message(message)
+
+    def _send_commands(self, commands: list[dict]) -> None:
+        self._send_message(json.dumps({
+            "action": "operation",
+            "macAddress": self.device_id,
+            "commandName": self._config_command_name,
+            "commands": commands,
+        }))
 
     def get_hvac_modes(self) -> list[HVACMode]:
         return [
@@ -652,96 +852,66 @@ class HaierAC(object):
     def get_preset_modes(self) -> list[str]:
         return self._config.get_mapping_values('preset_mode')
 
-    def set_temperature(self, temp) -> None:
-        self._send_message(json.dumps({
-            "action": "operation",
-            "macAddress": self.device_id,
-            "commandName": self._config_command_name,
-            "commands": [
-                {
-                    "commandName": self._config_target_temperature,
-                    "value": str(temp)
-                }
-            ]
-        }))
+    def set_temperature(self, temp: float) -> None:
+        self._send_commands([
+            {
+                "commandName": self._config_target_temperature,
+                "value": str(temp)
+            }
+        ])
         self._target_temperature = temp
 
     def switch_on(self, hvac_mode: str = None) -> None:
-        hvac_mode = hvac_mode or self._mode or "auto"
+        hvac_mode = hvac_mode or self._mode or HVACMode.AUTO
         mode_haier = self._config.get_haier_code(self._config_mode, hvac_mode)
-        self._send_message(json.dumps({
-            "action": "operation",
-            "macAddress": self.device_id,
-            "commandName": self._config_command_name,
-            "commands": [
-                {
-                    "commandName": self._config_status,
-                    "value": "1"
-                },
-                {
-                    "commandName": self._config_mode,
-                    "value": str(mode_haier)
-                }
-            ]
-        }))
+        self._send_commands([
+            {
+                "commandName": self._config_status,
+                "value": "1"
+            },
+            {
+                "commandName": self._config_mode,
+                "value": str(mode_haier)
+            }
+        ])
         self._status = 1
         self._mode = hvac_mode
 
     def switch_off(self) -> None:
-        self._send_message(json.dumps({
-            "action": "operation",
-            "macAddress": self.device_id,
-            "commandName": self._config_command_name,
-            "commands": [
-                {
-                    "commandName": self._config_status,
-                    "value": "0"
-                }
-            ]
-        }))
+        self._send_commands([
+            {
+                "commandName": self._config_status,
+                "value": "0"
+            }
+        ])
         self._status = 0
 
-    def set_fan_mode(self, fan_mode) -> None:
+    def set_fan_mode(self, fan_mode: str) -> None:
         mode_haier = self._config.get_haier_code(self._config_fan_mode, fan_mode)
-        self._send_message(json.dumps({
-            "action": "operation",
-            "macAddress": self.device_id,
-            "commandName": self._config_command_name,
-            "commands": [
-                {
-                    "commandName": self._config_fan_mode,
-                    "value": str(mode_haier)
-                }
-            ]
-        }))
+        self._send_commands([
+            {
+                "commandName": self._config_fan_mode,
+                "value": str(mode_haier)
+            }
+        ])
         self._fan_mode = fan_mode
 
-    def set_swing_mode(self, swing_mode) -> None:
+    def set_swing_mode(self, swing_mode: str) -> None:
         mode_haier = self._config.get_haier_code(self._config_swing_mode, swing_mode)
-        self._send_message(json.dumps({
-            "action": "operation",
-            "macAddress": self.device_id,
-            "commandName": self._config_command_name,
-            "commands": [
-                {
-                    "commandName": self._config_swing_mode,
-                    "value": str(mode_haier)
-                }
-            ]
-        }))
+        self._send_commands([
+            {
+                "commandName": self._config_swing_mode,
+                "value": str(mode_haier)
+            }
+        ])
         self._swing_mode = swing_mode
 
-    def set_preset_mode(self, preset_mode) -> None:
+    def set_preset_mode(self, preset_mode: str) -> None:
         mode_haier = self._config.get_haier_code(self._config_preset_mode, preset_mode)
-        self._send_message(json.dumps({
-            "action": "operation",
-            "macAddress": self.device_id,
-            "commandName": self._config_command_name,
-            "commands": [
-                {
-                    "commandName": self._config_preset_mode,
-                    "value": str(mode_haier)
-                }
-            ]
-        }))
+        self._send_commands([
+            {
+                "commandName": self._config_preset_mode,
+                "value": str(mode_haier)
+            }
+        ])
         self._preset_mode = preset_mode
