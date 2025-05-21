@@ -11,7 +11,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     haier_object = hass.data[DOMAIN][config_entry.entry_id]
     entities = []
     for device in haier_object.devices:
-        entities.append(HaierACEntity(device))
+        climate = HaierACEntity(device)
+        entities.append(climate)
     async_add_entities(entities)
     return True
 
@@ -23,11 +24,12 @@ class HaierACEntity(ClimateEntity):
 
     def __init__(self, device: api.HaierAC) -> None:
         self._device = device
-        self._attr_unique_id = f"{device.device_id}_{device.model_name}"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}"
         self._attr_name = device.device_name
         self._attr_supported_features = device.get_supported_features()
         self._attr_hvac_modes = device.get_hvac_modes()
         self._attr_fan_modes = device.get_fan_modes()
+        self._attr_swing_horizontal_modes = device.get_swing_horizontal_modes()
         self._attr_swing_modes = device.get_swing_modes()
         self._attr_preset_modes = device.get_preset_modes()
         # https://developers.home-assistant.io/blog/2024/01/24/climate-climateentityfeatures-expanded/
@@ -47,6 +49,10 @@ class HaierACEntity(ClimateEntity):
         if self._device.status == 1:
             return self._device.mode or HVACMode.OFF
         return HVACMode.OFF
+
+    @property
+    def swing_horizontal_mode(self) -> str:
+        return self._device.swing_horizontal_mode
 
     @property
     def swing_mode(self) -> str:
@@ -94,7 +100,7 @@ class HaierACEntity(ClimateEntity):
             "identifiers": {(DOMAIN, self._device.device_id)},
             "name": self._device.device_name,
             "sw_version": self._device.sw_version,
-            "model": self._device.model_name,
+            "model": self._device.device_model,
             "manufacturer": "Haier",
         }
 
@@ -120,6 +126,11 @@ class HaierACEntity(ClimateEntity):
         """Set new target fan mode."""
         _LOGGER.debug(f"Setting fan mode to {fan_mode}")
         self._device.set_fan_mode(fan_mode)
+
+    def set_swing_horizontal_mode(self, swing_mode: str) -> None:
+        """Set new target swing horizontal mode."""
+        _LOGGER.debug(f"Setting swing horizontal mode to {swing_mode}")
+        self._device.set_swing_horizontal_mode(swing_mode)
 
     def set_swing_mode(self, swing_mode: str) -> None:
         """Set new target swing operation."""
