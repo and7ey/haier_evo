@@ -8,7 +8,6 @@ import socket
 from enum import Enum
 from datetime import datetime, timezone, timedelta
 from tenacity import retry, stop_after_attempt, retry_if_exception_type, wait_fixed
-from ratelimit import sleep_and_retry
 from websocket import WebSocketException, WebSocketApp, WebSocket
 from requests.exceptions import ConnectionError, Timeout, HTTPError
 from urllib.parse import urlparse, urljoin, parse_qs
@@ -166,6 +165,7 @@ class Haier(object):
         self._pull_data = None
         if http is True:
             hass.http.register_view(HaierAPI(self))
+        self.reset_limits()
 
     @property
     def token(self) -> str | None:
@@ -224,9 +224,16 @@ class Haier(object):
         self._refreshexpire = None
         self._save_tokens()
 
+    def reset_limits(self) -> None:
+        self.common_limits.reset()
+        self.auth_login_limits.reset()
+        self.auth_refresh_limits.reset()
+
     def stop(self) -> None:
         self._disconnect_requested = True
-        self._socket_app.close()
+        self.reset_limits()
+        if self._socket_app is not None:
+            self._socket_app.close()
 
     def to_dict(self) -> dict:
         return {
@@ -235,7 +242,7 @@ class Haier(object):
             "devices": [device.to_dict() for device in self.devices]
         }
 
-    @sleep_and_retry
+    @common_limits.sleep_and_retry
     @common_limits
     def make_request(self, method: str, url: str, **kwargs) -> requests.Response:
         try:
@@ -263,7 +270,7 @@ class Haier(object):
             _LOGGER.error(f"HTTP error occurred: {e}")
             raise e
 
-    @sleep_and_retry
+    @auth_login_limits.sleep_and_retry
     @auth_login_limits
     def auth_login(self) -> AuthResponse:
         try:
@@ -281,7 +288,7 @@ class Haier(object):
         except AuthInternalError as e:
             _LOGGER.error(str(e))
             self.auth_login_limits.add_period(C.LOGIN_LIMIT_500)
-            response = AuthResponse(e.response)
+            response = e.response
         except AuthUserError as e:
             self._disconnect_requested = True
             raise e
@@ -291,7 +298,7 @@ class Haier(object):
             self.auth_refresh_limits.reset()
         return response
 
-    @sleep_and_retry
+    @auth_refresh_limits.sleep_and_retry
     @auth_refresh_limits
     def auth_refresh(self) -> AuthResponse:
         try:
@@ -312,7 +319,7 @@ class Haier(object):
         except AuthInternalError as e:
             _LOGGER.error(str(e))
             self.auth_refresh_limits.add_period(C.REFRESH_LIMIT_500)
-            response = AuthResponse(e.response)
+            response = e.response
         else:
             self.auth_refresh_limits.set_period()
         finally:
@@ -521,7 +528,7 @@ class Haier(object):
         try:
             self._socket_app.send(payload)
         except Exception as e:
-            _LOGGER.warning(f"Failed to send message: {e} retrying...")
+            _LOGGER.warning(f"Failed to send message: {e}")
             self.connect_if_needed()
             raise e
 
