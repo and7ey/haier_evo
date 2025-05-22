@@ -777,10 +777,19 @@ class HaierAC(object):
         # elif key == self.config_preset_mode:
         #     self._preset_mode = self.config.get_value(self.config_preset_mode, int(value))
 
-    def _load_config_from_attributes(self, attributes: list[dict]):
+    def _load_config_from_attributes(self, data: dict) -> None:
         self._config = config.HaierACConfig(self.device_model, self.hass.config.path(C.DOMAIN))
+        attributes = data.setdefault("attributes", [])
+        sensors = data.setdefault("sensors", {}).get("items", [])
+        sensor_curr_temp = next(filter(lambda i: (
+            isinstance(i, dict)
+            and isinstance(i.get("value"), dict)
+            and i.get("value", {}).get("description") == "indoorTemperature"
+        ), sensors), {}).get("value", {}).get("name")
         attrs = list(sorted(map(lambda x: config.Attribute(x), attributes), key=lambda x: x.code))
         for attr in attrs:
+            if attr.name == "current_temperature" and str(attr.code) != sensor_curr_temp:
+                continue
             self.config.attrs.append(attr)
             if attr.command_name and self.config.command_name is None:
                 self.config.command_name = attr.command_name
@@ -827,8 +836,7 @@ class HaierAC(object):
             self._device_name = settings.setdefault("name", {}).setdefault("name", self._device_name)
             self._sw_version = settings.setdefault('firmware', {}).setdefault('value', None)
             # read config and current values
-            attributes = data.setdefault("attributes", [])
-            self._load_config_from_attributes(attributes)
+            self._load_config_from_attributes(data)
             if self._swing_horizontal_mode is None:
                 self._swing_horizontal_mode = SWING_OFF
             if self._swing_mode is None:
