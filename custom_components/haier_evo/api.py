@@ -975,7 +975,7 @@ class HaierAC(object):
     def set_swing_horizontal_mode(self, swing_mode: str) -> None:
         if commands := self.get_commands(f"swing_horizontal_mode", swing_mode):
             self._send_commands(commands)
-            self._swing_mode = swing_mode
+            self._swing_horizontal_mode = swing_mode
 
     def set_swing_mode(self, swing_mode: str) -> None:
         if commands := self.get_commands(f"swing_mode", swing_mode):
