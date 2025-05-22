@@ -5,6 +5,7 @@ import time
 import threading
 import uuid
 import socket
+from aiohttp import web
 from enum import Enum
 from datetime import datetime, timezone, timedelta
 from tenacity import retry, stop_after_attempt, retry_if_exception_type, wait_fixed
@@ -61,9 +62,13 @@ class HaierAPI(HomeAssistantView):
         self.haier = haier
 
     async def get(self, request):
+        if not self.haier.allow_http:
+            return web.Response(text="Not found", status=404, content_type="text/plain")
         return self.json(self.haier.to_dict())
 
     async def post(self, request):
+        if not self.haier.allow_http:
+            return web.Response(text="Not found", status=404, content_type="text/plain")
         data = await request.json()
         self.haier.send_message(json.dumps(data))
         return self.json({"result": "success"})
@@ -164,8 +169,8 @@ class Haier(object):
         self._socket_status: SocketStatus = SocketStatus.PRE_INITIALIZATION
         self._socket_thread = None
         self._pull_data = None
-        if http is True:
-            hass.http.register_view(HaierAPI(self))
+        self.allow_http: bool = http
+        hass.http.register_view(HaierAPI(self))
         self.reset_limits()
 
     @property

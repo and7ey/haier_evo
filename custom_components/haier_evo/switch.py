@@ -1,7 +1,6 @@
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
-from .const import DOMAIN
-from .logger import _LOGGER
+from .const import DOMAIN, API_HTTP_ROUTE
 from . import api
 
 
@@ -21,6 +20,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
             entities.append(HaierACHealthSwitch(device))
         if device.config['comfort'] is not None:
             entities.append(HaierACComfortSwitch(device))
+    entities.append(HttpSwitch(haier_object))
     async_add_entities(entities)
     haier_object.write_ha_state()
     return True
@@ -139,3 +139,34 @@ class HaierACComfortSwitch(HaierACSwitch):
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_comfort"
         self._attr_name = f"{device.device_name} Комфорт"
         self._attr_icon = "mdi:toggle-switch"
+
+
+class HttpSwitch(SwitchEntity):
+
+    def __init__(self, haier):
+        self._haier = haier
+        self._attr_unique_id = f"{DOMAIN}_http_switch"
+        self._attr_name = "Haier Evo HTTP"
+        self._attr_is_on = API_HTTP_ROUTE
+        self._attr_icon = "mdi:toggle-switch"
+
+    @property
+    def device_info(self) -> dict:
+        return {
+            "identifiers": {(DOMAIN, self.unique_id)},
+            "name": self.name,
+            "manufacturer": "Haier"
+        }
+
+    async def async_turn_on(self, **kwargs):
+        self._haier.allow_http = True
+        self._attr_is_on = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs):
+        self._haier.allow_http = False
+        self._attr_is_on = False
+        self.async_write_ha_state()
+
+    async def async_update(self):
+        self._attr_is_on = self._haier.allow_http
