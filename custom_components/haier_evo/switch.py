@@ -22,14 +22,23 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         if device.config['comfort'] is not None:
             entities.append(HaierACComfortSwitch(device))
     async_add_entities(entities)
+    haier_object.write_ha_state()
     return True
 
 
 class HaierACSwitch(SwitchEntity):
 
+    # _attr_should_poll = False
+
     def __init__(self, device: api.HaierAC) -> None:
         self._device = device
+        self._device_attr_name = None
         self._attr_is_on = False
+
+        def write_ha_state_callback():
+            self.update_state()
+            self.async_write_ha_state()
+        device.add_write_ha_state_callback(write_ha_state_callback)
 
     @property
     def device_info(self) -> dict:
@@ -41,13 +50,19 @@ class HaierACSwitch(SwitchEntity):
             "manufacturer": "Haier",
         }
 
+    @property
+    def available(self) -> bool:
+        return self._device.available
+
     async def async_turn_on(self, **kwargs):
         await self.hass.async_add_executor_job(self.turn_on)
         self._attr_is_on = True
         self.async_write_ha_state()
 
     def turn_on(self) -> None:
-        raise NotImplementedError
+        method = getattr(self._device, f"set_{self._device_attr_name}", None)
+        if method is not None:
+            method(True)
 
     async def async_turn_off(self, **kwargs):
         await self.hass.async_add_executor_job(self.turn_off)
@@ -55,100 +70,72 @@ class HaierACSwitch(SwitchEntity):
         self.async_write_ha_state()
 
     def turn_off(self, **kwargs) -> None:
-        raise NotImplementedError
+        method = getattr(self._device, f"set_{self._device_attr_name}", None)
+        if method is not None:
+            method(False)
+
+    def update_state(self) -> None:
+        self._attr_is_on = bool(getattr(self._device, self._device_attr_name, None))
+
+    async def async_update(self):
+        self.update_state()
 
 
 class HaierACLightSwitch(HaierACSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
+        self._device_attr_name = "light_on"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_light"
         self._attr_name = f"{device.device_name} Подсветка"
         self._attr_icon = "mdi:lightbulb"
-
-    def turn_on(self) -> None:
-        self._device.set_light_on(True)
-
-    def turn_off(self) -> None:
-        self._device.set_light_on(False)
-
-    async def async_update(self):
-        self._attr_is_on = bool(self._device.light_on)
 
 
 class HaierACSoundSwitch(HaierACSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
+        self._device_attr_name = "sound_on"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_sound"
         self._attr_name = f"{device.device_name} Звуковой сигнал"
         self._attr_icon = "mdi:toggle-switch"
-
-    def turn_on(self) -> None:
-        self._device.set_sound_on(True)
-
-    def turn_off(self) -> None:
-        self._device.set_sound_on(False)
-
-    async def async_update(self):
-        self._attr_is_on = bool(self._device.sound_on)
 
 
 class HaierACQuietSwitch(HaierACSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
+        self._device_attr_name = "quiet_on"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_quiet"
         self._attr_name = f"{device.device_name} Тихий"
         self._attr_icon = "mdi:toggle-switch"
-
-    def turn_on(self) -> None:
-        self._device.set_quiet_on(True)
-
-    def turn_off(self) -> None:
-        self._device.set_quiet_on(False)
 
 
 class HaierACTurboSwitch(HaierACSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
+        self._device_attr_name = "turbo_on"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_turbo"
         self._attr_name = f"{device.device_name} Турбо"
         self._attr_icon = "mdi:toggle-switch"
-
-    def turn_on(self) -> None:
-        self._device.set_turbo_on(True)
-
-    def turn_off(self) -> None:
-        self._device.set_turbo_on(False)
 
 
 class HaierACHealthSwitch(HaierACSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
+        self._device_attr_name = "health_on"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_health"
         self._attr_name = f"{device.device_name} Здоровье"
         self._attr_icon = "mdi:toggle-switch"
-
-    def turn_on(self) -> None:
-        self._device.set_health_on(True)
-
-    def turn_off(self) -> None:
-        self._device.set_health_on(False)
 
 
 class HaierACComfortSwitch(HaierACSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
+        self._device_attr_name = "comfort_on"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_comfort"
         self._attr_name = f"{device.device_name} Комфорт"
         self._attr_icon = "mdi:toggle-switch"
-
-    def turn_on(self) -> None:
-        self._device.set_comfort_on(True)
-
-    def turn_off(self) -> None:
-        self._device.set_comfort_on(False)

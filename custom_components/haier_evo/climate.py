@@ -14,6 +14,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         climate = HaierACEntity(device)
         entities.append(climate)
     async_add_entities(entities)
+    haier_object.write_ha_state()
     return True
 
 
@@ -35,9 +36,7 @@ class HaierACEntity(ClimateEntity):
         # https://developers.home-assistant.io/blog/2024/01/24/climate-climateentityfeatures-expanded/
         self._enable_turn_on_off_backwards_compatibility = False
 
-        def write_ha_state() -> None:
-            self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
-        device.write_ha_state = write_ha_state
+        device.add_write_ha_state_callback(self.async_write_ha_state)
 
     @property
     def icon(self) -> str:

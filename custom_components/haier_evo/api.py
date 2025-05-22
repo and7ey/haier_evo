@@ -177,6 +177,10 @@ class Haier(object):
         return self._load_tokens
 
     @property
+    def write_ha_state(self):
+        return self._write_ha_state
+
+    @property
     def socket_status(self) -> SocketStatus:
         return self._socket_status
 
@@ -456,7 +460,7 @@ class Haier(object):
     def _on_message(self, ws: WebSocket, message: str) -> None:
         _LOGGER.debug(f"Received WSS message: {message}")
         message_dict: dict = json.loads(message)
-        message_device = message_dict.get("macAddress")
+        message_device = str(message_dict.get("macAddress")).lower()
         device = self.get_device_by_id(message_device)
         if device is None:
             _LOGGER.error(f"Got a message for a device we don't know about: {message_device}")
@@ -493,6 +497,10 @@ class Haier(object):
             if self.socket_status == SocketStatus.INITIALIZED:
                 return
             time.sleep(0.1)
+
+    def _write_ha_state(self) -> None:
+        for device in self.devices:
+            device.write_ha_state()
 
     def connect_if_needed(self, timeout: float = 4.0) -> None:
         if self._socket_thread and self._socket_thread.is_alive():
@@ -568,6 +576,7 @@ class HaierAC(object):
         self._comfort_on = False
         self._status_data = None
         self._config = None
+        self._write_ha_state_callbacks = []
         self._get_status()
 
     def __repr__(self) -> str:
@@ -657,6 +666,14 @@ class HaierAC(object):
         return self._quiet_on
 
     @property
+    def turbo_on(self) -> bool:
+        return self._turbo_on
+
+    @property
+    def comfort_on(self) -> bool:
+        return self._comfort_on
+
+    @property
     def health_on(self) -> bool:
         return self._health_on
 
@@ -676,7 +693,12 @@ class HaierAC(object):
         self._haier.auth()
 
     def write_ha_state(self) -> None:
-        pass
+        for callback in self._write_ha_state_callbacks:
+            self.hass.loop.call_soon_threadsafe(callback)
+
+    def add_write_ha_state_callback(self, callback) -> None:
+        if callback not in self._write_ha_state_callbacks:
+            self._write_ha_state_callbacks.append(callback)
 
     def to_dict(self) -> dict:
         return {
