@@ -22,6 +22,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 # https://developers.home-assistant.io/docs/core/entity/climate
 class HaierACEntity(ClimateEntity):
 
+    _attr_translation_key = "conditioner"
     _attr_should_poll = False
 
     def __init__(self, device: api.HaierAC) -> None:

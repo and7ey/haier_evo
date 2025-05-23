@@ -18,6 +18,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 
 class HaierACEcoSensorSelect(SelectEntity):
 
+    _attr_translation_key = "conditioner_eco_sensor"
+
     def __init__(self, device: api.HaierAC) -> None:
         self._device = weakref.proxy(device)
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_eco_sensor"

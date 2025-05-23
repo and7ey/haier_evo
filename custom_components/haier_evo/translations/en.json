@@ -16,5 +16,50 @@
                 }
             }
         }
-   }
+    },
+    "entity": {
+        "climate": {
+            "conditioner": {
+                "state_attributes": {
+                    "swing_horizontal_mode": {
+                        "state": {
+                            "position_1": "Default position",
+                            "position_2": "Second position",
+                            "position_3": "Third position",
+                            "position_4": "Fourth position",
+                            "position_5": "Fifth position",
+                            "position_6": "Sixth position",
+                            "position_7": "Seventh position",
+                            "auto": "Auto mode"
+                        }
+                    },
+                    "swing_mode": {
+                        "state": {
+                            "on": "Raise/Lower",
+                            "off": "Fixed position",
+                            "upper": "Upper position",
+                            "position_1": "First position",
+                            "bottom": "Lower position",
+                            "position_2": "Second position",
+                            "position_3": "Third position",
+                            "position_4": "Fourth position",
+                            "position_5": "Fifth position",
+                            "auto": "Auto mode",
+                            "special": "Raise/Lower"
+                        }
+                    }
+                }
+            }
+        },
+        "select": {
+            "conditioner_eco_sensor": {
+                "state": {
+                    "off": "Disabled",
+                    "outlining": "Outlining",
+                    "related": "Related",
+                    "on": "Active"
+                }
+            }
+        }
+    }
 }

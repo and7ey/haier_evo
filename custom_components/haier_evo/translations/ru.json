@@ -1,0 +1,65 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "already configured"
+        },
+        "error": {
+            "cannot_connect": "cannot connect",
+            "invalid_auth": "invalid_auth",
+            "unknown": "unknown"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "password": "password",
+                    "email": "email"
+                }
+            }
+        }
+    },
+    "entity": {
+        "climate": {
+            "conditioner": {
+                "state_attributes": {
+                    "swing_horizontal_mode": {
+                        "state": {
+                            "position_1": "Исходная позиция",
+                            "position_2": "Второе положение",
+                            "position_3": "Третье положение",
+                            "position_4": "Четвертая позиция",
+                            "position_5": "Пятая позиция",
+                            "position_6": "Шестое положение",
+                            "position_7": "Седьмая позиция",
+                            "auto": "Авто режим"
+                        }
+                    },
+                    "swing_mode": {
+                        "state": {
+                            "on": "Подъем и опускание",
+                            "off": "Фиксированное",
+                            "upper": "Верхнее положение",
+                            "position_1": "Первое положение",
+                            "bottom": "Нижнее положение",
+                            "position_2": "Второе положение",
+                            "position_3": "Третье положение",
+                            "position_4": "Четвертая позиция",
+                            "position_5": "Пятая позиция",
+                            "auto": "Авто режим",
+                            "special": "Подъем и опускание"
+                        }
+                    }
+                }
+            }
+        },
+        "select": {
+            "conditioner_eco_sensor": {
+                "state": {
+                    "off": "Выключен",
+                    "outlining": "Обводящий",
+                    "related": "Сопутствующий",
+                    "on": "Активен"
+                }
+            }
+        }
+    }
+}
