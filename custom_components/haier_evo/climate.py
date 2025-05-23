@@ -1,3 +1,4 @@
+import weakref
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
@@ -24,7 +25,7 @@ class HaierACEntity(ClimateEntity):
     _attr_should_poll = False
 
     def __init__(self, device: api.HaierAC) -> None:
-        self._device = device
+        self._device = weakref.proxy(device)
         self._attr_unique_id = f"{device.device_id}_{device.device_model}"
         self._attr_name = device.device_name
         self._attr_supported_features = device.get_supported_features()
@@ -95,13 +96,7 @@ class HaierACEntity(ClimateEntity):
 
     @property
     def device_info(self) -> dict:
-        return {
-            "identifiers": {(DOMAIN, self._device.device_id)},
-            "name": self._device.device_name,
-            "sw_version": self._device.sw_version,
-            "model": self._device.device_model,
-            "manufacturer": "Haier",
-        }
+        return self._device.device_info
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature."""
@@ -146,6 +141,3 @@ class HaierACEntity(ClimateEntity):
 
     def turn_off(self) -> None:
         self._device.switch_off()
-
-    def update(self) -> None:
-        pass

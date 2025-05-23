@@ -5,6 +5,7 @@ import time
 import threading
 import uuid
 import socket
+import weakref
 from aiohttp import web
 from enum import Enum
 from datetime import datetime, timezone, timedelta
@@ -58,17 +59,17 @@ class HaierAPI(HomeAssistantView):
     name = "/api:haier_evo"
     requires_auth = False
 
-    def __init__(self, haier: Haier):
-        self.haier = haier
+    def __init__(self):
+        self.haier = None
 
     async def get(self, request):
-        if not self.haier.allow_http:
-            return web.Response(text="Not found", status=404, content_type="text/plain")
+        if not getattr(self.haier, "allow_http", False):
+            return web.Response(text="404: Not found", status=404, content_type="text/plain")
         return self.json(self.haier.to_dict())
 
     async def post(self, request):
-        if not self.haier.allow_http:
-            return web.Response(text="Not found", status=404, content_type="text/plain")
+        if not getattr(self.haier, "allow_http", False):
+            return web.Response(text="404: Not found", status=404, content_type="text/plain")
         data = await request.json()
         self.haier.send_message(json.dumps(data))
         return self.json({"result": "success"})
@@ -139,6 +140,7 @@ class AuthResponse(object):
 
 class Haier(object):
 
+    http = HaierAPI()
     common_limits = ResettableLimits(
         calls=C.COMMON_LIMIT_CALLS,
         period=C.COMMON_LIMIT_PERIOD,
@@ -170,8 +172,8 @@ class Haier(object):
         self._socket_thread = None
         self._pull_data = None
         self.allow_http: bool = http
-        hass.http.register_view(HaierAPI(self))
         self.reset_limits()
+        self.register_view()
 
     @property
     def token(self) -> str | None:
@@ -239,11 +241,34 @@ class Haier(object):
         self.auth_login_limits.reset()
         self.auth_refresh_limits.reset()
 
+    def get_http_resources(self):
+        http = getattr(self.hass, "http", None)
+        app = getattr(http, "app", None)
+        router = getattr(app, "router", None)
+        resources = getattr(router, "resources", None)
+        return resources() if resources else []
+
+    def register_view(self):
+        self.http.haier = weakref.proxy(self)
+        for idx, resource in enumerate(self.get_http_resources()):
+            if resource.canonical == self.http.url:
+                return
+        self.hass.http.register_view(self.http)
+
+    def unregister_view(self):
+        self.http.haier = None
+        for idx, resource in enumerate(self.get_http_resources()):
+            if resource.canonical == self.http.url:
+                # noinspection PyProtectedMember
+                del self.hass.http.app.router._resources[idx]
+                break
+
     def stop(self) -> None:
         self._disconnect_requested = True
         self.reset_limits()
         if self._socket_app is not None:
             self._socket_app.close()
+        self.unregister_view()
 
     def to_dict(self) -> dict:
         return {
@@ -556,7 +581,7 @@ class HaierAC(object):
         device_serial: str = None,
         device_title: str = None
     ) -> None:
-        self._haier = haier
+        self._haier = weakref.proxy(haier)
         self._device_id = device_mac
         self._device_serial = device_serial
         self._device_name = device_title
@@ -579,6 +604,10 @@ class HaierAC(object):
         self._turbo_on = False
         self._health_on = False
         self._comfort_on = False
+        self._cleaning_on = False
+        self._antifreeze_on = False
+        self._autohumidity_on = False
+        self._eco_sensor = None
         self._status_data = None
         self._config = None
         self._write_ha_state_callbacks = []
@@ -593,6 +622,16 @@ class HaierAC(object):
             f"model={self.device_model!r}"
             f")"
         )
+
+    @property
+    def device_info(self) -> dict:
+        return {
+            "identifiers": {(C.DOMAIN, self.device_id)},
+            "name": self.device_name,
+            "sw_version": self.sw_version,
+            "model": self.device_model,
+            "manufacturer": "Haier",
+        }
 
     @property
     def status_data(self):
@@ -652,6 +691,14 @@ class HaierAC(object):
 
     @property
     def preset_mode(self) -> str:
+        if self.quiet_on:
+            return "sleep"
+        elif self.turbo_on:
+            return "boost"
+        elif self.comfort_on:
+            return "comfort"
+        # elif self.health_on:
+        #     return "health"
         return self._preset_mode
 
     @property
@@ -681,6 +728,22 @@ class HaierAC(object):
     @property
     def health_on(self) -> bool:
         return self._health_on
+
+    @property
+    def cleaning_on(self) -> bool:
+        return self._cleaning_on
+
+    @property
+    def antifreeze_on(self) -> bool:
+        return self._antifreeze_on
+
+    @property
+    def autohumidity_on(self) -> bool:
+        return self._autohumidity_on
+
+    @property
+    def eco_sensor(self) -> str | None:
+        return self._eco_sensor
 
     @property
     def available(self) -> bool:
@@ -726,6 +789,10 @@ class HaierAC(object):
             "turbo_on": self._turbo_on,
             "health_on": self.health_on,
             "comfort_on": self._comfort_on,
+            "cleaning_on": self.cleaning_on,
+            "antifreeze_on": self.antifreeze_on,
+            "autohumidity_on": self.autohumidity_on,
+            "eco_sensor": self.eco_sensor,
             "available": self.available,
             "mode": self.mode,
             "backend_data": self.status_data,
@@ -772,6 +839,14 @@ class HaierAC(object):
             self._health_on = parsebool(self.config.get_value("health", value))
         elif key == self.config['comfort']:
             self._comfort_on = parsebool(self.config.get_value("comfort", value))
+        elif key == self.config['cleaning']:
+            self._cleaning_on = parsebool(self.config.get_value("cleaning", value))
+        elif key == self.config['antifreeze']:
+            self._antifreeze_on = parsebool(self.config.get_value("antifreeze", value))
+        elif key == self.config['autohumidity']:
+            self._autohumidity_on = parsebool(self.config.get_value("autohumidity", value))
+        elif key == self.config['eco_sensor']:
+            self._eco_sensor = self.config.get_value("eco_sensor", value)
         # elif key == self.config.preset_mode_sleep:
         #     self._preset_mode_sleep = parsebool(self.config.get_value("preset_mode_sleep", value))
         # elif key == self.config_preset_mode:
@@ -821,7 +896,7 @@ class HaierAC(object):
         except Exception as e:
             _LOGGER.error(f"Failed to get status: {e}, response was: {response}")
             self._available = False
-            return None
+            raise
 
     def _get_status(self) -> None:
         self._status_data = data = self._get_status_data()
@@ -941,6 +1016,9 @@ class HaierAC(object):
     def get_preset_modes(self) -> list[str]:
         return ["none"] + self.config.get_preset_modes()
 
+    def get_eco_sensor_options(self) -> list[str]:
+        return self.config.get_mapping_values('eco_sensor')
+
     def set_temperature(self, temp: float) -> None:
         self._send_commands([
             {
@@ -1033,6 +1111,29 @@ class HaierAC(object):
         if commands := self.get_commands(f"comfort", value):
             self._send_commands(commands)
             self._comfort_on = state
+
+    def set_cleaning_on(self, state: bool) -> None:
+        value = "on" if state else "off"
+        if commands := self.get_commands(f"cleaning", value):
+            self._send_commands(commands)
+            self._cleaning_on = state
+
+    def set_antifreeze_on(self, state: bool) -> None:
+        value = "on" if state else "off"
+        if commands := self.get_commands(f"antifreeze", value):
+            self._send_commands(commands)
+            self._antifreeze_on = state
+
+    def set_autohumidity_on(self, state: bool) -> None:
+        value = "on" if state else "off"
+        if commands := self.get_commands(f"autohumidity", value):
+            self._send_commands(commands)
+            self._autohumidity_on = state
+
+    def set_eco_sensor(self, mode: str) -> None:
+        if commands := self.get_commands(f"eco_sensor", mode):
+            self._send_commands(commands)
+            self._eco_sensor = mode
 
 
 def parsebool(value) -> bool:

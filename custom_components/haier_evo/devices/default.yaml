@@ -1,9 +1,9 @@
-command_name: "3"
+#command_name: "3"
 attributes:
   - name: current_temperature
-    id: "0"
+#    id: "0"
   - name: mode
-    id: "5"
+#    id: "5"
     mappings:
       - haier: 0
         value: auto
@@ -16,7 +16,7 @@ attributes:
       - haier: 6
         value: fan_only
   - name: fan_mode
-    id: "6"
+#    id: "6"
     mappings:
       - haier: 1
         value: high
@@ -27,6 +27,6 @@ attributes:
       - haier: 5
         value: auto
   - name: status
-    id: "21"
+#    id: "21"
   - name: target_temperature
-    id: "31"
+#    id: "31"

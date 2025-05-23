@@ -194,14 +194,46 @@ class HaierACConfig(DeviceConfig):
             }))
         return attrs
 
-    def merge_attributes(self):
-        attrs = {a.name: a for a in self.attrs}
-        attrs.update({a.name: a for a in self.attributes})
-        self.attrs = []
-        for attr in attrs.values():
-            self.attrs.append(attr)
+    def merge_attributes(self) -> None:
+        attributes = {a.name: a for a in self.attributes}
+        for i, attr in enumerate(self.attrs[:]):
+            config_attr = attributes.pop(attr.name, None)
+            if config_attr and attr.name == config_attr.name:
+                config_attr.description = attr.description
+                config_attr.current = attr.current
+                self.attrs[i] = config_attr
+        self.attrs.extend(attributes.values())
+        self.attrs.sort(key=lambda a: a.code)
+        if (attr := self.get_attr_by_name("preset_mode_sleep")) and not self["quiet"]:
+            attr_copy = attr.copy()
+            attr_copy.update(attrname="quiet")
+            self.attrs.append(Attribute(attr_copy))
+        elif (attr := self.get_attr_by_name("quiet")) and not self["preset_mode_sleep"]:
+            attr_copy = attr.copy()
+            attr_copy.update(attrname="preset_mode_sleep")
+            self.attrs.append(Attribute(attr_copy))
+        if (attr := self.get_attr_by_name("preset_mode_boost")) and not self["turbo"]:
+            attr_copy = attr.copy()
+            attr_copy.update(attrname="turbo")
+            self.attrs.append(Attribute(attr_copy))
+        elif (attr := self.get_attr_by_name("turbo")) and not self["preset_mode_boost"]:
+            attr_copy = attr.copy()
+            attr_copy.update(attrname="preset_mode_boost")
+            self.attrs.append(Attribute(attr_copy))
+        if (attr := self.get_attr_by_name("preset_mode_comfort")) and not self["comfort"]:
+            attr_copy = attr.copy()
+            attr_copy.update(attrname="comfort")
+            self.attrs.append(Attribute(attr_copy))
+        elif (attr := self.get_attr_by_name("comfort")) and not self["preset_mode_comfort"]:
+            attr_copy = attr.copy()
+            attr_copy.update(attrname="preset_mode_comfort")
+            self.attrs.append(Attribute(attr_copy))
+        if (attr := self.get_attr_by_name("preset_mode_health")) and not self["health"]:
+            attr_copy = attr.copy()
+            attr_copy.update(attrname="health")
+            self.attrs.append(Attribute(attr_copy))
 
-    def get_command_by_name(self, name):
+    def get_command_by_name(self, name: str) -> list[dict] | None:
         try:
             commands = self._config.get('commands') or {}
             return commands.get(name)
@@ -227,7 +259,11 @@ class Attribute(dict):
             "Здоровый режим": "health",
             "Звуковой сигнал": "sound",
             "Подсветка блока": "light",
-        }.get(self.description, data.get("attrname") or "unknown")
+            "10 градусов": "antifreeze",
+            "Эко-датчик": "eco_sensor",
+            "Стерильная очистка": "cleaning",
+            "Авто влажность": "autohumidity",
+        }.get(data.get("attrname", self.description), data.get("attrname") or "unknown")
 
     def __repr__(self):
         return (
@@ -255,6 +291,10 @@ class Attribute(dict):
     def description(self):
         return (self.get("description") or "").strip()
 
+    @description.setter
+    def description(self, value):
+        self["description"] = value
+
     @property
     def code(self) -> int | None:
         try:
@@ -265,6 +305,10 @@ class Attribute(dict):
     @property
     def current(self):
         return self.get("currentValue")
+
+    @current.setter
+    def current(self, value):
+        self["currentValue"] = value
 
     @property
     def command_name(self):
@@ -283,6 +327,10 @@ class Attribute(dict):
     def range(self):
         value = self.get("range")
         return Range(value) if value else None
+
+    @range.setter
+    def range(self, value):
+        self["range"] = value
 
 
 class Range(dict):
@@ -368,9 +416,11 @@ class Item(dict):
         if name == "fan_mode":
             return FanMode(data)
         if name == "swing_horizontal_mode":
-            return SwingMode(data)
+            return SwingHorizontalMode(data)
         if name == "swing_mode":
             return SwingMode(data)
+        if name == "eco_sensor":
+            return EcoSensor(data)
         return cls(data)
 
 
@@ -393,13 +443,8 @@ class FanMode(Item):
     }
 
 
-class SwingMode(Item):
+class SwingHorizontalMode(Item):
     mappings = {
-        "Фиксированное верхнее и нижнее положение": "off",
-        "Верхнее положение": "upper",
-        "Нижнее положение": "bottom",
-        "Вверх и вниз четвертая позиция": "position_4",
-        "Первое положение поворота": "position_1",
         "Исходная позиция": "position_1",
         "Второе положение поворота": "position_2",
         "Третье положение поворота": "position_3",
@@ -407,6 +452,29 @@ class SwingMode(Item):
         "Пятая позиция поворота": "position_5",
         "Шестое положение поворота": "position_6",
         "Седьмая позиция поворота": "position_7",
-        "Автоматический подъем и опускание (только для специальной модели)": "special",
         "Авто режим": "auto",
+    }
+
+
+class SwingMode(Item):
+    mappings = {
+        "Фиксированное верхнее и нижнее положение": "off",
+        "Верхнее положение": "upper",
+        "Первое положение поворота": "position_1",
+        "Нижнее положение": "bottom",
+        "Второе положение поворота": "position_2",
+        "Третье положение поворота": "position_3",
+        "Вверх и вниз четвертая позиция": "position_4",
+        "Пятая позиция поворота": "position_5",
+        "Авто режим": "auto",
+        "Автоматический подъем и опускание (только для специальной модели)": "special",
+    }
+
+
+class EcoSensor(Item):
+    mappings = {
+        "Выключен": "off",
+        "Обводящий": "outlining",
+        "Сопутствующий": "related",
+        "Активен": "on",
     }
