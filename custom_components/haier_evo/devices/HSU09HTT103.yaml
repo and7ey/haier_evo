@@ -2,6 +2,10 @@ command_name: "3"
 attributes:
   - name: current_temperature
     id: "0"
+  - name: target_temperature
+    id: "31"
+  - name: status
+    id: "21"
   - name: mode
     id: "5"
     mappings:
@@ -26,7 +30,3 @@ attributes:
         value: low
       - haier: 5
         value: auto
-  - name: status
-    id: "21"
-  - name: target_temperature
-    id: "31"

@@ -189,7 +189,10 @@ class HaierACConfig(DeviceConfig):
                         "data": m.get('haier'),
                         "name": m.get('value'),
                         "attrname": m.get('value')
-                    } for m in attr.get("mappings", [])]
+                    } for m in attr.get("mappings", []) if (
+                        m.get('value') not in ("", None)
+                        and m.get('haier') not in ("", None)
+                    )],
                 }
             }))
         return attrs
