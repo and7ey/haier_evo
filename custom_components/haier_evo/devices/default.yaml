@@ -1,32 +1,162 @@
-command_name: "3"
+command_name: ""
 attributes:
   - name: current_temperature
-    id: "0"
-  - name: mode
-    id: "5"
-    mappings:
-      - haier: 0
-        value: auto
-      - haier: 1
-        value: cool
-      - haier: 2
-        value: dry
-      - haier: 4
-        value: heat
-      - haier: 6
-        value: fan_only
-  - name: fan_mode
-    id: "6"
-    mappings:
-      - haier: 1
-        value: high
-      - haier: 2
-        value: medium
-      - haier: 3
-        value: low
-      - haier: 5
-        value: auto
-  - name: status
-    id: "21"
+    id: ""
   - name: target_temperature
-    id: "31"
+    id: ""
+  - name: status
+    id: ""
+  - name: mode
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "auto"
+      - haier: "1"
+        value: "cool"
+      - haier: "2"
+        value: "dry"
+      - haier: "4"
+        value: "heat"
+      - haier: "6"
+        value: "fan_only"
+  - name: fan_mode
+    id: ""
+    mappings:
+      - haier: "1"
+        value: "high"
+      - haier: "2"
+        value: "medium"
+      - haier: "3"
+        value: "low"
+      - haier: "5"
+        value: "auto"
+  - name: swing_horizontal_mode
+    id: ""
+    mappings:
+      - haier: ""
+        value: "position_1"
+      - haier: ""
+        value: "position_2"
+      - haier: ""
+        value: "position_3"
+      - haier: ""
+        value: "position_4"
+      - haier: ""
+        value: "position_5"
+      - haier: ""
+        value: "position_6"
+      - haier: ""
+        value: "position_7"
+      - haier: ""
+        value: "auto"
+  - name: swing_mode
+    id: ""
+    mappings:
+      - haier: ""
+        value: "off"
+      - haier: ""
+        value: "upper"
+      - haier: ""
+        value: "position_1"
+      - haier: ""
+        value: "bottom"
+      - haier: ""
+        value: "position_2"
+      - haier: ""
+        value: "position_3"
+      - haier: ""
+        value: "position_4"
+      - haier: ""
+        value: "position_5"
+      - haier: ""
+        value: "auto"
+      - haier: ""
+        value: "special"
+  - name: quiet
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: turbo
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: health
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: light
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: sound
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: antifreeze
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: cleaning
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: autohumidity
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: eco_sensor
+    id: ""
+    mappings:
+      - haier: ""
+        value: "off"
+      - haier: ""
+        value: "outlining"
+      - haier: ""
+        value: "related"
+      - haier: ""
+        value: "on"
+  - name: preset_mode_sleep
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: preset_mode_boost
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: preset_mode_comfort
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"

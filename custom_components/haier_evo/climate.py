@@ -1,3 +1,4 @@
+import weakref
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
@@ -11,31 +12,33 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     haier_object = hass.data[DOMAIN][config_entry.entry_id]
     entities = []
     for device in haier_object.devices:
-        entities.append(HaierACEntity(device))
+        climate = HaierACEntity(device)
+        entities.append(climate)
     async_add_entities(entities)
+    haier_object.write_ha_state()
     return True
 
 
 # https://developers.home-assistant.io/docs/core/entity/climate
 class HaierACEntity(ClimateEntity):
 
+    _attr_translation_key = "conditioner"
     _attr_should_poll = False
 
     def __init__(self, device: api.HaierAC) -> None:
-        self._device = device
-        self._attr_unique_id = f"{device.device_id}_{device.model_name}"
+        self._device = weakref.proxy(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}"
         self._attr_name = device.device_name
         self._attr_supported_features = device.get_supported_features()
         self._attr_hvac_modes = device.get_hvac_modes()
         self._attr_fan_modes = device.get_fan_modes()
+        self._attr_swing_horizontal_modes = device.get_swing_horizontal_modes()
         self._attr_swing_modes = device.get_swing_modes()
         self._attr_preset_modes = device.get_preset_modes()
         # https://developers.home-assistant.io/blog/2024/01/24/climate-climateentityfeatures-expanded/
         self._enable_turn_on_off_backwards_compatibility = False
 
-        def write_ha_state() -> None:
-            self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
-        device.write_ha_state = write_ha_state
+        device.add_write_ha_state_callback(self.async_write_ha_state)
 
     @property
     def icon(self) -> str:
@@ -47,6 +50,10 @@ class HaierACEntity(ClimateEntity):
         if self._device.status == 1:
             return self._device.mode or HVACMode.OFF
         return HVACMode.OFF
+
+    @property
+    def swing_horizontal_mode(self) -> str:
+        return self._device.swing_horizontal_mode
 
     @property
     def swing_mode(self) -> str:
@@ -90,13 +97,7 @@ class HaierACEntity(ClimateEntity):
 
     @property
     def device_info(self) -> dict:
-        return {
-            "identifiers": {(DOMAIN, self._device.device_id)},
-            "name": self._device.device_name,
-            "sw_version": self._device.sw_version,
-            "model": self._device.model_name,
-            "manufacturer": "Haier",
-        }
+        return self._device.device_info
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature."""
@@ -121,6 +122,11 @@ class HaierACEntity(ClimateEntity):
         _LOGGER.debug(f"Setting fan mode to {fan_mode}")
         self._device.set_fan_mode(fan_mode)
 
+    def set_swing_horizontal_mode(self, swing_mode: str) -> None:
+        """Set new target swing horizontal mode."""
+        _LOGGER.debug(f"Setting swing horizontal mode to {swing_mode}")
+        self._device.set_swing_horizontal_mode(swing_mode)
+
     def set_swing_mode(self, swing_mode: str) -> None:
         """Set new target swing operation."""
         _LOGGER.debug(f"Setting swing mode to {swing_mode}")
@@ -136,6 +142,3 @@ class HaierACEntity(ClimateEntity):
 
     def turn_off(self) -> None:
         self._device.switch_off()
-
-    def update(self) -> None:
-        pass
