@@ -23,7 +23,7 @@ class HaierACEcoSensorSelect(SelectEntity):
     def __init__(self, device: api.HaierAC) -> None:
         self._device = weakref.proxy(device)
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_eco_sensor"
-        self._attr_name = f"{device.device_name} Это-датчик"
+        self._attr_name = f"{device.device_name} Эко-датчик"
         self._attr_icon = "mdi:format-list-bulleted"
         self._attr_options = device.get_eco_sensor_options()
 

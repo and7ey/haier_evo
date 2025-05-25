@@ -62,17 +62,18 @@ class HaierAPI(HomeAssistantView):
     def __init__(self):
         self.haier = None
 
+    # noinspection PyUnusedLocal
     async def get(self, request):
         if not getattr(self.haier, "allow_http", False):
             return web.Response(text="404: Not found", status=404, content_type="text/plain")
         return self.json(self.haier.to_dict())
 
-    async def post(self, request):
-        if not getattr(self.haier, "allow_http", False):
-            return web.Response(text="404: Not found", status=404, content_type="text/plain")
-        data = await request.json()
-        self.haier.send_message(json.dumps(data))
-        return self.json({"result": "success"})
+    # async def post(self, request):
+    #     if not getattr(self.haier, "allow_http", False):
+    #         return web.Response(text="404: Not found", status=404, content_type="text/plain")
+    #     data = await request.json()
+    #     self.haier.send_message(json.dumps(data))
+    #     return self.json({"result": "success"})
 
 
 class AuthResponse(object):
@@ -241,27 +242,20 @@ class Haier(object):
         self.auth_login_limits.reset()
         self.auth_refresh_limits.reset()
 
-    def get_http_resources(self):
+    def get_http_resources(self) -> list:
         http = getattr(self.hass, "http", None)
         app = getattr(http, "app", None)
         router = getattr(app, "router", None)
         resources = getattr(router, "resources", None)
         return resources() if resources else []
 
-    def register_view(self):
+    def register_view(self) -> None:
+        if self.http.url not in (r.canonical for r in self.get_http_resources()):
+            self.hass.http.register_view(self.http)
         self.http.haier = weakref.proxy(self)
-        for idx, resource in enumerate(self.get_http_resources()):
-            if resource.canonical == self.http.url:
-                return
-        self.hass.http.register_view(self.http)
 
-    def unregister_view(self):
+    def unregister_view(self) -> None:
         self.http.haier = None
-        for idx, resource in enumerate(self.get_http_resources()):
-            if resource.canonical == self.http.url:
-                # noinspection PyProtectedMember
-                del self.hass.http.app.router._resources[idx]
-                break
 
     def stop(self) -> None:
         self._disconnect_requested = True
@@ -362,7 +356,7 @@ class Haier(object):
         return response
 
     @retry(
-        retry=retry_if_exception_type((AuthValidationError,)),
+        retry=retry_if_exception_type(AuthValidationError),
         stop=stop_after_attempt(2),
     )
     def login(self, refresh: bool = False) -> None:
@@ -378,6 +372,8 @@ class Haier(object):
             self._refreshtoken = resp.refresh_token
             self._refreshexpire = resp.refresh_expire
             self._save_tokens()
+        except AuthValidationError as e:
+            raise e
         except AssertionError as e:
             _LOGGER.error(f"Assertion error: {e}")
         except Exception as e:
@@ -866,7 +862,7 @@ class HaierAC(object):
             if attr.name == "current_temperature" and str(attr.code) != sensor_curr_temp:
                 continue
             self.config.attrs.append(attr)
-            if attr.command_name and self.config.command_name is None:
+            if attr.command_name and not self.config.command_name:
                 self.config.command_name = attr.command_name
             self._set_attribute_value(str(attr.code), attr.current)
         attr = self.config.get_attr_by_name("target_temperature")
@@ -991,7 +987,7 @@ class HaierAC(object):
             value = value | ClimateEntityFeature.SWING_HORIZONTAL_MODE
         if self.config['swing_mode'] is not None:
             value = value | ClimateEntityFeature.SWING_MODE
-        if self.config.preset_mode is not None:
+        if self.config.preset_mode is True:
             value = value | ClimateEntityFeature.PRESET_MODE
         return ClimateEntityFeature(value)
 
