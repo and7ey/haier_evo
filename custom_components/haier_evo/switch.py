@@ -139,6 +139,7 @@ class HaierACComfortSwitch(HaierACSwitch):
 
 
 class HaierACCleaningSwitch(HaierACSwitch):
+
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
         self._device_attr_name = "cleaning_on"
@@ -147,6 +148,7 @@ class HaierACCleaningSwitch(HaierACSwitch):
 
 
 class HaierACAntiFreezeSwitch(HaierACSwitch):
+
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
         self._device_attr_name = "antifreeze_on"
@@ -155,6 +157,7 @@ class HaierACAntiFreezeSwitch(HaierACSwitch):
 
 
 class HaierACAutoHumiditySwitch(HaierACSwitch):
+
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
         self._device_attr_name = "autohumidity_on"
