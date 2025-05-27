@@ -1,7 +1,4 @@
-"""
-Config parser for Haier Evo devices.
-"""
-
+from __future__ import annotations
 import shutil
 from os.path import dirname, exists, join
 from homeassistant.util.yaml import load_yaml
@@ -29,56 +26,57 @@ class DeviceConfig(object):
 
     def _load_config_file(self) -> None:
         fname = self._find_config_file()
-        self._config = load_yaml(fname)
-        _LOGGER.debug("Loaded device config %s", fname)
+        try:
+            self._config = load_yaml(fname) or {}
+        except Exception as e:
+            _LOGGER.error(f"Failed to load config: {e}")
+            self._config = {}
+        else:
+            _LOGGER.info("Loaded device config %s", fname)
 
     def get_command_name(self) -> str:
         return self._config['command_name']
 
+    def get_attr_by_id(self, id_: str) -> dict | None:
+        return next(filter(
+            lambda a: a.get("id") == id_,
+            (self._config.get("attributes") or [])
+        ), None)
+
+    def get_attr_by_name(self, name: str) -> dict | None:
+        return next(filter(
+            lambda a: a.get("name") == name,
+            (self._config.get("attributes") or [])
+        ), None)
+
     def get_name_by_id(self, id_: str) -> str | None:
-        attributes = self._config['attributes']
-        for attr in attributes:
-            if attr.get('id') == id_:
-                return attr.get('name')
-        return None
+        attr = self.get_attr_by_id(id_)
+        return attr.get('name') if attr else None
 
     def get_id_by_name(self, name: str) -> str | None:
-        attributes = self._config['attributes']
-        for attr in attributes:
-            if attr.get('name') == name:
-                return attr.get('id')
-        return None
+        attr = self.get_attr_by_name(name)
+        return attr.get('id') if attr else None
 
     def get_value(self, id_: str, haier_value: int) -> str | None:
-        attributes = self._config['attributes']
-        for attr in attributes:
-            if attr.get('id') == id_:
-                mappings = attr.get('mappings')
-                for mapping in mappings:
-                    if mapping.get('haier') == haier_value:
-                        return mapping.get('value')
+        attr = self.get_attr_by_id(id_) or {}
+        for mapping in attr.get('mappings', []):
+            if mapping.get('haier') == haier_value:
+                return mapping.get('value')
         return None
 
-    def get_mapping_values(self, name: str) -> list[str]:
+    def get_value_code(self, id_: str, value: str) -> int | None:
+        attr = self.get_attr_by_id(id_) or {}
+        for mapping in attr.get('mappings', []):
+            if mapping.get('value') == value:
+                return mapping.get('haier')
+        return None
+
+    def get_values(self, name: str) -> list[str]:
         values = []
-        attributes = self._config['attributes']
-        for attr in attributes:
-            if attr.get('name') == name:
-                mappings = attr.get('mappings')
-                for mapping in mappings:
-                    values.append(mapping.get('value'))
-                break
+        attr = self.get_attr_by_name(name) or {}
+        for mapping in attr.get('mappings', []):
+            values.append(mapping.get('value'))
         return [str(v) for v in values]
-
-    def get_haier_code(self, id_: str, value: str) -> int | None:
-        attributes = self._config['attributes']
-        for attr in attributes:
-            if attr.get('id') == id_:
-                mappings = attr.get('mappings')
-                for mapping in mappings:
-                    if mapping.get('value') == value:
-                        return mapping.get('haier')
-        return None
 
     def to_dict(self) -> dict:
         pass
@@ -90,6 +88,7 @@ class HaierACConfig(DeviceConfig):
         self._userpath = userpath
         super().__init__(model)
         self.attrs = []
+        self._attrs_cache = {}
         self._command_name = self.get_command_name()
 
     def _find_config_file(self) -> str:
@@ -102,7 +101,7 @@ class HaierACConfig(DeviceConfig):
                 pass
         return userfname if exists(userfname) else fname
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}("
             f"command_name={self.command_name!r},"
@@ -113,12 +112,11 @@ class HaierACConfig(DeviceConfig):
             f"fan_mode={self['fan_mode']!r},"
             f"swing_mode={self['swing_mode']!r},"
             f"swing_horizontal_mode={self['swing_horizontal_mode']!r}"
-            # f"preset_mode_sleep={self['preset_mode_sleep']!r},"
             f")"
         )
 
-    def __getitem__(self, item):
-        return self.get_code_by_name(item)
+    def __getitem__(self, item) -> str | None:
+        return self.get_code_by_name(str(item))
 
     def to_dict(self) -> dict:
         return {
@@ -127,33 +125,33 @@ class HaierACConfig(DeviceConfig):
         }
 
     @property
-    def command_name(self):
+    def command_name(self) -> str:
         return self._command_name
 
     @command_name.setter
-    def command_name(self, value):
-        self._command_name = value
+    def command_name(self, value: str) -> None:
+        self._command_name = str(value)
 
     @property
-    def preset_mode(self):
+    def preset_mode(self) -> bool:
         return bool(self.get_preset_modes())
 
     def get_command_name(self) -> str:
         return self._config.get('command_name')
 
-    def get_haier_code(self, id_: str, value: str) -> int | None:
-        attr = self.get_attr_by_name(id_)
-        return {i.name: i.value for i in attr.list}.get(value) if attr else None
-
     def get_value(self, id_: str, haier_value: str) -> str | None:
         attr = self.get_attr_by_name(id_)
         return {str(i.value): i.name for i in attr.list}.get(haier_value) if attr else None
 
-    def get_mapping_values(self, name: str) -> list[str]:
+    def get_value_code(self, id_: str, value: str) -> int | None:
+        attr = self.get_attr_by_name(id_)
+        return {i.name: i.value for i in attr.list}.get(value) if attr else None
+
+    def get_values(self, name: str) -> list[str]:
         attr = self.get_attr_by_name(name)
         return [i.name for i in attr.list if i.name != "unknown"] if attr else []
 
-    def get_custom_preset_modes(self):
+    def get_custom_preset_modes(self) -> list[str]:
         try:
             modes = self._config.get('preset_modes')
             assert isinstance(modes, list)
@@ -163,21 +161,25 @@ class HaierACConfig(DeviceConfig):
         except AssertionError:
             return []
 
-    def get_preset_modes(self):
+    def get_preset_modes(self) -> list[str]:
         return self.get_custom_preset_modes() + [
             a.name.replace("preset_mode_", "")
             for a in filter(lambda a: a.name.startswith("preset_mode"), self.attrs)
         ]
 
-    def get_attr_by_name(self, name):
-        return next(filter(lambda a: a.name == name, self.attrs), None)
+    def get_attr_by_name(self, name: str) -> Attribute | None:
+        if name in self._attrs_cache:
+            return self._attrs_cache[name]
+        attr = next(filter(lambda a: a.name == name, self.attrs), None)
+        if attr is not None:
+            self._attrs_cache[name] = attr
+        return attr
 
-    def get_code_by_name(self, name):
+    def get_code_by_name(self, name: str) -> str | None:
         attr = self.get_attr_by_name(name)
         return str(attr.code) if attr else None
 
-    @property
-    def attributes(self):
+    def get_config_attributes(self) -> list[Attribute]:
         attrs = []
         for attr in (a for a in self._config.get('attributes', []) if a.get("id")):
             attrs.append(Attribute({
@@ -198,15 +200,17 @@ class HaierACConfig(DeviceConfig):
         return attrs
 
     def merge_attributes(self) -> None:
-        attributes = {a.name: a for a in self.attributes}
+        attributes = {a.name: a for a in self.get_config_attributes()}
         for i, attr in enumerate(self.attrs[:]):
             config_attr = attributes.pop(attr.name, None)
             if config_attr and attr.name == config_attr.name:
                 config_attr.description = attr.description
                 config_attr.current = attr.current
+                config_attr.range = attr.range
                 self.attrs[i] = config_attr
+            if attr.command_name and not self.command_name:
+                self.command_name = attr.command_name
         self.attrs.extend(attributes.values())
-        self.attrs.sort(key=lambda a: a.code)
         if (attr := self.get_attr_by_name("preset_mode_sleep")) and not self["quiet"]:
             attr_copy = attr.copy()
             attr_copy.update(attrname="quiet")
@@ -223,18 +227,7 @@ class HaierACConfig(DeviceConfig):
             attr_copy = attr.copy()
             attr_copy.update(attrname="preset_mode_boost")
             self.attrs.append(Attribute(attr_copy))
-        if (attr := self.get_attr_by_name("preset_mode_comfort")) and not self["comfort"]:
-            attr_copy = attr.copy()
-            attr_copy.update(attrname="comfort")
-            self.attrs.append(Attribute(attr_copy))
-        elif (attr := self.get_attr_by_name("comfort")) and not self["preset_mode_comfort"]:
-            attr_copy = attr.copy()
-            attr_copy.update(attrname="preset_mode_comfort")
-            self.attrs.append(Attribute(attr_copy))
-        if (attr := self.get_attr_by_name("preset_mode_health")) and not self["health"]:
-            attr_copy = attr.copy()
-            attr_copy.update(attrname="health")
-            self.attrs.append(Attribute(attr_copy))
+        self.attrs.sort(key=lambda a: a.code)
 
     def get_command_by_name(self, name: str) -> list[dict] | None:
         try:
@@ -246,7 +239,7 @@ class HaierACConfig(DeviceConfig):
 
 class Attribute(dict):
 
-    def __init__(self, data):
+    def __init__(self, data: dict) -> None:
         super().__init__(data)
         self.name = {
             "Режимы": "mode",
@@ -256,9 +249,9 @@ class Attribute(dict):
             "Включение/выключение": "status",
             "Горизонтальные жалюзи": "swing_horizontal_mode",
             "Вертикальные жалюзи": "swing_mode",
-            "Комфортный сон": "preset_mode_comfort",
             "Тихий": "preset_mode_sleep",
             "Турбо": "preset_mode_boost",
+            "Комфортный сон": "comfort",
             "Здоровый режим": "health",
             "Звуковой сигнал": "sound",
             "Подсветка блока": "light",
@@ -268,7 +261,7 @@ class Attribute(dict):
             "Авто влажность": "autohumidity",
         }.get(data.get("attrname", self.description), data.get("attrname") or "unknown")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}("
             f"{self.name}({self.code}),"
@@ -291,11 +284,11 @@ class Attribute(dict):
         }
 
     @property
-    def description(self):
+    def description(self) -> str:
         return (self.get("description") or "").strip()
 
     @description.setter
-    def description(self, value):
+    def description(self, value: str) -> None:
         self["description"] = value
 
     @property
@@ -306,39 +299,39 @@ class Attribute(dict):
             return -1
 
     @property
-    def current(self):
+    def current(self) -> int | float | str | None:
         return self.get("currentValue")
 
     @current.setter
-    def current(self, value):
+    def current(self, value: int | float | str) -> None:
         self["currentValue"] = value
 
     @property
-    def command_name(self):
+    def command_name(self) -> str | None:
         return self.get("commandName")
 
     @property
-    def type(self):
+    def type(self) -> str:
         return self.get("type", "").lower()
 
     @property
-    def list(self):
+    def list(self) -> list[Item]:
         data = self.get("list", {}).get("data")
         return [Item.create(self.name, v) for v in data] if data else []
 
     @property
-    def range(self):
+    def range(self) -> Range | None:
         value = self.get("range")
         return Range(value) if value else None
 
     @range.setter
-    def range(self, value):
+    def range(self, value: dict) -> None:
         self["range"] = value
 
 
 class Range(dict):
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"["
             f"min={self.min_value},"
@@ -355,23 +348,23 @@ class Range(dict):
         }
 
     @property
-    def type(self):
+    def type(self) -> str | None:
         return self.get("type")
 
     @property
-    def data(self):
+    def data(self) -> dict:
         return self.get("data", {})
 
     @property
-    def min_value(self):
+    def min_value(self) -> int | float | str | None:
         return self.data.get("minValue")
 
     @property
-    def max_value(self):
+    def max_value(self) -> int | float | str | None:
         return self.data.get("maxValue")
 
     @property
-    def step(self):
+    def step(self) -> int | float | str | None:
         return self.data.get("step")
 
 
@@ -381,11 +374,11 @@ class Item(dict):
         "Активен": "on",
     }
 
-    def __init__(self, data):
+    def __init__(self, data: dict) -> None:
         super().__init__(data)
         self.name = self.mappings.get(self.description, data.get("attrname") or "unknown")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"{self.name}("
             f"{self.value},"
@@ -401,11 +394,11 @@ class Item(dict):
         }
 
     @property
-    def description(self):
+    def description(self) -> str:
         return (self.get("name") or "").strip()
 
     @property
-    def value(self):
+    def value(self) -> str | None:
         value = self.get("data")
         return {
             "true": "1",
@@ -413,7 +406,7 @@ class Item(dict):
         }.get(value, value)
 
     @classmethod
-    def create(cls, name, data):
+    def create(cls, name: str, data: dict) -> Item:
         if name == "mode":
             return Mode(data)
         if name == "fan_mode":
@@ -456,6 +449,7 @@ class SwingHorizontalMode(Item):
         "Шестое положение поворота": "position_6",
         "Седьмая позиция поворота": "position_7",
         "Авто режим": "auto",
+        "Выключен": "off",
     }
 
 

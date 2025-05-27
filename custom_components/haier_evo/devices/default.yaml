@@ -86,6 +86,13 @@ attributes:
         value: "off"
       - haier: "1"
         value: "on"
+  - name: comfort
+    id: ""
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
   - name: health
     id: ""
     mappings:
@@ -147,13 +154,6 @@ attributes:
       - haier: "1"
         value: "on"
   - name: preset_mode_boost
-    id: ""
-    mappings:
-      - haier: "0"
-        value: "off"
-      - haier: "1"
-        value: "on"
-  - name: preset_mode_comfort
     id: ""
     mappings:
       - haier: "0"
