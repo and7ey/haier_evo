@@ -18,10 +18,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant import exceptions
 from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode, SWING_OFF, PRESET_NONE
 from homeassistant.components.http import HomeAssistantView
-from .config import HaierACConfig
 from .logger import _LOGGER
 from .limits import ResettableLimits
-from . import config
+from . import config as CFG # noqa
 from . import const as C # noqa
 
 
@@ -67,6 +66,13 @@ class HaierAPI(HomeAssistantView):
         if not getattr(self.haier, "allow_http", False):
             return web.Response(text="404: Not found", status=404, content_type="text/plain")
         return self.json(self.haier.to_dict())
+
+    async def post(self, request):
+        if not getattr(self.haier, "allow_http_post", False):
+            return web.Response(text="404: Not found", status=404, content_type="text/plain")
+        data = await request.json()
+        self.haier.send_message(json.dumps(data))
+        return self.json({"result": "success"})
 
 
 class AuthResponse(object):
@@ -154,10 +160,11 @@ class Haier(object):
         self._lock = threading.Lock()
         self._pull_data = None
         self.hass: HomeAssistant = hass
-        self.devices: list[HaierAC] = []
+        self.devices: list[HaierDevice] = []
         self.email: str = email
         self.password: str = password
         self.allow_http: bool = http
+        self.allow_http_post: bool = False
         self.token: str | None = None
         self.tokenexpire: datetime | None = None
         self.refreshtoken: str | None = None
@@ -172,7 +179,7 @@ class Haier(object):
     def to_dict(self) -> dict:
         return {
             "socket_status": self.socket_status,
-            # "backend_data": self._pull_data,
+            "backend_data": self._pull_data,
             "devices": [device.to_dict() for device in self.devices]
         }
 
@@ -440,22 +447,27 @@ class Haier(object):
                 containers.remove(item)
                 continue
             state_data = item.setdefault("state", "{}")
-            state_json = item['state'] = json.loads(state_data)
+            state_json = item['state'] = (
+                json.loads(state_data)
+                if isinstance(state_data, str)
+                else state_data
+            )
             devices = state_json.setdefault("items", [])
             for d in devices:
                 device_title = d.get('title', '')
                 device_link = d.get('action', {}).get('link', '')
                 parsed_link = urlparse(device_link)
                 query_params = parse_qs(parsed_link.query)
+                device_type = query_params.setdefault('type', ['UNKNOWN'])[0]
                 device_mac = query_params.get('deviceId', [''])[0]
                 device_mac = device_mac.replace('%3A', ':')
                 device_serial = query_params.get('serialNum', [''])[0]
-                device = HaierAC(
+                device = HaierDevice.create(
                     haier=self,
+                    device_type=device_type,
                     device_mac=device_mac,
                     device_serial=device_serial,
                     device_title=device_title,
-                    backend_data=self.pull_device_data(device_mac)
                 )
                 self.devices.append(device)
                 _LOGGER.info(f"Added device: {device}")
@@ -556,7 +568,7 @@ class Haier(object):
             raise e
 
 
-class HaierAC(object):
+class HaierDevice(object):
 
     def __init__(
         self,
@@ -570,33 +582,12 @@ class HaierAC(object):
         self.device_id = device_mac
         self.device_serial = device_serial
         self.device_name = device_title
-        self.device_model = "AC"
-        self.current_temperature = 0
-        self.target_temperature = 0
-        self.status = None
-        self.mode = None
-        self.fan_mode = None
-        self.swing_horizontal_mode = None
-        self.swing_mode = None
-        self._preset_mode = None
-        self.min_temperature = 7
-        self.max_temperature = 35
+        self.device_model = "UNKNOWN"
         self.sw_version = None
-        self._available = True
-        self.light_on = True
-        self.sound_on = True
-        self.quiet_on = False
-        self.turbo_on = False
-        self.health_on = False
-        self.comfort_on = False
-        self.cleaning_on = False
-        self.antifreeze_on = False
-        self.autohumidity_on = False
-        self.eco_sensor = None
-        self._status_data = None
-        self._config = None
         self._write_ha_state_callbacks = []
-        self._get_status(backend_data)
+        self._available = True
+        self._config = None
+        self._status_data = backend_data
 
     def __repr__(self) -> str:
         return (
@@ -619,7 +610,19 @@ class HaierAC(object):
         }
 
     @property
-    def status_data(self):
+    def device_mac(self) -> str:
+        return self.device_id
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    @available.setter
+    def available(self, value: bool):
+        self._available = bool(value)
+
+    @property
+    def status_data(self) -> dict:
         return self._status_data
 
     @property
@@ -627,8 +630,164 @@ class HaierAC(object):
         return self._haier.hass
 
     @property
-    def device_mac(self) -> str:
-        return self.device_id
+    def config(self) -> CFG.DeviceConfig:
+        return self._config
+
+    def to_dict(self) -> dict:
+        return {
+            "available": self.available,
+            "device_id": self.device_id,
+            "device_mac": self.device_mac,
+            "device_name": self.device_name,
+            "device_serial": self.device_serial,
+            "sw_version": self.sw_version,
+            "backend_data": self.status_data,
+        }
+
+    def _get_status(self, data: dict) -> dict:
+        self._status_data = data = (data or {})
+        info = data.setdefault("info", {})
+        self.device_serial = info.setdefault("serialNumber", self.device_serial)
+        device_model = info.setdefault("model", "AC")
+        device_model = device_model.replace('-','').replace('/', '')[:11]
+        self.device_model = device_model
+        self.set_available(data.setdefault("status", "ONLINE"))
+        settings = data.setdefault("settings", {})
+        self.device_name = settings.setdefault("name", {}).setdefault("name", self.device_name)
+        self.sw_version = settings.setdefault('firmware', {}).setdefault('value', None)
+        # read config and current values
+        self._load_config_from_attributes(data)
+        return data
+
+    def _load_config_from_attributes(self, data: dict) -> None:
+        pass
+
+    def _set_attribute_value(self, code: str, value) -> None:
+        pass
+
+    def _handle_status_update(self, received_message: dict) -> None:
+        message_statuses = received_message.get("payload", {}).get("statuses", [{}])
+        _LOGGER.info(f"Received status update {self.device_id} {received_message}")
+        for key, value in message_statuses[0]['properties'].items():
+            self._set_attribute_value(key, value)
+        self.available = True
+        self.write_ha_state()
+
+    def _handle_device_status_update(self, received_message: dict) -> None:
+        _LOGGER.info(f"Received status update {self.device_id} {received_message}")
+        status = received_message.get("payload", {}).get("status")
+        self.set_available(status)
+        self.write_ha_state()
+
+    def _handle_info(self, received_message: dict) -> None:
+        payload = received_message.get("payload", {})
+        self.sw_version = payload.get("swVersion") or self.sw_version
+
+    def _send_message(self, message: str) -> None:
+        self._haier.send_message(message)
+
+    def _send_commands(self, commands: list[dict]) -> None:
+        pass
+
+    def on_message(self, message_dict: dict) -> None:
+        message_type = message_dict.get("event", "")
+        if message_type == "status":
+            self._handle_status_update(message_dict)
+        elif message_type == "command_response":
+            pass
+        elif message_type == "info":
+            self._handle_info(message_dict)
+        elif message_type == "deviceStatusEvent":
+            self._handle_device_status_update(message_dict)
+        else:
+            _LOGGER.warning(f"Got unknown message: {message_dict}")
+
+    def write_ha_state(self) -> None:
+        for callback in self._write_ha_state_callbacks:
+            self.hass.loop.call_soon_threadsafe(callback)
+
+    def add_write_ha_state_callback(self, callback) -> None:
+        if callback not in self._write_ha_state_callbacks:
+            self._write_ha_state_callbacks.append(callback)
+
+    def set_available(self, status: str) -> None:
+        self.available = False if str(status).upper() == 'OFFLINE' else True
+
+    # noinspection PyMethodMayBeStatic
+    def create_entities_climate(self) -> list:
+        return []
+
+    # noinspection PyMethodMayBeStatic
+    def create_entities_switch(self) -> list:
+        return []
+
+    # noinspection PyMethodMayBeStatic
+    def create_entities_select(self) -> list:
+        return []
+
+    # noinspection PyMethodMayBeStatic
+    def create_entities_sensor(self) -> list:
+        return []
+
+    # noinspection PyMethodMayBeStatic
+    def create_entities_binary_sensor(self) -> list:
+        return []
+
+    @classmethod
+    def create(
+        cls,
+        haier: Haier,
+        device_type: str,
+        device_mac: str,
+        device_serial: str = None,
+        device_title: str = None,
+    ) -> HaierDevice:
+        if device_type == 'AC':
+            device_cls = HaierAC
+        elif device_type == 'REF':
+            device_cls = HaierREF
+        else:
+            device_cls = cls
+            _LOGGER.warning(f"Unknown device type: {device_type}")
+        return device_cls(
+            haier=haier,
+            device_mac=device_mac,
+            device_serial=device_serial,
+            device_title=device_title,
+            backend_data=haier.pull_device_data(device_mac),
+        )
+
+
+class HaierAC(HaierDevice):
+
+    def __init__(
+        self,
+        backend_data: dict = None,
+        **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+        self.device_model = "AC"
+        self.current_temperature = 0
+        self.target_temperature = 0
+        self.status = None
+        self.mode = None
+        self.fan_mode = None
+        self.swing_horizontal_mode = None
+        self.swing_mode = None
+        self._preset_mode = None
+        self.min_temperature = 7
+        self.max_temperature = 35
+        self.light_on = True
+        self.sound_on = True
+        self.quiet_on = False
+        self.turbo_on = False
+        self.health_on = False
+        self.comfort_on = False
+        self.cleaning_on = False
+        self.antifreeze_on = False
+        self.autohumidity_on = False
+        self.eco_sensor = None
+        self._get_status(backend_data)
 
     @property
     def preset_mode(self) -> str:
@@ -645,25 +804,12 @@ class HaierAC(object):
         self._preset_mode = preset_mode
 
     @property
-    def available(self) -> bool:
-        return self._available
-
-    @available.setter
-    def available(self, value: bool):
-        self._available = bool(value)
-
-    @property
-    def config(self) -> HaierACConfig:
+    def config(self) -> CFG.HaierACConfig:
         return self._config
 
     def to_dict(self) -> dict:
-        return {
-            "available": self.available,
-            "device_id": self.device_id,
-            "device_mac": self.device_mac,
-            "device_name": self.device_name,
-            "device_serial": self.device_serial,
-            "sw_version": self.sw_version,
+        data = super().to_dict()
+        data.update({
             "max_temperature": self.max_temperature,
             "min_temperature": self.min_temperature,
             "current_temperature": self.current_temperature,
@@ -685,29 +831,8 @@ class HaierAC(object):
             "autohumidity_on": self.autohumidity_on,
             "eco_sensor": self.eco_sensor,
             "config": self.config.to_dict(),
-            "backend_data": self.status_data,
-        }
-
-    def write_ha_state(self) -> None:
-        for callback in self._write_ha_state_callbacks:
-            self.hass.loop.call_soon_threadsafe(callback)
-
-    def add_write_ha_state_callback(self, callback) -> None:
-        if callback not in self._write_ha_state_callbacks:
-            self._write_ha_state_callbacks.append(callback)
-
-    def on_message(self, message_dict: dict) -> None:
-        message_type = message_dict.get("event", "")
-        if message_type == "status":
-            self._handle_status_update(message_dict)
-        elif message_type == "command_response":
-            pass
-        elif message_type == "info":
-            self._handle_info(message_dict)
-        elif message_type == "deviceStatusEvent":
-            self._handle_device_status_update(message_dict)
-        else:
-            _LOGGER.warning(f"Got unknown message: {message_dict}")
+        })
+        return data
 
     def _set_attribute_value(self, code: str, value) -> None:
         if code == self.config['current_temperature']:  # Температура в комнате
@@ -746,7 +871,7 @@ class HaierAC(object):
             self.eco_sensor = self.config.get_value("eco_sensor", value)
 
     def _load_config_from_attributes(self, data: dict) -> None:
-        self._config = config.HaierACConfig(self.device_model, self.hass.config.path(C.DOMAIN))
+        self._config = CFG.HaierACConfig(self.device_model, self.hass.config.path(C.DOMAIN))
         attributes = data.setdefault("attributes", [])
         sensors = data.setdefault("sensors", {}).get("items", [])
         sensor_curr_temp = next(filter(lambda i: (
@@ -754,7 +879,7 @@ class HaierAC(object):
             and isinstance(i.get("value"), dict)
             and i.get("value", {}).get("description") == "indoorTemperature"
         ), sensors), {}).get("value", {}).get("name")
-        attrs = list(sorted(map(lambda x: config.Attribute(x), attributes), key=lambda x: x.code))
+        attrs = list(sorted(map(lambda x: CFG.Attribute(x), attributes), key=lambda x: x.code))
         for attr in attrs:
             if attr.name == "current_temperature" and str(attr.code) != sensor_curr_temp:
                 continue
@@ -768,19 +893,8 @@ class HaierAC(object):
                 self.max_temperature = float(attr.range.max_value)
         _LOGGER.info(self.config)
 
-    def _get_status(self, data: dict) -> None:
-        self._status_data = data = (data or {})
-        info = data.setdefault("info", {})
-        self.device_serial = info.setdefault("serialNumber", self.device_serial)
-        device_model = info.setdefault("model", "AC")
-        device_model = device_model.replace('-','').replace('/', '')[:11]
-        self.device_model = device_model
-        self.set_available(data.setdefault("status", "ONLINE"))
-        settings = data.setdefault("settings", {})
-        self.device_name = settings.setdefault("name", {}).setdefault("name", self.device_name)
-        self.sw_version = settings.setdefault('firmware', {}).setdefault('value', None)
-        # read config and current values
-        self._load_config_from_attributes(data)
+    def _get_status(self, data: dict) -> dict:
+        data = super()._get_status(data)
         if self.swing_horizontal_mode is None:
             self.swing_horizontal_mode = SWING_OFF
         if self.swing_mode is None:
@@ -788,27 +902,7 @@ class HaierAC(object):
         if self.preset_mode is None:
             self.preset_mode = PRESET_NONE
         self.write_ha_state()
-
-    def _handle_status_update(self, received_message: dict) -> None:
-        message_statuses = received_message.get("payload", {}).get("statuses", [{}])
-        _LOGGER.info(f"Received status update {self.device_id} {received_message}")
-        for key, value in message_statuses[0]['properties'].items():
-            self._set_attribute_value(key, value)
-        self.available = True
-        self.write_ha_state()
-
-    def _handle_device_status_update(self, received_message: dict) -> None:
-        _LOGGER.info(f"Received status update {self.device_id} {received_message}")
-        status = received_message.get("payload", {}).get("status")
-        self.set_available(status)
-        self.write_ha_state()
-
-    def _handle_info(self, received_message: dict) -> None:
-        payload = received_message.get("payload", {})
-        self.sw_version = payload.get("swVersion") or self.sw_version
-
-    def _send_message(self, message: str) -> None:
-        self._haier.send_message(message)
+        return data
 
     def _send_commands(self, commands: list[dict]) -> None:
         self._send_message(json.dumps({
@@ -818,7 +912,7 @@ class HaierAC(object):
             "commands": commands,
         }))
 
-    def get_commands(self, name, value):
+    def get_commands(self, name: str, value: str) -> list[dict]:
         if name == "preset_mode":
             func = getattr(self, f"get_preset_mode_{value}", None)
             if func is not None:
@@ -832,7 +926,7 @@ class HaierAC(object):
             "value": str(getattr(next(filter(lambda i: i.name == value, attr.list), None), "value", None))
         }] if attr else []
 
-    def get_preset_mode_none(self):
+    def get_preset_mode_none(self) -> list[dict]:
         if custom := self.config.get_command_by_name('preset_mode_none'):
             return custom
         return [{
@@ -840,7 +934,7 @@ class HaierAC(object):
             "value": getattr(next(filter(lambda i: i.name == "off", attr.list), None), "value", "0")
         } for attr in filter(lambda a: a.name.startswith("preset_mode"), self.config.attrs)]
 
-    def get_preset_mode_command(self, mode):
+    def get_preset_mode_command(self, mode: str) -> list[dict]:
         if custom := self.config.get_command_by_name(f'preset_mode_{mode}'):
             return custom
         attr = self.config.get_attr_by_name(f"preset_mode_{mode}")
@@ -887,9 +981,6 @@ class HaierAC(object):
 
     def get_eco_sensor_options(self) -> list[str]:
         return self.config.get_values('eco_sensor')
-
-    def set_available(self, status: str) -> None:
-        self.available = False if str(status).upper() == 'OFFLINE' else True
 
     def set_temperature(self, temp: float) -> None:
         self._send_commands([
@@ -1003,6 +1094,141 @@ class HaierAC(object):
         if commands := self.get_commands(f"eco_sensor", mode):
             self._send_commands(commands)
             self.eco_sensor = mode
+
+    def create_entities_climate(self) -> list:
+        from . import climate
+        return [climate.HaierACEntity(self)]
+    
+    def create_entities_switch(self) -> list:
+        from . import switch
+        entities = []
+        if self.config['light'] is not None:
+            entities.append(switch.HaierACLightSwitch(self))
+        if self.config['sound'] is not None:
+            entities.append(switch.HaierACSoundSwitch(self))
+        if self.config['quiet'] is not None:
+            entities.append(switch.HaierACQuietSwitch(self))
+        if self.config['turbo'] is not None:
+            entities.append(switch.HaierACTurboSwitch(self))
+        if self.config['health'] is not None:
+            entities.append(switch.HaierACHealthSwitch(self))
+        if self.config['comfort'] is not None:
+            entities.append(switch.HaierACComfortSwitch(self))
+        if self.config['cleaning'] is not None:
+            entities.append(switch.HaierACCleaningSwitch(self))
+        if self.config['antifreeze'] is not None:
+            entities.append(switch.HaierACAntiFreezeSwitch(self))
+        if self.config['autohumidity'] is not None:
+            entities.append(switch.HaierACAutoHumiditySwitch(self))
+        return entities
+
+    def create_entities_select(self) -> list:
+        from . import select
+        entities = []
+        if self.config['eco_sensor'] is not None:
+            entities.append(select.HaierACEcoSensorSelect(self))
+        return entities
+
+
+class HaierREF(HaierDevice):
+
+    def __init__(
+        self,
+        backend_data: dict = None,
+        **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+        self.device_model = "REF"
+        self.current_fridge_temperature = 0
+        self.current_freezer_temperature = 0
+        self.current_temperature = 0
+        self.fridge_mode = None
+        self.freezer_mode = None
+        self.super_cooling = False
+        self.super_freeze = False
+        self.vacation_mode = False
+        self.door_open = False
+        self._get_status(backend_data)
+
+    @property
+    def config(self) -> CFG.HaierREFConfig:
+        return self._config
+
+    def to_dict(self) -> dict:
+        data = super().to_dict()
+        data.update({
+            "current_fridge_temperature": self.current_fridge_temperature,
+            "current_freezer_temperature": self.current_freezer_temperature,
+            "current_temperature": self.current_temperature,
+            "fridge_mode": self.fridge_mode,
+            "freezer_mode": self.freezer_mode,
+            "super_cooling": self.super_cooling,
+            "super_freeze": self.super_freeze,
+            "vacation_mode": self.vacation_mode,
+            "door_open": self.door_open,
+        })
+        return data
+
+    def _load_config_from_attributes(self, data: dict) -> None:
+        self._config = CFG.HaierREFConfig(self.device_model, self.hass.config.path(C.DOMAIN))
+        attributes = data.setdefault("attributes", [])
+        attrs = list(sorted(map(lambda x: CFG.Attribute(x), attributes), key=lambda x: x.code))
+        for attr in attrs:
+            self.config.attrs.append(attr)
+        self.config.merge_attributes()
+        for attr in self.config.attrs:
+            _LOGGER.info(f"{self.device_name}: {attr}")
+            self._set_attribute_value(str(attr.code), attr.current)
+        _LOGGER.info(self.config)
+
+    def _set_attribute_value(self, code: str, value) -> None:
+        if code == self.config['current_fridge_temperature']:
+            self.current_fridge_temperature = float(value)
+        elif code == self.config['current_freezer_temperature']:
+            self.current_freezer_temperature = float(value)
+        elif code == self.config['current_temperature']:
+            self.current_temperature = float(value)
+        elif code == self.config['fridge_mode']:
+            self.fridge_mode = self.config.get_value("fridge_mode", value)
+        elif code == self.config['freezer_mode']:
+            self.freezer_mode = self.config.get_value("freezer_mode", value)
+        elif code == self.config['super_cooling']:
+            self.super_cooling = parsebool(self.config.get_value("super_cooling", value))
+        elif code == self.config['super_freeze']:
+            self.super_freeze = parsebool(self.config.get_value("super_freeze", value))
+        elif code == self.config['vacation_mode']:
+            self.vacation_mode = parsebool(self.config.get_value("vacation_mode", value))
+        elif code == self.config['door_open']:
+            self.door_open = parsebool(self.config.get_value("door_open", value))
+
+    def create_entities_sensor(self) -> list:
+        from . import sensor
+        entities = []
+        if self.config['current_temperature'] is not None:
+            entities.append(sensor.HaierREFTemperatureSensor(self))
+        if self.config['current_fridge_temperature'] is not None:
+            entities.append(sensor.HaierREFFridgeTemperatureSensor(self))
+        if self.config['current_freezer_temperature'] is not None:
+            entities.append(sensor.HaierREFFreezerTemperatureSensor(self))
+        if self.config['fridge_mode'] is not None:
+            entities.append(sensor.HaierREFFridgeModeSensor(self))
+        if self.config['freezer_mode'] is not None:
+            entities.append(sensor.HaierREFFreezerModeSensor(self))
+        return entities
+
+    def create_entities_binary_sensor(self) -> list:
+        from . import binary_sensor
+        entities = []
+        if self.config['super_cooling'] is not None:
+            entities.append(binary_sensor.HaierREFSuperCoolingSensor(self))
+        if self.config['super_freeze'] is not None:
+            entities.append(binary_sensor.HaierREFSuperFreezeSensor(self))
+        if self.config['vacation_mode'] is not None:
+            entities.append(binary_sensor.HaierREFVacationSensor(self))
+        if self.config['door_open'] is not None:
+            entities.append(binary_sensor.HaierREFDoorSensor(self))
+        return entities
+
 
 
 def parsebool(value) -> bool:

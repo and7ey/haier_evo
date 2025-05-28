@@ -237,11 +237,30 @@ class HaierACConfig(DeviceConfig):
             return None
 
 
+class HaierREFConfig(HaierACConfig):
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"current_temperature={self['current_temperature']!r},"
+            f"current_fridge_temperature={self['current_fridge_temperature']!r},"
+            f"current_freezer_temperature={self['current_freezer_temperature']!r},"
+            f"fridge_mode={self['fridge_mode']!r},"
+            f"freezer_mode={self['freezer_mode']!r},"
+            f"super_cooling={self['super_cooling']!r},"
+            f"super_freeze={self['super_freeze']!r},"
+            f"vacation_mode={self['vacation_mode']!r},"
+            f"door_open={self['door_open']!r}"
+            f")"
+        )
+
+
 class Attribute(dict):
 
     def __init__(self, data: dict) -> None:
         super().__init__(data)
         self.name = {
+            # Кондиционеры:
             "Режимы": "mode",
             "Целевая температура": "target_temperature",
             "Температура в комнате": "current_temperature",
@@ -259,6 +278,16 @@ class Attribute(dict):
             "Эко-датчик": "eco_sensor",
             "Стерильная очистка": "cleaning",
             "Авто влажность": "autohumidity",
+            # Холодильники:
+            "Температура холодильника (℃)": "current_fridge_temperature",
+            "Температура морозильной камеры (°C)": "current_freezer_temperature",
+            "Температура в помещении": "current_temperature",
+            "Холодильное отделение": "fridge_mode",
+            "Морозильное отделение": "freezer_mode",
+            "Супер-охлаждение": "super_cooling",
+            "Супер-заморозка": "super_freeze",
+            "Режим Отпуск": "vacation_mode",
+            "Состояние дверцы холодильника": "door_open",
         }.get(data.get("attrname", self.description), data.get("attrname") or "unknown")
 
     def __repr__(self) -> str:
@@ -376,7 +405,10 @@ class Item(dict):
 
     def __init__(self, data: dict) -> None:
         super().__init__(data)
-        self.name = self.mappings.get(self.description, data.get("attrname") or "unknown")
+        self.name = self.mappings.get(
+            self.description,
+            data.get("attrname")
+        ) or self.mappings.get("_") or "unknown"
 
     def __repr__(self) -> str:
         return (
@@ -417,6 +449,10 @@ class Item(dict):
             return SwingMode(data)
         if name == "eco_sensor":
             return EcoSensor(data)
+        if name == "fridge_mode":
+            return FridgeMode(data)
+        if name == "freezer_mode":
+            return FreezerMode(data)
         return cls(data)
 
 
@@ -474,4 +510,32 @@ class EcoSensor(Item):
         "Обводящий": "outlining",
         "Сопутствующий": "related",
         "Активен": "on",
+    }
+
+
+class FridgeMode(Item):
+    mappings = {
+        "_": "0",
+        "+2℃": "2",
+        "+3℃": "3",
+        "+4℃": "4",
+        "+5℃": "5",
+        "+6℃": "6",
+        "+7℃": "7",
+        "+8℃": "8",
+    }
+
+
+class FreezerMode(Item):
+    mappings = {
+        "_": "0",
+        "-24℃": "-24",
+        "-23℃": "-23",
+        "-22℃": "-22",
+        "-21℃": "-21",
+        "-20℃": "-20",
+        "-19℃": "-19",
+        "-18℃": "-18",
+        "-17℃": "-17",
+        "-16℃": "-16",
     }

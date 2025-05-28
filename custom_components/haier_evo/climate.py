@@ -12,8 +12,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     haier_object = hass.data[DOMAIN][config_entry.entry_id]
     entities = []
     for device in haier_object.devices:
-        climate = HaierACEntity(device)
-        entities.append(climate)
+        entities.extend(device.create_entities_climate())
     async_add_entities(entities)
     haier_object.write_ha_state()
     return True
@@ -21,9 +20,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 
 # https://developers.home-assistant.io/docs/core/entity/climate
 class HaierACEntity(ClimateEntity):
-
     _attr_translation_key = "conditioner"
     _attr_should_poll = False
+    _attr_icon = "mdi:air-conditioner"
 
     def __init__(self, device: api.HaierAC) -> None:
         self._device = weakref.proxy(device)
@@ -39,10 +38,6 @@ class HaierACEntity(ClimateEntity):
         self._enable_turn_on_off_backwards_compatibility = False
 
         device.add_write_ha_state_callback(self.async_write_ha_state)
-
-    @property
-    def icon(self) -> str:
-        return "mdi:air-conditioner"
 
     @property
     def hvac_mode(self) -> str:
