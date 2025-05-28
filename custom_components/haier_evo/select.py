@@ -9,8 +9,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     haier_object = hass.data[DOMAIN][config_entry.entry_id]
     entities = []
     for device in haier_object.devices:
-        if device.config['eco_sensor'] is not None:
-            entities.append(HaierACEcoSensorSelect(device))
+        entities.extend(device.create_entities_select())
     async_add_entities(entities)
     haier_object.write_ha_state()
     return True

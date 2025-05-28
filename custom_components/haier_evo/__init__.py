@@ -7,7 +7,7 @@ from .const import DOMAIN
 from . import api
 
 
-PLATFORMS: list[str] = ["climate", "switch", "select"]
+PLATFORMS: list[str] = ["climate", "switch", "select", "sensor", "binary_sensor"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

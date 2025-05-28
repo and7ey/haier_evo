@@ -9,24 +9,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     haier_object = hass.data[DOMAIN][config_entry.entry_id]
     entities = []
     for device in haier_object.devices:
-        if device.config['light'] is not None:
-            entities.append(HaierACLightSwitch(device))
-        if device.config['sound'] is not None:
-            entities.append(HaierACSoundSwitch(device))
-        if device.config['quiet'] is not None:
-            entities.append(HaierACQuietSwitch(device))
-        if device.config['turbo'] is not None:
-            entities.append(HaierACTurboSwitch(device))
-        if device.config['health'] is not None:
-            entities.append(HaierACHealthSwitch(device))
-        if device.config['comfort'] is not None:
-            entities.append(HaierACComfortSwitch(device))
-        if device.config['cleaning'] is not None:
-            entities.append(HaierACCleaningSwitch(device))
-        if device.config['antifreeze'] is not None:
-            entities.append(HaierACAntiFreezeSwitch(device))
-        if device.config['autohumidity'] is not None:
-            entities.append(HaierACAutoHumiditySwitch(device))
+        entities.extend(device.create_entities_switch())
     entities.append(HttpSwitch(haier_object))
     async_add_entities(entities)
     haier_object.write_ha_state()
