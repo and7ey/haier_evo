@@ -67,6 +67,13 @@ class HaierAPI(HomeAssistantView):
             return web.Response(text="404: Not found", status=404, content_type="text/plain")
         return self.json(self.haier.to_dict())
 
+    async def post(self, request):
+        if not getattr(self.haier, "allow_http_post", False):
+            return web.Response(text="404: Not found", status=404, content_type="text/plain")
+        data = await request.json()
+        self.haier.send_message(json.dumps(data))
+        return self.json({"result": "success"})
+
 
 class AuthResponse(object):
 
@@ -157,6 +164,7 @@ class Haier(object):
         self.email: str = email
         self.password: str = password
         self.allow_http: bool = http
+        self.allow_http_post: bool = False
         self.token: str | None = None
         self.tokenexpire: datetime | None = None
         self.refreshtoken: str | None = None
@@ -904,7 +912,7 @@ class HaierAC(HaierDevice):
             "commands": commands,
         }))
 
-    def get_commands(self, name, value):
+    def get_commands(self, name: str, value: str) -> list[dict]:
         if name == "preset_mode":
             func = getattr(self, f"get_preset_mode_{value}", None)
             if func is not None:
@@ -918,7 +926,7 @@ class HaierAC(HaierDevice):
             "value": str(getattr(next(filter(lambda i: i.name == value, attr.list), None), "value", None))
         }] if attr else []
 
-    def get_preset_mode_none(self):
+    def get_preset_mode_none(self) -> list[dict]:
         if custom := self.config.get_command_by_name('preset_mode_none'):
             return custom
         return [{
@@ -926,7 +934,7 @@ class HaierAC(HaierDevice):
             "value": getattr(next(filter(lambda i: i.name == "off", attr.list), None), "value", "0")
         } for attr in filter(lambda a: a.name.startswith("preset_mode"), self.config.attrs)]
 
-    def get_preset_mode_command(self, mode):
+    def get_preset_mode_command(self, mode: str) -> list[dict]:
         if custom := self.config.get_command_by_name(f'preset_mode_{mode}'):
             return custom
         attr = self.config.get_attr_by_name(f"preset_mode_{mode}")

@@ -41,7 +41,6 @@ class HaierSensor(SensorEntity):
 
 
 class HaierREFTemperatureSensor(HaierSensor):
-
     _attr_device_class = TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 

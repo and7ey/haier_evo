@@ -11,20 +11,20 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     for device in haier_object.devices:
         entities.extend(device.create_entities_switch())
     entities.append(HttpSwitch(haier_object))
+    entities.append(HttpSwitchPOST(haier_object))
     async_add_entities(entities)
     haier_object.write_ha_state()
     return True
 
 
 class HaierACSwitch(SwitchEntity):
-
     # _attr_should_poll = False
+    _attr_icon = "mdi:toggle-switch"
 
     def __init__(self, device: api.HaierAC) -> None:
         self._device = weakref.proxy(device)
         self._device_attr_name = None
         self._attr_is_on = False
-        self._attr_icon = "mdi:toggle-switch"
 
         def write_ha_state_callback():
             self.update_state()
@@ -67,13 +67,13 @@ class HaierACSwitch(SwitchEntity):
 
 
 class HaierACLightSwitch(HaierACSwitch):
+    _attr_icon = "mdi:lightbulb"
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
         self._device_attr_name = "light_on"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_light"
         self._attr_name = f"{device.device_name} Подсветка"
-        self._attr_icon = "mdi:lightbulb"
 
 
 class HaierACSoundSwitch(HaierACSwitch):
@@ -149,31 +149,49 @@ class HaierACAutoHumiditySwitch(HaierACSwitch):
 
 
 class HttpSwitch(SwitchEntity):
+    _attr_icon = "mdi:toggle-switch"
 
     def __init__(self, haier):
         self._haier = weakref.proxy(haier)
-        self._attr_unique_id = f"{DOMAIN}_http_switch"
-        self._attr_name = "Haier Evo HTTP"
-        self._attr_is_on = haier.allow_http
-        self._attr_icon = "mdi:toggle-switch"
+        self._attr_unique_id = f"{DOMAIN}_http_switch_get"
+        self._attr_name = "Haier Evo HTTP GET"
+
+    @property
+    def is_on(self) -> bool:
+        return self._haier.allow_http
 
     @property
     def device_info(self) -> dict:
         return {
-            "identifiers": {(DOMAIN, self.unique_id)},
-            "name": self.name,
+            "identifiers": {(DOMAIN, f"{DOMAIN}_http_switch")},
+            "name": "Haier Evo HTTP",
             "manufacturer": "Haier"
         }
 
     async def async_turn_on(self, **kwargs):
         self._haier.allow_http = True
-        self._attr_is_on = True
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
         self._haier.allow_http = False
-        self._attr_is_on = False
         self.async_write_ha_state()
 
-    async def async_update(self):
-        self._attr_is_on = self._haier.allow_http
+
+class HttpSwitchPOST(HttpSwitch):
+
+    def __init__(self, haier):
+        super().__init__(haier)
+        self._attr_unique_id = f"{DOMAIN}_http_switch_post"
+        self._attr_name = "Haier Evo HTTP POST"
+
+    @property
+    def is_on(self) -> bool:
+        return self._haier.allow_http_post
+
+    async def async_turn_on(self, **kwargs):
+        self._haier.allow_http_post = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs):
+        self._haier.allow_http_post = False
+        self.async_write_ha_state()

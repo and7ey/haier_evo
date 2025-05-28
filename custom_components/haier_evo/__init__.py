@@ -1,13 +1,20 @@
 from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.const import Platform
 from homeassistant.loader import async_get_integration
 from .logger import _LOGGER
 from .const import DOMAIN
 from . import api
 
 
-PLATFORMS: list[str] = ["climate", "switch", "select", "sensor", "binary_sensor"]
+PLATFORMS: list[str] = [
+    Platform.CLIMATE,
+    Platform.SWITCH,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

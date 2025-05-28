@@ -16,14 +16,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 
 
 class HaierACEcoSensorSelect(SelectEntity):
-
     _attr_translation_key = "conditioner_eco_sensor"
+    _attr_icon = "mdi:format-list-bulleted"
 
     def __init__(self, device: api.HaierAC) -> None:
         self._device = weakref.proxy(device)
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_eco_sensor"
         self._attr_name = f"{device.device_name} Эко-датчик"
-        self._attr_icon = "mdi:format-list-bulleted"
         self._attr_options = device.get_eco_sensor_options()
 
         device.add_write_ha_state_callback(self.async_write_ha_state)

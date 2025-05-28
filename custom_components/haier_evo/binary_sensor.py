@@ -17,13 +17,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 
 
 class HaierBinarySensor(BinarySensorEntity):
-
     # _attr_should_poll = False
 
     def __init__(self, device: api.HaierDevice) -> None:
         self._device = weakref.proxy(device)
         self._device_attr_name = None
-        self._attr_icon = "mdi:fridge-outline"
 
         device.add_write_ha_state_callback(self.async_write_ha_state)
 
@@ -40,7 +38,11 @@ class HaierBinarySensor(BinarySensorEntity):
         return getattr(self._device, self._device_attr_name, False)
 
 
-class HaierREFDoorSensor(HaierBinarySensor):
+class HaierREFBinarySensor(HaierBinarySensor):
+    _attr_icon = "mdi:fridge-outline"
+
+
+class HaierREFDoorSensor(HaierREFBinarySensor):
 
     def __init__(self, device: api.HaierDevice) -> None:
         super().__init__(device)
@@ -49,7 +51,7 @@ class HaierREFDoorSensor(HaierBinarySensor):
         self._attr_name = f"{device.device_name} Дверь"
 
 
-class HaierREFVacationSensor(HaierBinarySensor):
+class HaierREFVacationSensor(HaierREFBinarySensor):
 
     def __init__(self, device: api.HaierDevice) -> None:
         super().__init__(device)
@@ -58,7 +60,7 @@ class HaierREFVacationSensor(HaierBinarySensor):
         self._attr_name = f"{device.device_name} Отпуск"
 
 
-class HaierREFSuperFreezeSensor(HaierBinarySensor):
+class HaierREFSuperFreezeSensor(HaierREFBinarySensor):
 
     def __init__(self, device: api.HaierDevice) -> None:
         super().__init__(device)
@@ -67,7 +69,7 @@ class HaierREFSuperFreezeSensor(HaierBinarySensor):
         self._attr_name = f"{device.device_name} Супер-заморозка"
 
 
-class HaierREFSuperCoolingSensor(HaierBinarySensor):
+class HaierREFSuperCoolingSensor(HaierREFBinarySensor):
 
     def __init__(self, device: api.HaierDevice) -> None:
         super().__init__(device)
