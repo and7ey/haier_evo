@@ -150,11 +150,29 @@ class HaierACAutoHumiditySwitch(HaierACSwitch):
 
 class HaierREFSuperCoolingSwitch(HaierACSwitch):
 
-    def __init__(self, device: api.HaierDevice) -> None:
+    def __init__(self, device: api.HaierREF) -> None:
         super().__init__(device)
         self._device_attr_name = "super_cooling"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_super_cooling_switch"
         self._attr_name = f"{device.device_name} Супер-охлаждение"
+
+
+class HaierREFSuperFreezeSwitch(HaierACSwitch):
+
+    def __init__(self, device: api.HaierREF) -> None:
+        super().__init__(device)
+        self._device_attr_name = "super_freeze"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_super_freeze_switch"
+        self._attr_name = f"{device.device_name} Супер-заморозка"
+
+
+class HaierREFVacationSwitch(HaierACSwitch):
+
+    def __init__(self, device: api.HaierREF) -> None:
+        super().__init__(device)
+        self._device_attr_name = "vacation_mode"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_vacation_mode_switch"
+        self._attr_name = f"{device.device_name} Режим Отпуск"
 
 
 class HttpSwitch(SwitchEntity):

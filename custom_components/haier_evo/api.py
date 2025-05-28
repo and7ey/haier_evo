@@ -923,7 +923,7 @@ class HaierAC(HaierDevice):
         attr = self.config.get_attr_by_name(name)
         return [{
             "commandName": str(attr.code),
-            "value": str(getattr(next(filter(lambda i: i.name == value, attr.list), None), "value", None))
+            "value": attr.get_item_code(value),
         }] if attr else []
 
     def get_preset_mode_none(self) -> list[dict]:
@@ -931,8 +931,11 @@ class HaierAC(HaierDevice):
             return custom
         return [{
             "commandName": str(attr.code),
-            "value": getattr(next(filter(lambda i: i.name == "off", attr.list), None), "value", "0")
-        } for attr in filter(lambda a: a.name.startswith("preset_mode"), self.config.attrs)]
+            "value": attr.get_item_code("off", "0"),
+        } for attr in filter(
+            lambda a: a.name.startswith("preset_mode"),
+            self.config.attrs
+        )]
 
     def get_preset_mode_command(self, mode: str) -> list[dict]:
         if custom := self.config.get_command_by_name(f'preset_mode_{mode}'):
@@ -940,7 +943,7 @@ class HaierAC(HaierDevice):
         attr = self.config.get_attr_by_name(f"preset_mode_{mode}")
         return [{
             "commandName": str(attr.code),
-            "value": getattr(next(filter(lambda i: i.name == "on", attr.list), None), "value", "1"),
+            "value": attr.get_item_code("on", "1")
         }] if attr else []
 
     def get_supported_features(self) -> ClimateEntityFeature:
@@ -1201,25 +1204,73 @@ class HaierREF(HaierDevice):
         elif code == self.config['door_open']:
             self.door_open = parsebool(self.config.get_value("door_open", value))
 
-    def _send_command(self, command: dict) -> None:
+    def _send_single_command(self, command: dict) -> None:
         self._send_message(json.dumps({
             "action": "command",
             "macAddress": self.device_id,
             "command": command,
         }))
 
+    def get_fridge_mode_options(self) -> list[str]:
+        return self.config.get_values('fridge_mode')
+
+    def get_freezer_mode_options(self) -> list[str]:
+        return self.config.get_values('freezer_mode')
+
     def get_command(self, name: str, value: str) -> dict:
         attr = self.config.get_attr_by_name(name)
         return {
             "commandName": str(attr.code),
-            "value": str(getattr(next(filter(lambda i: i.name == value, attr.list), None), "value", None))
+            "value": attr.get_item_code(value),
         }
 
     def set_super_cooling(self, state: bool) -> None:
         value = "on" if state else "off"
         if command := self.get_command("super_cooling", value):
-            self._send_command(command)
+            self._send_single_command(command)
             self.super_cooling = state
+
+    def set_super_freeze(self, state: bool) -> None:
+        value = "on" if state else "off"
+        if command := self.get_command("super_freeze", value):
+            self._send_single_command(command)
+            self.super_freeze = state
+
+    def set_vacation_mode(self, state: bool) -> None:
+        value = "on" if state else "off"
+        if command := self.get_command("vacation_mode", value):
+            self._send_single_command(command)
+            self.vacation_mode = state
+
+    def set_fridge_mode(self, mode: str) -> None:
+        if command := self.get_command("fridge_mode", mode):
+            self._send_single_command(command)
+            self.fridge_mode = mode
+
+    def set_freezer_mode(self, mode: str) -> None:
+        if command := self.get_command("freezer_mode", mode):
+            self._send_single_command(command)
+            self.freezer_mode = mode
+
+    def create_entities_switch(self) -> list:
+        from . import switch
+        entities = []
+        if self.config['super_cooling'] is not None:
+            entities.append(switch.HaierREFSuperCoolingSwitch(self))
+        if self.config['super_freeze'] is not None:
+            entities.append(switch.HaierREFSuperFreezeSwitch(self))
+        if self.config['vacation_mode'] is not None:
+            entities.append(switch.HaierREFVacationSwitch(self))
+        return entities
+
+    def create_entities_select(self) -> list:
+        from . import select
+        entities = []
+        if self.config['fridge_mode'] is not None:
+            entities.append(select.HaierREFFridgeModeSelect(self))
+        if self.config['freezer_mode'] is not None:
+            entities.append(select.HaierREFFreezerModeSelect(self))
+        return entities
 
     def create_entities_sensor(self) -> list:
         from . import sensor
@@ -1247,13 +1298,6 @@ class HaierREF(HaierDevice):
             entities.append(binary_sensor.HaierREFVacationSensor(self))
         if self.config['door_open'] is not None:
             entities.append(binary_sensor.HaierREFDoorSensor(self))
-        return entities
-
-    def create_entities_switch(self) -> list:
-        from . import switch
-        entities = []
-        if self.config['super_cooling'] is not None:
-            entities.append(switch.HaierREFSuperCoolingSwitch(self))
         return entities
 
 

@@ -357,6 +357,12 @@ class Attribute(dict):
     def range(self, value: dict) -> None:
         self["range"] = value
 
+    def get_item_code(self, name: str, default=None) -> str:
+        return str(getattr(next(filter(
+            lambda i: i.name == name,
+            self.list
+        ), None), "value", default))
+
 
 class Range(dict):
 
