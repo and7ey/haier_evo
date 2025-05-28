@@ -1201,6 +1201,26 @@ class HaierREF(HaierDevice):
         elif code == self.config['door_open']:
             self.door_open = parsebool(self.config.get_value("door_open", value))
 
+    def _send_command(self, command: dict) -> None:
+        self._send_message(json.dumps({
+            "action": "command",
+            "macAddress": self.device_id,
+            "command": command,
+        }))
+
+    def get_command(self, name: str, value: str) -> dict:
+        attr = self.config.get_attr_by_name(name)
+        return {
+            "commandName": str(attr.code),
+            "value": str(getattr(next(filter(lambda i: i.name == value, attr.list), None), "value", None))
+        }
+
+    def set_super_cooling(self, state: bool) -> None:
+        value = "on" if state else "off"
+        if command := self.get_command("super_cooling", value):
+            self._send_command(command)
+            self.super_cooling = state
+
     def create_entities_sensor(self) -> list:
         from . import sensor
         entities = []
@@ -1229,6 +1249,12 @@ class HaierREF(HaierDevice):
             entities.append(binary_sensor.HaierREFDoorSensor(self))
         return entities
 
+    def create_entities_switch(self) -> list:
+        from . import switch
+        entities = []
+        if self.config['super_cooling'] is not None:
+            entities.append(switch.HaierREFSuperCoolingSwitch(self))
+        return entities
 
 
 def parsebool(value) -> bool:

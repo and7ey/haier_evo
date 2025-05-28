@@ -21,7 +21,7 @@ class HaierACSwitch(SwitchEntity):
     # _attr_should_poll = False
     _attr_icon = "mdi:toggle-switch"
 
-    def __init__(self, device: api.HaierAC) -> None:
+    def __init__(self, device: api.HaierDevice) -> None:
         self._device = weakref.proxy(device)
         self._device_attr_name = None
         self._attr_is_on = False
@@ -146,6 +146,15 @@ class HaierACAutoHumiditySwitch(HaierACSwitch):
         self._device_attr_name = "autohumidity_on"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_autohumidity"
         self._attr_name = f"{device.device_name} Авто влажность"
+
+
+class HaierREFSuperCoolingSwitch(HaierACSwitch):
+
+    def __init__(self, device: api.HaierDevice) -> None:
+        super().__init__(device)
+        self._device_attr_name = "super_cooling"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_super_cooling_switch"
+        self._attr_name = f"{device.device_name} Супер-охлаждение"
 
 
 class HttpSwitch(SwitchEntity):
