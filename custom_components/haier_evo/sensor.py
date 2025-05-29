@@ -44,7 +44,7 @@ class HaierREFTemperatureSensor(HaierSensor):
     _attr_device_class = TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
-    def __init__(self, device: api.HaierDevice):
+    def __init__(self, device: api.HaierREF):
         super().__init__(device)
         self._device_attr_name = "current_temperature"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_temperature"
@@ -53,7 +53,7 @@ class HaierREFTemperatureSensor(HaierSensor):
 
 class HaierREFFridgeTemperatureSensor(HaierREFTemperatureSensor):
 
-    def __init__(self, device: api.HaierDevice):
+    def __init__(self, device: api.HaierREF):
         super().__init__(device)
         self._device_attr_name = "current_fridge_temperature"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_fridge_temperature"
@@ -62,7 +62,7 @@ class HaierREFFridgeTemperatureSensor(HaierREFTemperatureSensor):
 
 class HaierREFFreezerTemperatureSensor(HaierREFTemperatureSensor):
 
-    def __init__(self, device: api.HaierDevice):
+    def __init__(self, device: api.HaierREF):
         super().__init__(device)
         self._device_attr_name = "current_freezer_temperature"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_freezer_temperature"
@@ -71,7 +71,7 @@ class HaierREFFreezerTemperatureSensor(HaierREFTemperatureSensor):
 
 class HaierREFFridgeModeSensor(HaierREFTemperatureSensor):
 
-    def __init__(self, device: api.HaierDevice):
+    def __init__(self, device: api.HaierREF):
         super().__init__(device)
         self._device_attr_name = "fridge_mode"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_fridge_mode"
@@ -84,7 +84,7 @@ class HaierREFFridgeModeSensor(HaierREFTemperatureSensor):
 
 class HaierREFFreezerModeSensor(HaierREFFridgeModeSensor):
 
-    def __init__(self, device: api.HaierDevice):
+    def __init__(self, device: api.HaierREF):
         super().__init__(device)
         self._device_attr_name = "freezer_mode"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_freezer_mode"

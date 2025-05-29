@@ -17,7 +17,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     return True
 
 
-class HaierACSwitch(SwitchEntity):
+class HaierSwitch(SwitchEntity):
     # _attr_should_poll = False
     _attr_icon = "mdi:toggle-switch"
 
@@ -66,7 +66,7 @@ class HaierACSwitch(SwitchEntity):
         self.update_state()
 
 
-class HaierACLightSwitch(HaierACSwitch):
+class HaierACLightSwitch(HaierSwitch):
     _attr_icon = "mdi:lightbulb"
 
     def __init__(self, device: api.HaierAC) -> None:
@@ -76,7 +76,7 @@ class HaierACLightSwitch(HaierACSwitch):
         self._attr_name = f"{device.device_name} Подсветка"
 
 
-class HaierACSoundSwitch(HaierACSwitch):
+class HaierACSoundSwitch(HaierSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
@@ -85,7 +85,7 @@ class HaierACSoundSwitch(HaierACSwitch):
         self._attr_name = f"{device.device_name} Звуковой сигнал"
 
 
-class HaierACQuietSwitch(HaierACSwitch):
+class HaierACQuietSwitch(HaierSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
@@ -94,7 +94,7 @@ class HaierACQuietSwitch(HaierACSwitch):
         self._attr_name = f"{device.device_name} Тихий"
 
 
-class HaierACTurboSwitch(HaierACSwitch):
+class HaierACTurboSwitch(HaierSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
@@ -103,7 +103,7 @@ class HaierACTurboSwitch(HaierACSwitch):
         self._attr_name = f"{device.device_name} Турбо"
 
 
-class HaierACHealthSwitch(HaierACSwitch):
+class HaierACHealthSwitch(HaierSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
@@ -112,7 +112,7 @@ class HaierACHealthSwitch(HaierACSwitch):
         self._attr_name = f"{device.device_name} Здоровье"
 
 
-class HaierACComfortSwitch(HaierACSwitch):
+class HaierACComfortSwitch(HaierSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
@@ -121,7 +121,7 @@ class HaierACComfortSwitch(HaierACSwitch):
         self._attr_name = f"{device.device_name} Комфорт"
 
 
-class HaierACCleaningSwitch(HaierACSwitch):
+class HaierACCleaningSwitch(HaierSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
@@ -130,7 +130,7 @@ class HaierACCleaningSwitch(HaierACSwitch):
         self._attr_name = f"{device.device_name} Очистка"
 
 
-class HaierACAntiFreezeSwitch(HaierACSwitch):
+class HaierACAntiFreezeSwitch(HaierSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
@@ -139,7 +139,7 @@ class HaierACAntiFreezeSwitch(HaierACSwitch):
         self._attr_name = f"{device.device_name} Антизамерзание"
 
 
-class HaierACAutoHumiditySwitch(HaierACSwitch):
+class HaierACAutoHumiditySwitch(HaierSwitch):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
@@ -148,7 +148,7 @@ class HaierACAutoHumiditySwitch(HaierACSwitch):
         self._attr_name = f"{device.device_name} Авто влажность"
 
 
-class HaierREFSuperCoolingSwitch(HaierACSwitch):
+class HaierREFSuperCoolingSwitch(HaierSwitch):
 
     def __init__(self, device: api.HaierREF) -> None:
         super().__init__(device)
@@ -157,7 +157,7 @@ class HaierREFSuperCoolingSwitch(HaierACSwitch):
         self._attr_name = f"{device.device_name} Супер-охлаждение"
 
 
-class HaierREFSuperFreezeSwitch(HaierACSwitch):
+class HaierREFSuperFreezeSwitch(HaierSwitch):
 
     def __init__(self, device: api.HaierREF) -> None:
         super().__init__(device)
@@ -166,7 +166,7 @@ class HaierREFSuperFreezeSwitch(HaierACSwitch):
         self._attr_name = f"{device.device_name} Супер-заморозка"
 
 
-class HaierREFVacationSwitch(HaierACSwitch):
+class HaierREFVacationSwitch(HaierSwitch):
 
     def __init__(self, device: api.HaierREF) -> None:
         super().__init__(device)

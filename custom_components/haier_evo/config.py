@@ -6,23 +6,40 @@ from .logger import _LOGGER
 from . import devices as config_dir
 
 
-class DeviceConfig(object):
-    """Representation of a device config."""
+class HaierDeviceConfig(object):
 
-    def __init__(self, model: str) -> None:
-        """Initialize the device config.
-        Args:
-            model (string): The filename of the yaml config to load."""
+    def __init__(self, model: str, userpath: str = "") -> None:
         self._model = model
-        self._config = None
+        self._userpath = userpath
+        self._config = {}
         self._load_config_file()
+        self._command_name = self._config.get('command_name')
+        self._attrs_cache = {}
+        self.attrs = []
+
+    def __getitem__(self, item) -> str | None:
+        return self.get_code_by_name(str(item))
+
+    @property
+    def command_name(self) -> str:
+        return self._command_name
+
+    @command_name.setter
+    def command_name(self, value: str) -> None:
+        self._command_name = str(value)
 
     def _find_config_file(self) -> str:
         _CONFIG_DIR = dirname(config_dir.__file__)
         fname = join(_CONFIG_DIR, self._model) + '.yaml'
         if not exists(fname):
             fname = join(_CONFIG_DIR, 'default') + '.yaml'
-        return fname
+        userfname = f"{self._userpath}.{self._model}.yaml"
+        if not exists(userfname):
+            try:
+                shutil.copy(fname, userfname)
+            except Exception:
+                pass
+        return userfname if exists(userfname) else fname
 
     def _load_config_file(self) -> None:
         fname = self._find_config_file()
@@ -34,138 +51,17 @@ class DeviceConfig(object):
         else:
             _LOGGER.info("Loaded device config %s", fname)
 
-    def get_command_name(self) -> str:
-        return self._config['command_name']
-
-    def get_attr_by_id(self, id_: str) -> dict | None:
-        return next(filter(
-            lambda a: a.get("id") == id_,
-            (self._config.get("attributes") or [])
-        ), None)
-
-    def get_attr_by_name(self, name: str) -> dict | None:
-        return next(filter(
-            lambda a: a.get("name") == name,
-            (self._config.get("attributes") or [])
-        ), None)
-
-    def get_name_by_id(self, id_: str) -> str | None:
-        attr = self.get_attr_by_id(id_)
-        return attr.get('name') if attr else None
-
-    def get_id_by_name(self, name: str) -> str | None:
-        attr = self.get_attr_by_name(name)
-        return attr.get('id') if attr else None
-
-    def get_value(self, id_: str, haier_value: int) -> str | None:
-        attr = self.get_attr_by_id(id_) or {}
-        for mapping in attr.get('mappings', []):
-            if mapping.get('haier') == haier_value:
-                return mapping.get('value')
-        return None
-
-    def get_value_code(self, id_: str, value: str) -> int | None:
-        attr = self.get_attr_by_id(id_) or {}
-        for mapping in attr.get('mappings', []):
-            if mapping.get('value') == value:
-                return mapping.get('haier')
-        return None
-
-    def get_values(self, name: str) -> list[str]:
-        values = []
-        attr = self.get_attr_by_name(name) or {}
-        for mapping in attr.get('mappings', []):
-            values.append(mapping.get('value'))
-        return [str(v) for v in values]
-
-    def to_dict(self) -> dict:
-        pass
-
-
-class HaierACConfig(DeviceConfig):
-
-    def __init__(self, model: str, userpath: str) -> None:
-        self._userpath = userpath
-        super().__init__(model)
-        self.attrs = []
-        self._attrs_cache = {}
-        self._command_name = self.get_command_name()
-
-    def _find_config_file(self) -> str:
-        userfname = f"{self._userpath}.{self._model}.yaml"
-        fname = super()._find_config_file()
-        if not exists(userfname):
-            try:
-                shutil.copy(fname, userfname)
-            except Exception:
-                pass
-        return userfname if exists(userfname) else fname
-
-    def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}("
-            f"command_name={self.command_name!r},"
-            f"current_temperature={self['current_temperature']!r},"
-            f"target_temperature={self['target_temperature']!r},"
-            f"status={self['status']!r},"
-            f"mode={self['mode']!r},"
-            f"fan_mode={self['fan_mode']!r},"
-            f"swing_mode={self['swing_mode']!r},"
-            f"swing_horizontal_mode={self['swing_horizontal_mode']!r}"
-            f")"
-        )
-
-    def __getitem__(self, item) -> str | None:
-        return self.get_code_by_name(str(item))
-
     def to_dict(self) -> dict:
         return {
             "command_name": self.command_name,
             "attributes": [a.to_dict() for a in self.attrs],
         }
 
-    @property
-    def command_name(self) -> str:
-        return self._command_name
-
-    @command_name.setter
-    def command_name(self, value: str) -> None:
-        self._command_name = str(value)
-
-    @property
-    def preset_mode(self) -> bool:
-        return bool(self.get_preset_modes())
-
-    def get_command_name(self) -> str:
-        return self._config.get('command_name')
-
-    def get_value(self, id_: str, haier_value: str) -> str | None:
-        attr = self.get_attr_by_name(id_)
-        return {str(i.value): i.name for i in attr.list}.get(haier_value) if attr else None
-
-    def get_value_code(self, id_: str, value: str) -> int | None:
-        attr = self.get_attr_by_name(id_)
-        return {i.name: i.value for i in attr.list}.get(value) if attr else None
-
-    def get_values(self, name: str) -> list[str]:
-        attr = self.get_attr_by_name(name)
-        return [i.name for i in attr.list if i.name != "unknown"] if attr else []
-
-    def get_custom_preset_modes(self) -> list[str]:
-        try:
-            modes = self._config.get('preset_modes')
-            assert isinstance(modes, list)
-            assert len(modes) > 0
-            assert all(((m and isinstance(m, str)) for m in modes))
-            return modes
-        except AssertionError:
-            return []
-
-    def get_preset_modes(self) -> list[str]:
-        return self.get_custom_preset_modes() + [
-            a.name.replace("preset_mode_", "")
-            for a in filter(lambda a: a.name.startswith("preset_mode"), self.attrs)
-        ]
+    def get_attr_by_code(self, code: str | int) -> Attribute | None:
+        return next(filter(
+            lambda a: str(a.code) == str(code),
+            self.attrs
+        ), None)
 
     def get_attr_by_name(self, name: str) -> Attribute | None:
         if name in self._attrs_cache:
@@ -175,9 +71,28 @@ class HaierACConfig(DeviceConfig):
             self._attrs_cache[name] = attr
         return attr
 
+    def get_value(self, name: str, code: str) -> str | None:
+        attr = self.get_attr_by_name(name)
+        return {str(i.value): i.name for i in attr.list}.get(str(code)) if attr else None
+
+    def get_value_code(self, name: str, value: str) -> str | None:
+        attr = self.get_attr_by_name(name)
+        return {i.name: i.value for i in attr.list}.get(value) if attr else None
+
+    def get_values(self, name: str) -> list[str]:
+        attr = self.get_attr_by_name(name)
+        return [i.name for i in attr.list if i.name != "unknown"] if attr else []
+
     def get_code_by_name(self, name: str) -> str | None:
         attr = self.get_attr_by_name(name)
         return str(attr.code) if attr else None
+
+    def get_command_by_name(self, name: str) -> list[dict] | None:
+        try:
+            commands = self._config.get('commands') or {}
+            return commands.get(name)
+        except Exception:
+            return None
 
     def get_config_attributes(self) -> list[Attribute]:
         attrs = []
@@ -211,6 +126,50 @@ class HaierACConfig(DeviceConfig):
             if attr.command_name and not self.command_name:
                 self.command_name = attr.command_name
         self.attrs.extend(attributes.values())
+        self.extend_attributes()
+        self.attrs.sort(key=lambda a: a.code)
+
+    def extend_attributes(self) -> None:
+        pass
+
+
+class HaierACConfig(HaierDeviceConfig):
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"command_name={self.command_name!r},"
+            f"current_temperature={self['current_temperature']!r},"
+            f"target_temperature={self['target_temperature']!r},"
+            f"status={self['status']!r},"
+            f"mode={self['mode']!r},"
+            f"fan_mode={self['fan_mode']!r},"
+            f"swing_mode={self['swing_mode']!r},"
+            f"swing_horizontal_mode={self['swing_horizontal_mode']!r}"
+            f")"
+        )
+
+    @property
+    def preset_mode(self) -> bool:
+        return bool(self.get_preset_modes())
+
+    def get_custom_preset_modes(self) -> list[str]:
+        try:
+            modes = self._config.get('preset_modes')
+            assert isinstance(modes, list)
+            assert len(modes) > 0
+            assert all(((m and isinstance(m, str)) for m in modes))
+            return modes
+        except AssertionError:
+            return []
+
+    def get_preset_modes(self) -> list[str]:
+        return self.get_custom_preset_modes() + [
+            a.name.replace("preset_mode_", "")
+            for a in filter(lambda a: a.name.startswith("preset_mode"), self.attrs)
+        ]
+
+    def extend_attributes(self) -> None:
         if (attr := self.get_attr_by_name("preset_mode_sleep")) and not self["quiet"]:
             attr_copy = attr.copy()
             attr_copy.update(attrname="quiet")
@@ -227,17 +186,9 @@ class HaierACConfig(DeviceConfig):
             attr_copy = attr.copy()
             attr_copy.update(attrname="preset_mode_boost")
             self.attrs.append(Attribute(attr_copy))
-        self.attrs.sort(key=lambda a: a.code)
-
-    def get_command_by_name(self, name: str) -> list[dict] | None:
-        try:
-            commands = self._config.get('commands') or {}
-            return commands.get(name)
-        except Exception:
-            return None
 
 
-class HaierREFConfig(HaierACConfig):
+class HaierREFConfig(HaierDeviceConfig):
 
     def __repr__(self) -> str:
         return (
@@ -288,6 +239,7 @@ class Attribute(dict):
             "Супер-заморозка": "super_freeze",
             "Режим Отпуск": "vacation_mode",
             "Состояние дверцы холодильника": "door_open",
+            "My Zone": "my_zone",
         }.get(data.get("attrname", self.description), data.get("attrname") or "unknown")
 
     def __repr__(self) -> str:
@@ -297,7 +249,7 @@ class Attribute(dict):
             f"desc={self.description!r},"
             f"current={self.current!r},"
             f"range={self.range!r},"
-            f"list={self.list!r}"
+            f"list=[{",".join(repr(i) for i in self.list)}]"
             f")"
         )
 
@@ -362,6 +314,12 @@ class Attribute(dict):
             lambda i: i.name == name,
             self.list
         ), None), "value", default))
+
+    def get_item_name(self, code: str, default=None) -> str:
+        return str(getattr(next(filter(
+            lambda i: i.value == code,
+            self.list
+        ), None), "name", default))
 
 
 class Range(dict):
@@ -445,21 +403,16 @@ class Item(dict):
 
     @classmethod
     def create(cls, name: str, data: dict) -> Item:
-        if name == "mode":
-            return Mode(data)
-        if name == "fan_mode":
-            return FanMode(data)
-        if name == "swing_horizontal_mode":
-            return SwingHorizontalMode(data)
-        if name == "swing_mode":
-            return SwingMode(data)
-        if name == "eco_sensor":
-            return EcoSensor(data)
-        if name == "fridge_mode":
-            return FridgeMode(data)
-        if name == "freezer_mode":
-            return FreezerMode(data)
-        return cls(data)
+        return {
+            "mode": Mode,
+            "fan_mode": FanMode,
+            "swing_horizontal_mode": SwingHorizontalMode,
+            "swing_mode": SwingMode,
+            "eco_sensor": EcoSensor,
+            "fridge_mode": Temperature,
+            "freezer_mode": Temperature,
+            "my_zone": Temperature,
+        }.get(name, cls)(data)
 
 
 class Mode(Item):
@@ -519,29 +472,11 @@ class EcoSensor(Item):
     }
 
 
-class FridgeMode(Item):
-    mappings = {
-        "_": "0",
-        "+2℃": "2",
-        "+3℃": "3",
-        "+4℃": "4",
-        "+5℃": "5",
-        "+6℃": "6",
-        "+7℃": "7",
-        "+8℃": "8",
-    }
-
-
-class FreezerMode(Item):
-    mappings = {
-        "_": "0",
-        "-24℃": "-24",
-        "-23℃": "-23",
-        "-22℃": "-22",
-        "-21℃": "-21",
-        "-20℃": "-20",
-        "-19℃": "-19",
-        "-18℃": "-18",
-        "-17℃": "-17",
-        "-16℃": "-16",
-    }
+class Temperature(Item):
+    def __init__(self, data: dict) -> None:
+        description = (data.get("name") or "").strip()
+        self.mappings.setdefault(
+            description,
+            description.replace("℃", "").strip()
+        )
+        super().__init__(data)

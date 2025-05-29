@@ -10,8 +10,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     entities = []
     for device in haier_object.devices:
         entities.extend(device.create_entities_select())
-    async_add_entities(entities)
-    haier_object.write_ha_state()
+    if entities:
+        async_add_entities(entities)
+        haier_object.write_ha_state()
     return True
 
 
@@ -89,3 +90,19 @@ class HaierREFFreezerModeSelect(HaierSelect):
 
     def set_option(self, value) -> None:
         self._device.set_freezer_mode(value)
+
+
+class HaierREFMyZoneSelect(HaierSelect):
+
+    def __init__(self, device: api.HaierREF) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_my_zone"
+        self._attr_name = f"{device.device_name} My Zone"
+        self._attr_options = device.get_my_zone_options()
+
+    @property
+    def current_option(self) -> str:
+        return self._device.my_zone
+
+    def set_option(self, value) -> None:
+        self._device.set_my_zone(value)
