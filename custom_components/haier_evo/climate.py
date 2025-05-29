@@ -13,8 +13,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     entities = []
     for device in haier_object.devices:
         entities.extend(device.create_entities_climate())
-    async_add_entities(entities)
-    haier_object.write_ha_state()
+    if entities:
+        async_add_entities(entities)
+        haier_object.write_ha_state()
     return True
 
 

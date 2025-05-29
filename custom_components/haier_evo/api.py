@@ -618,8 +618,11 @@ class HaierDevice(object):
         return self._available
 
     @available.setter
-    def available(self, value: bool):
-        self._available = bool(value)
+    def available(self, value: bool | str):
+        if not isinstance(value, bool):
+            self._available = False if str(value).upper() == 'OFFLINE' else True
+        else:
+            self._available = value
 
     @property
     def status_data(self) -> dict:
@@ -630,7 +633,7 @@ class HaierDevice(object):
         return self._haier.hass
 
     @property
-    def config(self) -> CFG.DeviceConfig:
+    def config(self) -> CFG.HaierDeviceConfig:
         return self._config
 
     def to_dict(self) -> dict:
@@ -641,6 +644,7 @@ class HaierDevice(object):
             "device_name": self.device_name,
             "device_serial": self.device_serial,
             "sw_version": self.sw_version,
+            "config": self.config.to_dict(),
             "backend_data": self.status_data,
         }
 
@@ -651,7 +655,7 @@ class HaierDevice(object):
         device_model = info.setdefault("model", "AC")
         device_model = device_model.replace('-','').replace('/', '')[:11]
         self.device_model = device_model
-        self.set_available(data.setdefault("status", "ONLINE"))
+        self.available = data.setdefault("status", "ONLINE")
         settings = data.setdefault("settings", {})
         self.device_name = settings.setdefault("name", {}).setdefault("name", self.device_name)
         self.sw_version = settings.setdefault('firmware', {}).setdefault('value', None)
@@ -662,7 +666,7 @@ class HaierDevice(object):
     def _load_config_from_attributes(self, data: dict) -> None:
         pass
 
-    def _set_attribute_value(self, code: str, value) -> None:
+    def _set_attribute_value(self, code: str, value: str) -> None:
         pass
 
     def _handle_status_update(self, received_message: dict) -> None:
@@ -676,7 +680,7 @@ class HaierDevice(object):
     def _handle_device_status_update(self, received_message: dict) -> None:
         _LOGGER.info(f"Received status update {self.device_id} {received_message}")
         status = received_message.get("payload", {}).get("status")
-        self.set_available(status)
+        self.available = status
         self.write_ha_state()
 
     def _handle_info(self, received_message: dict) -> None:
@@ -687,7 +691,29 @@ class HaierDevice(object):
         self._haier.send_message(message)
 
     def _send_commands(self, commands: list[dict]) -> None:
-        pass
+        self._send_message(json.dumps({
+            "action": "operation",
+            "macAddress": self.device_id,
+            "commandName": self.config.command_name,
+            "commands": commands,
+        }))
+
+    def _send_single_command(self, command: dict) -> None:
+        self._send_message(json.dumps({
+            "action": "command",
+            "macAddress": self.device_id,
+            "command": command,
+        }))
+
+    def get_commands(self, name: str, value: str | bool) -> list[dict]:
+        value = str({True: "on", False: "off", None: "off"}.get(value, value))
+        if custom := self.config.get_command_by_name(f"{name}_{value}"):
+            return custom
+        attr = self.config.get_attr_by_name(name)
+        return [{
+            "commandName": str(attr.code),
+            "value": attr.get_item_code(value),
+        }] if attr else []
 
     def on_message(self, message_dict: dict) -> None:
         message_type = message_dict.get("event", "")
@@ -709,9 +735,6 @@ class HaierDevice(object):
     def add_write_ha_state_callback(self, callback) -> None:
         if callback not in self._write_ha_state_callbacks:
             self._write_ha_state_callbacks.append(callback)
-
-    def set_available(self, status: str) -> None:
-        self.available = False if str(status).upper() == 'OFFLINE' else True
 
     # noinspection PyMethodMayBeStatic
     def create_entities_climate(self) -> list:
@@ -766,7 +789,6 @@ class HaierAC(HaierDevice):
         **kwargs
     ) -> None:
         super().__init__(**kwargs)
-        self.device_model = "AC"
         self.current_temperature = 0
         self.target_temperature = 0
         self.status = None
@@ -790,6 +812,10 @@ class HaierAC(HaierDevice):
         self._get_status(backend_data)
 
     @property
+    def config(self) -> CFG.HaierACConfig:
+        return self._config
+
+    @property
     def preset_mode(self) -> str:
         if self._preset_mode not in ("none", "sleep", "boost"):
             return self._preset_mode
@@ -803,17 +829,13 @@ class HaierAC(HaierDevice):
     def preset_mode(self, preset_mode: str) -> None:
         self._preset_mode = preset_mode
 
-    @property
-    def config(self) -> CFG.HaierACConfig:
-        return self._config
-
     def to_dict(self) -> dict:
         data = super().to_dict()
         data.update({
-            "max_temperature": self.max_temperature,
-            "min_temperature": self.min_temperature,
             "current_temperature": self.current_temperature,
             "target_temperature": self.target_temperature,
+            "max_temperature": self.max_temperature,
+            "min_temperature": self.min_temperature,
             "status": self.status,
             "mode": self.mode,
             "fan_mode": self.fan_mode,
@@ -830,45 +852,47 @@ class HaierAC(HaierDevice):
             "antifreeze_on": self.antifreeze_on,
             "autohumidity_on": self.autohumidity_on,
             "eco_sensor": self.eco_sensor,
-            "config": self.config.to_dict(),
         })
         return data
 
-    def _set_attribute_value(self, code: str, value) -> None:
-        if code == self.config['current_temperature']:  # Температура в комнате
+    def _set_attribute_value(self, code: str, value: str) -> None:
+        attr = self.config.get_attr_by_code(code)
+        if not (attr and value is not None):
+            return
+        elif attr.name == "current_temperature":
             self.current_temperature = float(value)
-        elif code == self.config['status']:  # Включение/выключение
+        elif attr.name == "status":
             self.status = int(value)
-        elif code == self.config['target_temperature']:  # Целевая температура
+        elif attr.name == "target_temperature":
             self.target_temperature = float(value)
-        elif code == self.config['mode']:  # Режимы
-            self.mode = self.config.get_value("mode", value)
-        elif code == self.config['fan_mode']:  # Скорость вентилятора
-            self.fan_mode = self.config.get_value("fan_mode", value)
-        elif code == self.config['swing_horizontal_mode']:
-            self.swing_horizontal_mode = self.config.get_value("swing_horizontal_mode", value)
-        elif code == self.config['swing_mode']:
-            self.swing_mode = self.config.get_value("swing_mode", value)
-        elif code == self.config['light']:
-            self.light_on = parsebool(self.config.get_value("light", value))
-        elif code == self.config['sound']:
-            self.sound_on = parsebool(self.config.get_value("sound", value))
-        elif code == self.config['quiet']:
-            self.quiet_on = parsebool(self.config.get_value("quiet", value))
-        elif code == self.config['turbo']:
-            self.turbo_on = parsebool(self.config.get_value("turbo", value))
-        elif code == self.config['health']:
-            self.health_on = parsebool(self.config.get_value("health", value))
-        elif code == self.config['comfort']:
-            self.comfort_on = parsebool(self.config.get_value("comfort", value))
-        elif code == self.config['cleaning']:
-            self.cleaning_on = parsebool(self.config.get_value("cleaning", value))
-        elif code == self.config['antifreeze']:
-            self.antifreeze_on = parsebool(self.config.get_value("antifreeze", value))
-        elif code == self.config['autohumidity']:
-            self.autohumidity_on = parsebool(self.config.get_value("autohumidity", value))
-        elif code == self.config['eco_sensor']:
-            self.eco_sensor = self.config.get_value("eco_sensor", value)
+        elif attr.name == "mode":
+            self.mode = attr.get_item_name(value)
+        elif attr.name == "fan_mode":
+            self.fan_mode = attr.get_item_name(value)
+        elif attr.name == "swing_horizontal_mode":
+            self.swing_horizontal_mode = attr.get_item_name(value)
+        elif attr.name == "swing_mode":
+            self.swing_mode = attr.get_item_name(value)
+        elif attr.name == "light":
+            self.light_on = parsebool(attr.get_item_name(value))
+        elif attr.name == "sound":
+            self.sound_on = parsebool(attr.get_item_name(value))
+        elif attr.name == "quiet":
+            self.quiet_on = parsebool(attr.get_item_name(value))
+        elif attr.name == "turbo":
+            self.turbo_on = parsebool(attr.get_item_name(value))
+        elif attr.name == "health":
+            self.health_on = parsebool(attr.get_item_name(value))
+        elif attr.name == "comfort":
+            self.comfort_on = parsebool(attr.get_item_name(value))
+        elif attr.name == "cleaning":
+            self.cleaning_on = parsebool(attr.get_item_name(value))
+        elif attr.name == "antifreeze":
+            self.antifreeze_on = parsebool(attr.get_item_name(value))
+        elif attr.name == "autohumidity":
+            self.autohumidity_on = parsebool(attr.get_item_name(value))
+        elif attr.name == "eco_sensor":
+            self.eco_sensor = attr.get_item_name(value)
 
     def _load_config_from_attributes(self, data: dict) -> None:
         self._config = CFG.HaierACConfig(self.device_model, self.hass.config.path(C.DOMAIN))
@@ -904,35 +928,24 @@ class HaierAC(HaierDevice):
         self.write_ha_state()
         return data
 
-    def _send_commands(self, commands: list[dict]) -> None:
-        self._send_message(json.dumps({
-            "action": "operation",
-            "macAddress": self.device_id,
-            "commandName": self.config.command_name,
-            "commands": commands,
-        }))
-
-    def get_commands(self, name: str, value: str) -> list[dict]:
-        if name == "preset_mode":
-            func = getattr(self, f"get_preset_mode_{value}", None)
-            if func is not None:
-                return func()
-            return self.get_preset_mode_command(value)
-        if custom := self.config.get_command_by_name(f"{name}_{value}"):
-            return custom
-        attr = self.config.get_attr_by_name(name)
-        return [{
-            "commandName": str(attr.code),
-            "value": str(getattr(next(filter(lambda i: i.name == value, attr.list), None), "value", None))
-        }] if attr else []
+    def get_commands(self, name: str, value: str | bool) -> list[dict]:
+        if name != "preset_mode":
+            return super().get_commands(name, value)
+        func = getattr(self, f"get_preset_mode_{value}", None)
+        if func is not None:
+            return func()
+        return self.get_preset_mode_command(value)
 
     def get_preset_mode_none(self) -> list[dict]:
         if custom := self.config.get_command_by_name('preset_mode_none'):
             return custom
         return [{
             "commandName": str(attr.code),
-            "value": getattr(next(filter(lambda i: i.name == "off", attr.list), None), "value", "0")
-        } for attr in filter(lambda a: a.name.startswith("preset_mode"), self.config.attrs)]
+            "value": attr.get_item_code("off", "0"),
+        } for attr in filter(
+            lambda a: a.name.startswith("preset_mode"),
+            self.config.attrs
+        )]
 
     def get_preset_mode_command(self, mode: str) -> list[dict]:
         if custom := self.config.get_command_by_name(f'preset_mode_{mode}'):
@@ -940,7 +953,7 @@ class HaierAC(HaierDevice):
         attr = self.config.get_attr_by_name(f"preset_mode_{mode}")
         return [{
             "commandName": str(attr.code),
-            "value": getattr(next(filter(lambda i: i.name == "on", attr.list), None), "value", "1"),
+            "value": attr.get_item_code("on", "1")
         }] if attr else []
 
     def get_supported_features(self) -> ClimateEntityFeature:
@@ -982,18 +995,17 @@ class HaierAC(HaierDevice):
     def get_eco_sensor_options(self) -> list[str]:
         return self.config.get_values('eco_sensor')
 
-    def set_temperature(self, temp: float) -> None:
+    def set_temperature(self, value: float) -> None:
         self._send_commands([
             {
                 "commandName": self.config['target_temperature'],
-                "value": str(temp)
+                "value": str(value)
             }
         ])
-        self.target_temperature = temp
+        self.target_temperature = value
 
-    def switch_on(self, hvac_mode: str = None) -> None:
-        hvac_mode = hvac_mode or self.mode or HVACMode.AUTO
-        mode_haier = self.config.get_value_code("mode", hvac_mode)
+    def switch_on(self, value: str = None) -> None:
+        value = value or self.mode or HVACMode.AUTO
         self._send_commands([
             {
                 "commandName": self.config['status'],
@@ -1001,11 +1013,11 @@ class HaierAC(HaierDevice):
             },
             {
                 "commandName": self.config['mode'],
-                "value": str(mode_haier)
+                "value": str(self.config.get_value_code("mode", value))
             }
         ])
         self.status = 1
-        self.mode = hvac_mode
+        self.mode = value
 
     def switch_off(self) -> None:
         self._send_commands([
@@ -1016,84 +1028,75 @@ class HaierAC(HaierDevice):
         ])
         self.status = 0
 
-    def set_fan_mode(self, fan_mode: str) -> None:
-        if commands := self.get_commands(f"fan_mode", fan_mode):
+    def set_fan_mode(self, value: str) -> None:
+        if commands := self.get_commands(f"fan_mode", value):
             self._send_commands(commands)
-            self.fan_mode = fan_mode
+            self.fan_mode = value
 
-    def set_swing_horizontal_mode(self, swing_mode: str) -> None:
-        if commands := self.get_commands(f"swing_horizontal_mode", swing_mode):
+    def set_swing_horizontal_mode(self, value: str) -> None:
+        if commands := self.get_commands(f"swing_horizontal_mode", value):
             self._send_commands(commands)
-            self.swing_horizontal_mode = swing_mode
+            self.swing_horizontal_mode = value
 
-    def set_swing_mode(self, swing_mode: str) -> None:
-        if commands := self.get_commands(f"swing_mode", swing_mode):
+    def set_swing_mode(self, value: str) -> None:
+        if commands := self.get_commands(f"swing_mode", value):
             self._send_commands(commands)
-            self.swing_mode = swing_mode
+            self.swing_mode = value
 
-    def set_preset_mode(self, preset_mode: str) -> None:
-        if commands := self.get_commands(f"preset_mode", preset_mode):
+    def set_preset_mode(self, value: str) -> None:
+        if commands := self.get_commands(f"preset_mode", value):
             self._send_commands(commands)
-            self.preset_mode = preset_mode
+            self.preset_mode = value
 
-    def set_light_on(self, state: bool) -> None:
-        value = "on" if state else "off"
+    def set_light_on(self, value: bool) -> None:
         if commands := self.get_commands(f"light", value):
             self._send_commands(commands)
-            self.light_on = state
+            self.light_on = value
 
-    def set_sound_on(self, state: bool) -> None:
-        value = "on" if state else "off"
+    def set_sound_on(self, value: bool) -> None:
         if commands := self.get_commands(f"sound", value):
             self._send_commands(commands)
-            self.sound_on = state
+            self.sound_on = value
 
-    def set_quiet_on(self, state: bool) -> None:
-        value = "on" if state else "off"
+    def set_quiet_on(self, value: bool) -> None:
         if commands := self.get_commands(f"quiet", value):
             self._send_commands(commands)
-            self.quiet_on = state
+            self.quiet_on = value
 
-    def set_health_on(self, state: bool) -> None:
-        value = "on" if state else "off"
+    def set_health_on(self, value: bool) -> None:
         if commands := self.get_commands(f"health", value):
             self._send_commands(commands)
-            self.health_on = state
+            self.health_on = value
 
-    def set_turbo_on(self, state: bool) -> None:
-        value = "on" if state else "off"
+    def set_turbo_on(self, value: bool) -> None:
         if commands := self.get_commands(f"turbo", value):
             self._send_commands(commands)
-            self.turbo_on = state
+            self.turbo_on = value
 
-    def set_comfort_on(self, state: bool) -> None:
-        value = "on" if state else "off"
+    def set_comfort_on(self, value: bool) -> None:
         if commands := self.get_commands(f"comfort", value):
             self._send_commands(commands)
-            self.comfort_on = state
+            self.comfort_on = value
 
-    def set_cleaning_on(self, state: bool) -> None:
-        value = "on" if state else "off"
+    def set_cleaning_on(self, value: bool) -> None:
         if commands := self.get_commands(f"cleaning", value):
             self._send_commands(commands)
-            self.cleaning_on = state
+            self.cleaning_on = value
 
-    def set_antifreeze_on(self, state: bool) -> None:
-        value = "on" if state else "off"
+    def set_antifreeze_on(self, value: bool) -> None:
         if commands := self.get_commands(f"antifreeze", value):
             self._send_commands(commands)
-            self.antifreeze_on = state
+            self.antifreeze_on = value
 
-    def set_autohumidity_on(self, state: bool) -> None:
-        value = "on" if state else "off"
+    def set_autohumidity_on(self, value: bool) -> None:
         if commands := self.get_commands(f"autohumidity", value):
             self._send_commands(commands)
-            self.autohumidity_on = state
+            self.autohumidity_on = value
 
-    def set_eco_sensor(self, mode: str) -> None:
-        if commands := self.get_commands(f"eco_sensor", mode):
+    def set_eco_sensor(self, value: str) -> None:
+        if commands := self.get_commands(f"eco_sensor", value):
             self._send_commands(commands)
-            self.eco_sensor = mode
+            self.eco_sensor = value
 
     def create_entities_climate(self) -> list:
         from . import climate
@@ -1138,12 +1141,12 @@ class HaierREF(HaierDevice):
         **kwargs
     ) -> None:
         super().__init__(**kwargs)
-        self.device_model = "REF"
         self.current_fridge_temperature = 0
         self.current_freezer_temperature = 0
         self.current_temperature = 0
         self.fridge_mode = None
         self.freezer_mode = None
+        self.my_zone = None
         self.super_cooling = False
         self.super_freeze = False
         self.vacation_mode = False
@@ -1162,6 +1165,7 @@ class HaierREF(HaierDevice):
             "current_temperature": self.current_temperature,
             "fridge_mode": self.fridge_mode,
             "freezer_mode": self.freezer_mode,
+            "my_zone": self.my_zone,
             "super_cooling": self.super_cooling,
             "super_freeze": self.super_freeze,
             "vacation_mode": self.vacation_mode,
@@ -1181,25 +1185,91 @@ class HaierREF(HaierDevice):
             self._set_attribute_value(str(attr.code), attr.current)
         _LOGGER.info(self.config)
 
-    def _set_attribute_value(self, code: str, value) -> None:
-        if code == self.config['current_fridge_temperature']:
+    def _set_attribute_value(self, code: str, value: str) -> None:
+        attr = self.config.get_attr_by_code(code)
+        if not (attr and value is not None):
+            return
+        elif attr.name == "current_fridge_temperature":
             self.current_fridge_temperature = float(value)
-        elif code == self.config['current_freezer_temperature']:
+        elif attr.name == "current_freezer_temperature":
             self.current_freezer_temperature = float(value)
-        elif code == self.config['current_temperature']:
+        elif attr.name == "current_temperature":
             self.current_temperature = float(value)
-        elif code == self.config['fridge_mode']:
-            self.fridge_mode = self.config.get_value("fridge_mode", value)
-        elif code == self.config['freezer_mode']:
-            self.freezer_mode = self.config.get_value("freezer_mode", value)
-        elif code == self.config['super_cooling']:
-            self.super_cooling = parsebool(self.config.get_value("super_cooling", value))
-        elif code == self.config['super_freeze']:
-            self.super_freeze = parsebool(self.config.get_value("super_freeze", value))
-        elif code == self.config['vacation_mode']:
-            self.vacation_mode = parsebool(self.config.get_value("vacation_mode", value))
-        elif code == self.config['door_open']:
-            self.door_open = parsebool(self.config.get_value("door_open", value))
+        elif attr.name == "fridge_mode":
+            self.fridge_mode = attr.get_item_name(value)
+        elif attr.name == "freezer_mode":
+            self.freezer_mode = attr.get_item_name(value)
+        elif attr.name == "my_zone":
+            self.my_zone = attr.get_item_name(value)
+        elif attr.name == "super_cooling":
+            self.super_cooling = parsebool(attr.get_item_name(value))
+        elif attr.name == "super_freeze":
+            self.super_freeze = parsebool(attr.get_item_name(value))
+        elif attr.name == "vacation_mode":
+            self.vacation_mode = parsebool(attr.get_item_name(value))
+        elif attr.name == "door_open":
+            self.door_open = parsebool(attr.get_item_name(value))
+
+    def get_fridge_mode_options(self) -> list[str]:
+        return self.config.get_values('fridge_mode')
+
+    def get_freezer_mode_options(self) -> list[str]:
+        return self.config.get_values('freezer_mode')
+
+    def get_my_zone_options(self) -> list[str]:
+        return self.config.get_values('my_zone')
+
+    def set_super_cooling(self, value: bool) -> None:
+        if commands := self.get_commands("super_cooling", value):
+            self._send_single_command(commands[0])
+            self.super_cooling = value
+
+    def set_super_freeze(self, value: bool) -> None:
+        if commands := self.get_commands("super_freeze", value):
+            self._send_single_command(commands[0])
+            self.super_freeze = value
+
+    def set_vacation_mode(self, value: bool) -> None:
+        if commands := self.get_commands("vacation_mode", value):
+            self._send_single_command(commands[0])
+            self.vacation_mode = value
+
+    def set_fridge_mode(self, value: str) -> None:
+        if commands := self.get_commands("fridge_mode", value):
+            self._send_single_command(commands[0])
+            self.fridge_mode = value
+
+    def set_freezer_mode(self, value: str) -> None:
+        if commands := self.get_commands("freezer_mode", value):
+            self._send_single_command(commands[0])
+            self.freezer_mode = value
+
+    def set_my_zone(self, value: str) -> None:
+        if commands := self.get_commands("my_zone", value):
+            self._send_single_command(commands[0])
+            self.my_zone = value
+
+    def create_entities_switch(self) -> list:
+        from . import switch
+        entities = []
+        if self.config['super_cooling'] is not None:
+            entities.append(switch.HaierREFSuperCoolingSwitch(self))
+        if self.config['super_freeze'] is not None:
+            entities.append(switch.HaierREFSuperFreezeSwitch(self))
+        if self.config['vacation_mode'] is not None:
+            entities.append(switch.HaierREFVacationSwitch(self))
+        return entities
+
+    def create_entities_select(self) -> list:
+        from . import select
+        entities = []
+        if self.config['fridge_mode'] is not None:
+            entities.append(select.HaierREFFridgeModeSelect(self))
+        if self.config['freezer_mode'] is not None:
+            entities.append(select.HaierREFFreezerModeSelect(self))
+        if self.config['my_zone'] is not None:
+            entities.append(select.HaierREFMyZoneSelect(self))
+        return entities
 
     def create_entities_sensor(self) -> list:
         from . import sensor
@@ -1228,7 +1298,6 @@ class HaierREF(HaierDevice):
         if self.config['door_open'] is not None:
             entities.append(binary_sensor.HaierREFDoorSensor(self))
         return entities
-
 
 
 def parsebool(value) -> bool:

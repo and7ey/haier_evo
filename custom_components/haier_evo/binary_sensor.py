@@ -44,7 +44,7 @@ class HaierREFBinarySensor(HaierBinarySensor):
 
 class HaierREFDoorSensor(HaierREFBinarySensor):
 
-    def __init__(self, device: api.HaierDevice) -> None:
+    def __init__(self, device: api.HaierREF) -> None:
         super().__init__(device)
         self._device_attr_name = "door_open"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_door_open"
@@ -53,16 +53,16 @@ class HaierREFDoorSensor(HaierREFBinarySensor):
 
 class HaierREFVacationSensor(HaierREFBinarySensor):
 
-    def __init__(self, device: api.HaierDevice) -> None:
+    def __init__(self, device: api.HaierREF) -> None:
         super().__init__(device)
         self._device_attr_name = "vacation_mode"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_vacation"
-        self._attr_name = f"{device.device_name} Отпуск"
+        self._attr_name = f"{device.device_name} Режим Отпуск"
 
 
 class HaierREFSuperFreezeSensor(HaierREFBinarySensor):
 
-    def __init__(self, device: api.HaierDevice) -> None:
+    def __init__(self, device: api.HaierREF) -> None:
         super().__init__(device)
         self._device_attr_name = "super_freeze"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_super_freeze"
@@ -71,7 +71,7 @@ class HaierREFSuperFreezeSensor(HaierREFBinarySensor):
 
 class HaierREFSuperCoolingSensor(HaierREFBinarySensor):
 
-    def __init__(self, device: api.HaierDevice) -> None:
+    def __init__(self, device: api.HaierREF) -> None:
         super().__init__(device)
         self._device_attr_name = "super_cooling"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_super_cooling"
