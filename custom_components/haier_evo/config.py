@@ -16,6 +16,7 @@ class HaierDeviceConfig(object):
         self._command_name = self._config.get('command_name')
         self._attrs_cache = {}
         self.attrs = []
+        self.constraint = Constraint([])
 
     def __getitem__(self, item) -> str | None:
         return self.get_code_by_name(str(item))
@@ -122,6 +123,7 @@ class HaierDeviceConfig(object):
                 config_attr.description = attr.description
                 config_attr.current = attr.current
                 config_attr.range = attr.range
+                config_attr.list = config_attr.list or attr.list
                 self.attrs[i] = config_attr
             if attr.command_name and not self.command_name:
                 self.command_name = attr.command_name
@@ -299,6 +301,10 @@ class Attribute(dict):
     def list(self) -> list[Item]:
         data = self.get("list", {}).get("data")
         return [Item.create(self.name, v) for v in data] if data else []
+
+    @list.setter
+    def list(self, value) -> None:
+        self.setdefault("list", {})["data"] = value
 
     @property
     def range(self) -> Range | None:
@@ -480,3 +486,58 @@ class Temperature(Item):
             description.replace("℃", "").strip()
         )
         super().__init__(data)
+
+
+class Constraint(list):
+
+    def __init__(self, data: list) -> None:
+        super().__init__(data)
+
+    def apply(self, commands: list[dict]) -> list[dict]:
+        if len(self) == 0 or not commands:
+            return commands
+        new_commands = []
+        for command in commands:
+            new_commands.extend(self.merge_commands(
+                command,
+                self.find_additionals(command)
+            ))
+        return new_commands
+
+    def format_command(self, command: dict) -> dict:
+        value = self.value2code(command.get("value"))
+        return {
+            "commandName": command.get("name"),
+            "value": value,
+        }
+
+    def find_additionals(self, command: dict) -> list[dict]:
+        command_code = command.get("commandName")
+        command_value = command.get("value")
+        additionals = []
+        for item in self:
+            cond = item.get("pendingCondition", {})
+            for cond_command in cond.get("commands", []):
+                if command_code != cond_command.get("commandName"):
+                    continue
+                values = [self.value2code(x) for x in cond_command.get("values")]
+                if command_value not in values:
+                    continue
+                additionals.append(item.get("additionalCommands", {}))
+        return additionals
+
+    def merge_commands(self, command: dict, additionals: list[dict]) -> list[dict]:
+        commands = {"PREPEND": [], "APPEND": []}
+        for additional in additionals:
+            merge_type = additional.get("mergeType")
+            additional_commands = [self.format_command(x) for x in additional.get("commands", [])]
+            target = commands.get(merge_type, [])
+            target.extend(filter(
+                lambda c: c not in target,
+                additional_commands
+            ))
+        return [*commands["PREPEND"], command, *commands["APPEND"]]
+
+    @staticmethod
+    def value2code(value: str) -> str:
+        return {"true": "1", "false": "0"}.get(value, value)

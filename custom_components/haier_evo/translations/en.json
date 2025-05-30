@@ -21,8 +21,17 @@
         "climate": {
             "conditioner": {
                 "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "none": "None",
+                            "sleep": "Quiet",
+                            "boost": "Turbo"
+                        }
+                    },
                     "swing_horizontal_mode": {
                         "state": {
+                            "on": "Right/Left",
+                            "off": "Fixed position",
                             "position_1": "Default position",
                             "position_2": "Second position",
                             "position_3": "Third position",
