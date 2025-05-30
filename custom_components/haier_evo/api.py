@@ -671,14 +671,12 @@ class HaierDevice(object):
 
     def _handle_status_update(self, received_message: dict) -> None:
         message_statuses = received_message.get("payload", {}).get("statuses", [{}])
-        _LOGGER.debug(f"Received status update {self.device_id} {received_message}")
         for key, value in message_statuses[0]['properties'].items():
             self._set_attribute_value(key, value)
         self.available = True
         self.write_ha_state()
 
     def _handle_device_status_update(self, received_message: dict) -> None:
-        _LOGGER.debug(f"Received status update {self.device_id} {received_message}")
         status = received_message.get("payload", {}).get("status")
         self.available = status
         self.write_ha_state()
