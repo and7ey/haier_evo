@@ -312,7 +312,7 @@ class Haier(object):
     def auth_refresh(self) -> AuthResponse:
         try:
             path = urljoin(C.API_PATH, C.API_TOKEN_REFRESH)
-            _LOGGER.info(f"Refreshing token in to {path} with email {self.email}")
+            _LOGGER.debug(f"Refreshing token in to {path} with email {self.email}")
             response = AuthResponse(self.make_request('POST', path, data={
                 'refreshToken': self.refreshtoken
             }))
@@ -364,7 +364,7 @@ class Haier(object):
             )
             raise InvalidAuth()
         else:
-            _LOGGER.info(f"Successful update tokens for email {self.email}")
+            _LOGGER.debug(f"Successful update tokens for email {self.email}")
 
     def auth(self) -> None:
         with self._lock:
@@ -377,9 +377,9 @@ class Haier(object):
                 if tokenexpire > now:
                     return None
                 elif self.refreshtoken and refreshexpire > now:
-                    _LOGGER.info(f"Token to be refreshed")
+                    _LOGGER.debug(f"Token to be refreshed")
                     return self.login(refresh=True)
-            _LOGGER.info(f"Token expired or empty")
+            _LOGGER.debug(f"Token expired or empty")
             return self.login()
 
     def pull_data_from_api(self) -> dict:
@@ -387,7 +387,7 @@ class Haier(object):
         response = None
         try:
             devices_path = urljoin(C.API_PATH, C.API_DEVICES)
-            _LOGGER.info(f"Getting devices, url: {devices_path}")
+            _LOGGER.debug(f"Getting devices, url: {devices_path}")
             response = requests.get(devices_path, headers={
                 'X-Auth-Token': self.token,
                 'User-Agent': 'evo-mobile',
@@ -412,7 +412,7 @@ class Haier(object):
         response = None
         try:
             status_url = C.API_STATUS.replace("{mac}", device_mac)
-            _LOGGER.info(f"Getting initial status of device {device_mac}, url: {status_url}")
+            _LOGGER.debug(f"Getting initial status of device {device_mac}, url: {status_url}")
             response = requests.get(
                 url=status_url,
                 headers={"X-Auth-token": self.token},
@@ -678,14 +678,12 @@ class HaierDevice(object):
 
     def _handle_status_update(self, received_message: dict) -> None:
         message_statuses = received_message.get("payload", {}).get("statuses", [{}])
-        _LOGGER.info(f"Received status update {self.device_id} {received_message}")
         for key, value in message_statuses[0]['properties'].items():
             self._set_attribute_value(key, value)
         self.available = True
         self.write_ha_state()
 
     def _handle_device_status_update(self, received_message: dict) -> None:
-        _LOGGER.info(f"Received status update {self.device_id} {received_message}")
         status = received_message.get("payload", {}).get("status")
         self.available = status
         self.write_ha_state()
@@ -928,7 +926,7 @@ class HaierAC(HaierDevice):
             if attr.name == "target_temperature":
                 self.min_temperature = float(attr.range.min_value)
                 self.max_temperature = float(attr.range.max_value)
-            _LOGGER.info(f"{self.device_name}: {attr}")
+            _LOGGER.debug(f"{self.device_name}: {attr}")
         self.constraint.extend(data.setdefault("constraint", []))
 
     def _get_status(self, data: dict) -> dict:
@@ -1187,7 +1185,7 @@ class HaierREF(HaierDevice):
         self.config.merge_attributes()
         for attr in self.config.attrs:
             self._set_attribute_value(str(attr.code), attr.current)
-            _LOGGER.info(f"{self.device_name}: {attr}")
+            _LOGGER.debug(f"{self.device_name}: {attr}")
 
     def _set_attribute_value(self, code: str, value: str) -> None:
         attr = self.config.get_attr_by_code(code)
