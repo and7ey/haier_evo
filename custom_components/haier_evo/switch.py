@@ -18,18 +18,14 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 
 
 class HaierSwitch(SwitchEntity):
-    # _attr_should_poll = False
+    _attr_should_poll = False
     _attr_icon = "mdi:toggle-switch"
 
     def __init__(self, device: api.HaierDevice) -> None:
         self._device = weakref.proxy(device)
         self._device_attr_name = None
-        self._attr_is_on = False
 
-        def write_ha_state_callback():
-            self.update_state()
-            self.async_write_ha_state()
-        device.add_write_ha_state_callback(write_ha_state_callback)
+        device.add_write_ha_state_callback(self.async_write_ha_state)
 
     @property
     def device_info(self) -> dict:
@@ -41,8 +37,6 @@ class HaierSwitch(SwitchEntity):
 
     async def async_turn_on(self, **kwargs):
         await self.hass.async_add_executor_job(self.turn_on)
-        self._attr_is_on = True
-        self.async_write_ha_state()
 
     def turn_on(self) -> None:
         method = getattr(self._device, f"set_{self._device_attr_name}", None)
@@ -51,19 +45,15 @@ class HaierSwitch(SwitchEntity):
 
     async def async_turn_off(self, **kwargs):
         await self.hass.async_add_executor_job(self.turn_off)
-        self._attr_is_on = False
-        self.async_write_ha_state()
 
     def turn_off(self, **kwargs) -> None:
         method = getattr(self._device, f"set_{self._device_attr_name}", None)
         if method is not None:
             method(False)
 
-    def update_state(self) -> None:
-        self._attr_is_on = bool(getattr(self._device, self._device_attr_name, None))
-
-    async def async_update(self):
-        self.update_state()
+    @property
+    def is_on(self) -> bool:
+        return bool(getattr(self._device, self._device_attr_name, None))
 
 
 class HaierACLightSwitch(HaierSwitch):

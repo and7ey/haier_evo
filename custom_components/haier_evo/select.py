@@ -17,10 +17,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 
 
 class HaierSelect(SelectEntity):
+    _attr_should_poll = False
     _attr_icon = "mdi:format-list-bulleted"
 
     def __init__(self, device: api.HaierDevice) -> None:
         self._device = weakref.proxy(device)
+        self._device_attr_name = None
         self._attr_options = []
 
         device.add_write_ha_state_callback(self.async_write_ha_state)
@@ -33,14 +35,17 @@ class HaierSelect(SelectEntity):
     def available(self) -> bool:
         return self._device.available
 
+    @property
+    def current_option(self) -> str:
+        return getattr(self._device, self._device_attr_name, None)
+
     async def async_select_option(self, option: str) -> None:
-        if option not in self.options:
-            raise ValueError(f"{option} is not a valid option")
         await self.hass.async_add_executor_job(self.set_option, option)
-        self.async_write_ha_state()
 
     def set_option(self, value) -> None:
-        pass
+        method = getattr(self._device, f"set_{self._device_attr_name}", None)
+        if method is not None:
+            method(value)
 
 
 class HaierACEcoSensorSelect(HaierSelect):
@@ -48,61 +53,37 @@ class HaierACEcoSensorSelect(HaierSelect):
 
     def __init__(self, device: api.HaierAC) -> None:
         super().__init__(device)
+        self._device_attr_name = "eco_sensor"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_eco_sensor"
         self._attr_name = f"{device.device_name} Эко-датчик"
         self._attr_options = device.get_eco_sensor_options()
-
-    @property
-    def current_option(self) -> str:
-        return self._device.eco_sensor
-
-    def set_option(self, value) -> None:
-        self._device.set_eco_sensor(value)
 
 
 class HaierREFFridgeModeSelect(HaierSelect):
 
     def __init__(self, device: api.HaierREF) -> None:
         super().__init__(device)
+        self._device_attr_name = "fridge_mode"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_fridge_mode_select"
         self._attr_name = f"{device.device_name} Режим холодильной камеры"
         self._attr_options = device.get_fridge_mode_options()
-
-    @property
-    def current_option(self) -> str:
-        return self._device.fridge_mode
-
-    def set_option(self, value) -> None:
-        self._device.set_fridge_mode(value)
 
 
 class HaierREFFreezerModeSelect(HaierSelect):
 
     def __init__(self, device: api.HaierREF) -> None:
         super().__init__(device)
+        self._device_attr_name = "freezer_mode"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_freezer_mode_select"
         self._attr_name = f"{device.device_name} Режим морозильной камеры"
         self._attr_options = device.get_freezer_mode_options()
-
-    @property
-    def current_option(self) -> str:
-        return self._device.freezer_mode
-
-    def set_option(self, value) -> None:
-        self._device.set_freezer_mode(value)
 
 
 class HaierREFMyZoneSelect(HaierSelect):
 
     def __init__(self, device: api.HaierREF) -> None:
         super().__init__(device)
+        self._device_attr_name = "my_zone"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_my_zone"
         self._attr_name = f"{device.device_name} My Zone"
         self._attr_options = device.get_my_zone_options()
-
-    @property
-    def current_option(self) -> str:
-        return self._device.my_zone
-
-    def set_option(self, value) -> None:
-        self._device.set_my_zone(value)
