@@ -21,8 +21,17 @@
         "climate": {
             "conditioner": {
                 "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "none": "Нет",
+                            "sleep": "Тихий",
+                            "boost": "Турбо"
+                        }
+                    },
                     "swing_horizontal_mode": {
                         "state": {
+                            "on": "Вправо и влево",
+                            "off": "Фиксированное",
                             "position_1": "Исходная позиция",
                             "position_2": "Второе положение",
                             "position_3": "Третье положение",

@@ -15,7 +15,8 @@ from requests.exceptions import ConnectionError, Timeout, HTTPError
 from urllib.parse import urlparse, urljoin, parse_qs
 from urllib3.exceptions import NewConnectionError
 from homeassistant.core import HomeAssistant
-from homeassistant import exceptions
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode, SWING_OFF, PRESET_NONE
 from homeassistant.components.http import HomeAssistantView
 from .logger import _LOGGER
@@ -24,10 +25,10 @@ from . import config as CFG # noqa
 from . import const as C # noqa
 
 
-class InvalidAuth(exceptions.HomeAssistantError):
+class InvalidAuth(HomeAssistantError):
     """Error to indicate we cannot connect."""
 
-class InvalidDevicesList(exceptions.HomeAssistantError):
+class InvalidDevicesList(HomeAssistantError):
     """Error to indicate we cannot connect."""
 
 class AuthError(HTTPError):
@@ -474,8 +475,11 @@ class Haier(object):
         if len(self.devices) > 0:
             self.connect_in_thread()
 
-    def get_device_by_id(self, id_: str) -> HaierAC | None:
-        return next(filter(lambda d: d.device_id == id_, self.devices), None)
+    def get_device_by_id(self, id_: str) -> HaierDevice | None:
+        return next(filter(
+            lambda d: d.device_id == id_,
+            self.devices
+        ), None)
 
     def _init_ws(self) -> None:
         self.auth()
@@ -517,8 +521,6 @@ class Haier(object):
 
     def _wait_websocket(self, timeout: float) -> None:
         current = time.time()
-        if self.socket_status == SocketStatus.INITIALIZED:
-            return
         while time.time() <= (current + timeout):
             if self.socket_status == SocketStatus.INITIALIZED:
                 return
@@ -540,7 +542,7 @@ class Haier(object):
             try:
                 self.socket_status = SocketStatus.INITIALIZING
                 self._init_ws()
-                self.socket_app.run_forever()
+                self.socket_app.run_forever(ping_interval=30, ping_timeout=2)
             except WebSocketException: # socket is already opened
                 pass
             except Exception as e:
@@ -592,22 +594,23 @@ class HaierDevice(object):
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}("
-            f"{self.device_id!r}, "
-            f"name={self.device_name!r}, "
-            f"serial={self.device_serial!r}, "
-            f"model={self.device_model!r}"
+            f"{self.device_id!r},"
+            f"name={self.device_name!r},"
+            f"serial={self.device_serial!r},"
+            f"model={self.device_model!r},"
+            f"config={self.config!r}"
             f")"
         )
 
     @property
-    def device_info(self) -> dict:
-        return {
-            "identifiers": {(C.DOMAIN, self.device_id)},
-            "name": self.device_name,
-            "sw_version": self.sw_version,
-            "model": self.device_model,
-            "manufacturer": "Haier",
-        }
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(C.DOMAIN, self.device_id)},
+            name=self.device_name,
+            sw_version=self.sw_version,
+            model=self.device_model,
+            manufacturer="Haier"
+        )
 
     @property
     def device_mac(self) -> str:
@@ -635,6 +638,10 @@ class HaierDevice(object):
     @property
     def config(self) -> CFG.HaierDeviceConfig:
         return self._config
+
+    @property
+    def constraint(self) -> CFG.Constraint:
+        return self.config.constraint
 
     def to_dict(self) -> dict:
         return {
@@ -685,33 +692,40 @@ class HaierDevice(object):
         payload = received_message.get("payload", {})
         self.sw_version = payload.get("swVersion") or self.sw_version
 
-    def _send_message(self, message: str) -> None:
-        self._haier.send_message(message)
+    def _send_message(self, message: dict) -> None:
+        self._haier.send_message(json.dumps(message))
 
     def _send_commands(self, commands: list[dict]) -> None:
-        self._send_message(json.dumps({
+        self._send_group_command(commands)
+
+    def _send_group_command(self, commands: list[dict]) -> None:
+        trace = str(uuid.uuid4())
+        self._send_message({
             "action": "operation",
             "macAddress": self.device_id,
             "commandName": self.config.command_name,
             "commands": commands,
-        }))
+            "trace": trace,
+        })
 
     def _send_single_command(self, command: dict) -> None:
-        self._send_message(json.dumps({
+        trace = str(uuid.uuid4())
+        self._send_message({
             "action": "command",
             "macAddress": self.device_id,
             "command": command,
-        }))
+            "trace": trace,
+        })
 
     def get_commands(self, name: str, value: str | bool) -> list[dict]:
         value = str({True: "on", False: "off", None: "off"}.get(value, value))
         if custom := self.config.get_command_by_name(f"{name}_{value}"):
             return custom
         attr = self.config.get_attr_by_name(name)
-        return [{
+        return self.constraint.apply([{
             "commandName": str(attr.code),
             "value": attr.get_item_code(value),
-        }] if attr else []
+        }] if attr else [])
 
     def on_message(self, message_dict: dict) -> None:
         message_type = message_dict.get("event", "")
@@ -908,12 +922,12 @@ class HaierAC(HaierDevice):
             self.config.attrs.append(attr)
         self.config.merge_attributes()
         for attr in self.config.attrs:
-            _LOGGER.debug(f"{self.device_name}: {attr}")
             self._set_attribute_value(str(attr.code), attr.current)
             if attr.name == "target_temperature":
                 self.min_temperature = float(attr.range.min_value)
                 self.max_temperature = float(attr.range.max_value)
-        _LOGGER.debug(self.config)
+            _LOGGER.debug(f"{self.device_name}: {attr}")
+        self.constraint.extend(data.setdefault("constraint", []))
 
     def _get_status(self, data: dict) -> dict:
         data = super()._get_status(data)
@@ -949,10 +963,10 @@ class HaierAC(HaierDevice):
         if custom := self.config.get_command_by_name(f'preset_mode_{mode}'):
             return custom
         attr = self.config.get_attr_by_name(f"preset_mode_{mode}")
-        return [{
+        return self.constraint.apply([{
             "commandName": str(attr.code),
             "value": attr.get_item_code("on", "1")
-        }] if attr else []
+        }] if attr else [])
 
     def get_supported_features(self) -> ClimateEntityFeature:
         value = (
@@ -1005,94 +1019,85 @@ class HaierAC(HaierDevice):
     def switch_on(self, value: str = None) -> None:
         value = value or self.mode or HVACMode.AUTO
         self._send_commands([
-            {
-                "commandName": self.config['status'],
-                "value": "1"
-            },
-            {
-                "commandName": self.config['mode'],
-                "value": str(self.config.get_value_code("mode", value))
-            }
+            *(self.get_commands("status", "on") if not self.status else []),
+            *self.get_commands("mode", value),
         ])
         self.status = 1
         self.mode = value
 
     def switch_off(self) -> None:
         self._send_commands([
-            {
-                "commandName": self.config['status'],
-                "value": "0"
-            }
+            *self.get_commands("status", "off"),
         ])
         self.status = 0
 
     def set_fan_mode(self, value: str) -> None:
-        if commands := self.get_commands(f"fan_mode", value):
+        if commands := self.get_commands("fan_mode", value):
             self._send_commands(commands)
             self.fan_mode = value
 
     def set_swing_horizontal_mode(self, value: str) -> None:
-        if commands := self.get_commands(f"swing_horizontal_mode", value):
+        if commands := self.get_commands("swing_horizontal_mode", value):
             self._send_commands(commands)
             self.swing_horizontal_mode = value
 
     def set_swing_mode(self, value: str) -> None:
-        if commands := self.get_commands(f"swing_mode", value):
+        if commands := self.get_commands("swing_mode", value):
             self._send_commands(commands)
             self.swing_mode = value
 
     def set_preset_mode(self, value: str) -> None:
-        if commands := self.get_commands(f"preset_mode", value):
+        if commands := self.get_commands("preset_mode", value):
             self._send_commands(commands)
             self.preset_mode = value
 
     def set_light_on(self, value: bool) -> None:
-        if commands := self.get_commands(f"light", value):
+        if commands := self.get_commands("light", value):
             self._send_commands(commands)
             self.light_on = value
 
     def set_sound_on(self, value: bool) -> None:
-        if commands := self.get_commands(f"sound", value):
+        if commands := self.get_commands("sound", value):
             self._send_commands(commands)
             self.sound_on = value
 
     def set_quiet_on(self, value: bool) -> None:
-        if commands := self.get_commands(f"quiet", value):
+        if commands := self.get_commands("quiet", value):
             self._send_commands(commands)
             self.quiet_on = value
 
     def set_health_on(self, value: bool) -> None:
-        if commands := self.get_commands(f"health", value):
+        if commands := self.get_commands("health", value):
             self._send_commands(commands)
             self.health_on = value
 
     def set_turbo_on(self, value: bool) -> None:
-        if commands := self.get_commands(f"turbo", value):
+        if commands := self.get_commands("turbo", value):
             self._send_commands(commands)
             self.turbo_on = value
 
     def set_comfort_on(self, value: bool) -> None:
-        if commands := self.get_commands(f"comfort", value):
+        if commands := self.get_commands("comfort", value):
             self._send_commands(commands)
             self.comfort_on = value
 
     def set_cleaning_on(self, value: bool) -> None:
-        if commands := self.get_commands(f"cleaning", value):
+        if commands := self.get_commands("cleaning", value):
             self._send_commands(commands)
             self.cleaning_on = value
 
     def set_antifreeze_on(self, value: bool) -> None:
-        if commands := self.get_commands(f"antifreeze", value):
+        if commands := self.get_commands("antifreeze", value):
             self._send_commands(commands)
             self.antifreeze_on = value
 
     def set_autohumidity_on(self, value: bool) -> None:
-        if commands := self.get_commands(f"autohumidity", value):
+        if commands := self.get_commands("autohumidity", value):
             self._send_commands(commands)
             self.autohumidity_on = value
 
     def set_eco_sensor(self, value: str) -> None:
-        if commands := self.get_commands(f"eco_sensor", value):
+        if commands := self.get_commands("eco_sensor", value):
             self._send_commands(commands)
             self.eco_sensor = value
 
@@ -1179,9 +1184,8 @@ class HaierREF(HaierDevice):
             self.config.attrs.append(attr)
         self.config.merge_attributes()
         for attr in self.config.attrs:
-            _LOGGER.debug(f"{self.device_name}: {attr}")
             self._set_attribute_value(str(attr.code), attr.current)
-        _LOGGER.debug(self.config)
+            _LOGGER.debug(f"{self.device_name}: {attr}")
 
     def _set_attribute_value(self, code: str, value: str) -> None:
         attr = self.config.get_attr_by_code(code)
