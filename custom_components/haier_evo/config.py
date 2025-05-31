@@ -50,7 +50,7 @@ class HaierDeviceConfig(object):
             _LOGGER.error(f"Failed to load config: {e}")
             self._config = {}
         else:
-            _LOGGER.info("Loaded device config %s", fname)
+            _LOGGER.debug("Loaded device config %s", fname)
 
     def to_dict(self) -> dict:
         return {
