@@ -23,7 +23,6 @@ class HaierSensor(SensorEntity):
     def __init__(self, device: api.HaierDevice):
         self._device = weakref.proxy(device)
         self._device_attr_name = None
-        self._attr_is_on = False
 
         device.add_write_ha_state_callback(self.async_write_ha_state)
 

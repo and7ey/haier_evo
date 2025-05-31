@@ -215,7 +215,7 @@ class Haier(object):
         except Exception as e:
             _LOGGER.error(f"Failed to save tokens file: {e}")
         else:
-            _LOGGER.info(f"Saved tokens file: {filename}")
+            _LOGGER.debug(f"Saved tokens file: {filename}")
 
     def clear_tokens(self) -> None:
         self.token = None
@@ -284,7 +284,7 @@ class Haier(object):
     def auth_login(self) -> AuthResponse:
         try:
             path = urljoin(C.API_PATH, C.API_LOGIN)
-            _LOGGER.info(f"Logging in to {path} with email {self.email}")
+            _LOGGER.debug(f"Logging in to {path} with email {self.email}")
             response = AuthResponse(self.make_request('POST', path, data={
                 'email': self.email,
                 'password': self.password
@@ -418,7 +418,7 @@ class Haier(object):
                 headers={"X-Auth-token": self.token},
                 timeout=C.API_TIMEOUT
             )
-            _LOGGER.info(f"Update device {device_mac} status code: {response.status_code}")
+            _LOGGER.debug(f"Update device {device_mac} status code: {response.status_code}")
             _LOGGER.debug(response.text)
             response.raise_for_status()
             data = response.json()
@@ -542,12 +542,12 @@ class Haier(object):
             try:
                 self.socket_status = SocketStatus.INITIALIZING
                 self._init_ws()
-                self.socket_app.run_forever(ping_interval=30, ping_timeout=2)
+                self.socket_app.run_forever(ping_interval=10, ping_timeout=2)
             except WebSocketException: # socket is already opened
                 pass
             except Exception as e:
                 _LOGGER.error(f"Error connecting to websocket: {e}")
-        _LOGGER.info("Connection stoped")
+        _LOGGER.debug("Connection stoped")
 
     def connect_in_thread(self) -> None:
         self.socket_thread = thread = threading.Thread(target=self.connect)

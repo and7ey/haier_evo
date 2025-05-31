@@ -17,7 +17,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 
 
 class HaierBinarySensor(BinarySensorEntity):
-    # _attr_should_poll = False
+    _attr_should_poll = False
 
     def __init__(self, device: api.HaierDevice) -> None:
         self._device = weakref.proxy(device)
