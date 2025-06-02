@@ -510,6 +510,8 @@ class Haier(object):
     def _on_open(self, ws: WebSocket) -> None:
         self.socket_status = SocketStatus.INITIALIZED
         _LOGGER.debug("Websocket opened")
+        for device in self.devices:
+            device.init_if_needed()
 
     # noinspection PyUnusedLocal
     def _on_ping(self, ws: WebSocket) -> None:
@@ -542,7 +544,7 @@ class Haier(object):
             try:
                 self.socket_status = SocketStatus.INITIALIZING
                 self._init_ws()
-                self.socket_app.run_forever(ping_interval=10, ping_timeout=2)
+                self.socket_app.run_forever(ping_interval=10)
             except WebSocketException: # socket is already opened
                 pass
             except Exception as e:
@@ -717,6 +719,9 @@ class HaierDevice(object):
             "trace": trace,
         })
 
+    def init_if_needed(self) -> None:
+        pass
+
     def get_commands(self, name: str, value: str | bool) -> list[dict]:
         value = str({True: "on", False: "off", None: "off"}.get(value, value))
         if custom := self.config.get_command_by_name(f"{name}_{value}"):
@@ -822,6 +827,7 @@ class HaierAC(HaierDevice):
         self.autohumidity_on = False
         self.eco_sensor = None
         self._get_status(backend_data)
+        self._inited = False
 
     @property
     def config(self) -> CFG.HaierACConfig:
@@ -939,6 +945,14 @@ class HaierAC(HaierDevice):
             self.preset_mode = PRESET_NONE
         self.write_ha_state()
         return data
+
+    def init_if_needed(self) -> None:
+        if not self._inited and next(filter(
+            lambda a: (not a.name.startswith("preset_mode_") and a.current is None),
+            self.config.attrs
+        ), None) is not None:
+            self.set_temperature(self.target_temperature)
+        self._inited = True
 
     def get_commands(self, name: str, value: str | bool) -> list[dict]:
         if name != "preset_mode":
