@@ -104,8 +104,8 @@ class HaierDeviceConfig(object):
                 "name": attr.get('id'),
                 "list": {
                     "data": [{
-                        "data": m.get('haier'),
-                        "name": m.get('value'),
+                        "data": str(m.get('haier')),
+                        "name": str(m.get('value')),
                         "attrname": m.get('value')
                     } for m in attr.get("mappings", []) if (
                         m.get('value') not in ("", None)
@@ -317,13 +317,13 @@ class Attribute(dict):
 
     def get_item_code(self, name: str, default=None) -> str:
         return str(getattr(next(filter(
-            lambda i: i.name == name,
+            lambda i: str(i.name) == name,
             self.list
         ), None), "value", default))
 
     def get_item_name(self, code: str, default=None) -> str:
         return str(getattr(next(filter(
-            lambda i: i.value == code,
+            lambda i: str(i.value) == code,
             self.list
         ), None), "name", default))
 
