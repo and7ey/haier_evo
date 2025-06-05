@@ -9,24 +9,24 @@ attributes:
   - name: mode
     id: "2"
     mappings:
-      - haier: 0
-        value: auto
-      - haier: 1
-        value: cool
-      - haier: 2
-        value: dry
-      - haier: 4
-        value: heat
-      - haier: 6
-        value: fan_only
+      - haier: "0"
+        value: "auto"
+      - haier: "1"
+        value: "cool"
+      - haier: "2"
+        value: "dry"
+      - haier: "4"
+        value: "heat"
+      - haier: "6"
+        value: "fan_only"
   - name: fan_mode
     id: "4"
     mappings:
-      - haier: 1
-        value: high
-      - haier: 2
-        value: medium
-      - haier: 3
-        value: low
-      - haier: 5
-        value: auto
+      - haier: "1"
+        value: "high"
+      - haier: "2"
+        value: "medium"
+      - haier: "3"
+        value: "low"
+      - haier: "5"
+        value: "auto"
