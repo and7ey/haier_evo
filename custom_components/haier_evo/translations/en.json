@@ -11,8 +11,16 @@
         "step": {
             "user": {
                 "data": {
-                    "password": "password",
-                    "email": "email"
+                    "password": "Password",
+                    "email": "Login (email)",
+                    "region": "Region"
+                }
+            },
+            "init": {
+                "data": {
+                    "password": "Password",
+                    "email": "Login (email)",
+                    "region": "Region"
                 }
             }
         }

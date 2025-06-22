@@ -157,13 +157,22 @@ class Haier(object):
         max=C.REFRESH_LIMIT_MAX
     )
 
-    def __init__(self, hass: HomeAssistant, email: str, password: str, http: bool = C.API_HTTP_ROUTE) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        email: str,
+        password: str,
+        region: str,
+        http: bool = C.API_HTTP_ROUTE
+    ) -> None:
         self._lock = threading.Lock()
         self._pull_data = None
+        self._device_id = str(uuid.uuid4())
         self.hass: HomeAssistant = hass
         self.devices: list[HaierDevice] = []
         self.email: str = email
         self.password: str = password
+        self.region: str = region
         self.allow_http: bool = http
         self.allow_http_post: bool = False
         self.token: str | None = None
@@ -262,7 +271,7 @@ class Haier(object):
             headers.setdefault('User-Agent', "curl/7.81.0")
             headers.setdefault('Accept', "*/*")
             resp = requests.request(method, url, **kwargs)
-            _LOGGER.debug(resp.text)
+            # _LOGGER.debug(resp.text)
             # Handling 429 Too Many Requests with retry
             if resp.status_code == 429:
                 raise ManyRequestsError("429 Too Many Requests", response=resp)
@@ -283,13 +292,13 @@ class Haier(object):
     @auth_login_limits
     def auth_login(self) -> AuthResponse:
         try:
-            path = urljoin(C.API_PATH, C.API_LOGIN)
-            _LOGGER.debug(f"Logging in to {path} with email {self.email}")
+            path = urljoin(C.API_PATH, C.API_LOGIN.format(region=self.region))
+            _LOGGER.debug(f"Logging in to {path}")
             response = AuthResponse(self.make_request('POST', path, data={
                 'email': self.email,
                 'password': self.password
             }))
-            # _LOGGER.info(f"Login ({self.email}) status code: {response.status_code}")
+            # _LOGGER.info(f"Login status code: {response.status_code}")
             response.raise_for_error()
         except ManyRequestsError as e:
             self.auth_login_limits.add_period(C.LOGIN_LIMIT_429)
@@ -311,12 +320,12 @@ class Haier(object):
     @auth_refresh_limits
     def auth_refresh(self) -> AuthResponse:
         try:
-            path = urljoin(C.API_PATH, C.API_TOKEN_REFRESH)
-            _LOGGER.debug(f"Refreshing token in to {path} with email {self.email}")
+            path = urljoin(C.API_PATH, C.API_TOKEN_REFRESH.format(region=self.region))
+            _LOGGER.debug(f"Refreshing token in to {path}")
             response = AuthResponse(self.make_request('POST', path, data={
                 'refreshToken': self.refreshtoken
             }))
-            # _LOGGER.info(f"Refresh ({self.email}) status code: {response.status_code}")
+            # _LOGGER.info(f"Refresh status code: {response.status_code}")
             response.raise_for_error()
         except ManyRequestsError as e:
             self.auth_refresh_limits.add_period(C.REFRESH_LIMIT_429)
@@ -358,13 +367,13 @@ class Haier(object):
             _LOGGER.error(f"Assertion error: {e}")
         except Exception as e:
             _LOGGER.error(
-                f"Failed to login/refresh token for email {self.email}, "
+                f"Failed to login/refresh token, "
                 f"response was: {resp}, "
                 f"err: {e}"
             )
             raise InvalidAuth()
         else:
-            _LOGGER.debug(f"Successful update tokens for email {self.email}")
+            _LOGGER.debug(f"Successful update tokens")
 
     def auth(self) -> None:
         with self._lock:
@@ -377,21 +386,21 @@ class Haier(object):
                 if tokenexpire > now:
                     return None
                 elif self.refreshtoken and refreshexpire > now:
-                    _LOGGER.debug(f"Token to be refreshed")
+                    # _LOGGER.debug(f"Token to be refreshed")
                     return self.login(refresh=True)
-            _LOGGER.debug(f"Token expired or empty")
+            # _LOGGER.debug(f"Token expired or empty")
             return self.login()
 
     def pull_data_from_api(self) -> dict:
         self.auth()
         response = None
         try:
-            devices_path = urljoin(C.API_PATH, C.API_DEVICES)
+            devices_path = urljoin(C.API_PATH, C.API_DEVICES.format(region=self.region))
             _LOGGER.debug(f"Getting devices, url: {devices_path}")
             response = requests.get(devices_path, headers={
                 'X-Auth-Token': self.token,
                 'User-Agent': 'evo-mobile',
-                'Device-Id': str(uuid.uuid4()),
+                'Device-Id': self._device_id,
                 'Content-Type': 'application/json'
             }, timeout=C.API_TIMEOUT)
             _LOGGER.debug(response.text)
@@ -411,13 +420,14 @@ class Haier(object):
         self.auth()
         response = None
         try:
-            status_url = C.API_STATUS.replace("{mac}", device_mac)
+            status_url = C.API_STATUS.format(mac=device_mac)
             _LOGGER.debug(f"Getting initial status of device {device_mac}, url: {status_url}")
-            response = requests.get(
-                url=status_url,
-                headers={"X-Auth-token": self.token},
-                timeout=C.API_TIMEOUT
-            )
+            response = requests.get(status_url, headers={
+                'X-Auth-Token': self.token,
+                'User-Agent': 'evo-mobile',
+                'Device-Id': self._device_id,
+                'Content-Type': 'application/json'
+            }, timeout=C.API_TIMEOUT)
             _LOGGER.debug(f"Update device {device_mac} status code: {response.status_code}")
             _LOGGER.debug(response.text)
             response.raise_for_status()

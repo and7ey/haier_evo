@@ -14,8 +14,8 @@ REFRESH_LIMIT_500 = 60
 API_HTTP_ROUTE = True
 API_TIMEOUT = 15
 API_PATH = "https://evo.haieronline.ru"
-API_LOGIN = "v1/users/auth/sign-in"
-API_TOKEN_REFRESH = "v1/users/auth/refresh"
-API_DEVICES = "v2/ru/pages/sduiRawPaginated/smartHome?part=1&partitionWeight=6"
+API_LOGIN = "v2/{region}/users/auth/sign-in"
+API_TOKEN_REFRESH = "v2/{region}/users/auth/refresh"
+API_DEVICES = "v2/{region}/pages/sduiRawPaginated/smartHome?part=1&partitionWeight=6"
 API_STATUS = "https://iot-platform.evo.haieronline.ru/mobile-backend-service/api/v1/config/{mac}?type=DETAILED"
 API_WS_PATH = "wss://iot-platform.evo.haieronline.ru/gateway-ws-service/ws/"
