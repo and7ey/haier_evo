@@ -10,7 +10,7 @@ from aiohttp import web
 from enum import Enum
 from datetime import datetime, timezone, timedelta
 from tenacity import retry, stop_after_attempt, retry_if_exception_type, wait_fixed
-from websocket import WebSocketException, WebSocketApp, WebSocket
+from websocket import WebSocketApp, WebSocket
 from requests.exceptions import ConnectionError, Timeout, HTTPError
 from urllib.parse import urlparse, urljoin, parse_qs
 from urllib3.exceptions import NewConnectionError
@@ -142,6 +142,7 @@ class AuthResponse(object):
 class Haier(object):
 
     http = HaierAPI()
+    connect_limits = ResettableLimits(calls=1, period=5)
     common_limits = ResettableLimits(
         calls=C.COMMON_LIMIT_CALLS,
         period=C.COMMON_LIMIT_PERIOD,
@@ -234,6 +235,7 @@ class Haier(object):
         self.save_tokens()
 
     def reset_limits(self) -> None:
+        self.connect_limits.reset()
         self.common_limits.reset()
         self.auth_login_limits.reset()
         self.auth_refresh_limits.reset()
@@ -550,21 +552,24 @@ class Haier(object):
     def connect(self) -> None:
         self.socket_status = SocketStatus.NOT_INITIALIZED
         while not self.disconnect_requested:
-            _LOGGER.debug(f"Connecting to websocket ({C.API_WS_PATH})")
-            try:
-                self.socket_status = SocketStatus.INITIALIZING
-                self._init_ws()
-                self.socket_app.run_forever(ping_interval=10)
-            except WebSocketException: # socket is already opened
-                pass
-            except Exception as e:
-                _LOGGER.error(f"Error connecting to websocket: {e}")
+            self.run_forever()
         _LOGGER.debug("Connection stoped")
 
     def connect_in_thread(self) -> None:
         self.socket_thread = thread = threading.Thread(target=self.connect)
         thread.daemon = True
         thread.start()
+
+    @connect_limits.sleep_and_retry
+    @connect_limits
+    def run_forever(self) -> None:
+        _LOGGER.debug(f"Connecting to websocket ({C.API_WS_PATH})")
+        try:
+            self.socket_status = SocketStatus.INITIALIZING
+            self._init_ws()
+            self.socket_app.run_forever(ping_interval=10)
+        except Exception as e:
+            _LOGGER.error(f"Error connecting to websocket: {e}")
 
     @retry(
         retry=retry_if_exception_type(Exception),
