@@ -189,7 +189,7 @@ class Haier(object):
 
     def to_dict(self) -> dict:
         return {
-            "socket_status": self.socket_status,
+            "socket_status": getattr(self.socket_status, "value", None),
             "backend_data": self._pull_data,
             "devices": [device.to_dict() for device in self.devices]
         }
@@ -668,7 +668,7 @@ class HaierDevice(object):
             "device_name": self.device_name,
             "device_serial": self.device_serial,
             "sw_version": self.sw_version,
-            "config": self.config.to_dict(),
+            "config": self.config.to_dict() if self.config else None,
             "backend_data": self.status_data,
         }
 
@@ -797,12 +797,11 @@ class HaierDevice(object):
         device_serial: str = None,
         device_title: str = None,
     ) -> HaierDevice:
-        if device_type == 'AC':
-            device_cls = HaierAC
-        elif device_type == 'REF':
-            device_cls = HaierREF
-        else:
-            device_cls = cls
+        device_cls = {
+            "AC": HaierAC,
+            "REF": HaierREF,
+        }.get(device_type, cls)
+        if device_cls is cls:
             _LOGGER.warning(f"Unknown device type: {device_type}")
         return device_cls(
             haier=haier,
