@@ -10,7 +10,7 @@ from aiohttp import web
 from enum import Enum
 from datetime import datetime, timezone, timedelta
 from tenacity import retry, stop_after_attempt, retry_if_exception_type, wait_fixed
-from websocket import WebSocketException, WebSocketApp, WebSocket
+from websocket import WebSocketApp, WebSocket
 from requests.exceptions import ConnectionError, Timeout, HTTPError
 from urllib.parse import urlparse, urljoin, parse_qs
 from urllib3.exceptions import NewConnectionError
@@ -142,6 +142,7 @@ class AuthResponse(object):
 class Haier(object):
 
     http = HaierAPI()
+    connect_limits = ResettableLimits(calls=1, period=5)
     common_limits = ResettableLimits(
         calls=C.COMMON_LIMIT_CALLS,
         period=C.COMMON_LIMIT_PERIOD,
@@ -157,13 +158,22 @@ class Haier(object):
         max=C.REFRESH_LIMIT_MAX
     )
 
-    def __init__(self, hass: HomeAssistant, email: str, password: str, http: bool = C.API_HTTP_ROUTE) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        email: str,
+        password: str,
+        region: str,
+        http: bool = C.API_HTTP_ROUTE
+    ) -> None:
         self._lock = threading.Lock()
         self._pull_data = None
+        self._device_id = str(uuid.uuid4())
         self.hass: HomeAssistant = hass
         self.devices: list[HaierDevice] = []
         self.email: str = email
         self.password: str = password
+        self.region: str = region
         self.allow_http: bool = http
         self.allow_http_post: bool = False
         self.token: str | None = None
@@ -179,7 +189,7 @@ class Haier(object):
 
     def to_dict(self) -> dict:
         return {
-            "socket_status": self.socket_status,
+            "socket_status": getattr(self.socket_status, "value", None),
             "backend_data": self._pull_data,
             "devices": [device.to_dict() for device in self.devices]
         }
@@ -225,6 +235,7 @@ class Haier(object):
         self.save_tokens()
 
     def reset_limits(self) -> None:
+        self.connect_limits.reset()
         self.common_limits.reset()
         self.auth_login_limits.reset()
         self.auth_refresh_limits.reset()
@@ -262,7 +273,7 @@ class Haier(object):
             headers.setdefault('User-Agent', "curl/7.81.0")
             headers.setdefault('Accept', "*/*")
             resp = requests.request(method, url, **kwargs)
-            _LOGGER.debug(resp.text)
+            # _LOGGER.debug(resp.text)
             # Handling 429 Too Many Requests with retry
             if resp.status_code == 429:
                 raise ManyRequestsError("429 Too Many Requests", response=resp)
@@ -283,13 +294,13 @@ class Haier(object):
     @auth_login_limits
     def auth_login(self) -> AuthResponse:
         try:
-            path = urljoin(C.API_PATH, C.API_LOGIN)
-            _LOGGER.debug(f"Logging in to {path} with email {self.email}")
+            path = urljoin(C.API_PATH, C.API_LOGIN.format(region=self.region))
+            _LOGGER.debug(f"Logging in to {path}")
             response = AuthResponse(self.make_request('POST', path, data={
                 'email': self.email,
                 'password': self.password
             }))
-            # _LOGGER.info(f"Login ({self.email}) status code: {response.status_code}")
+            # _LOGGER.info(f"Login status code: {response.status_code}")
             response.raise_for_error()
         except ManyRequestsError as e:
             self.auth_login_limits.add_period(C.LOGIN_LIMIT_429)
@@ -311,12 +322,12 @@ class Haier(object):
     @auth_refresh_limits
     def auth_refresh(self) -> AuthResponse:
         try:
-            path = urljoin(C.API_PATH, C.API_TOKEN_REFRESH)
-            _LOGGER.debug(f"Refreshing token in to {path} with email {self.email}")
+            path = urljoin(C.API_PATH, C.API_TOKEN_REFRESH.format(region=self.region))
+            _LOGGER.debug(f"Refreshing token in to {path}")
             response = AuthResponse(self.make_request('POST', path, data={
                 'refreshToken': self.refreshtoken
             }))
-            # _LOGGER.info(f"Refresh ({self.email}) status code: {response.status_code}")
+            # _LOGGER.info(f"Refresh status code: {response.status_code}")
             response.raise_for_error()
         except ManyRequestsError as e:
             self.auth_refresh_limits.add_period(C.REFRESH_LIMIT_429)
@@ -358,13 +369,13 @@ class Haier(object):
             _LOGGER.error(f"Assertion error: {e}")
         except Exception as e:
             _LOGGER.error(
-                f"Failed to login/refresh token for email {self.email}, "
+                f"Failed to login/refresh token, "
                 f"response was: {resp}, "
                 f"err: {e}"
             )
             raise InvalidAuth()
         else:
-            _LOGGER.debug(f"Successful update tokens for email {self.email}")
+            _LOGGER.debug(f"Successful update tokens")
 
     def auth(self) -> None:
         with self._lock:
@@ -377,21 +388,21 @@ class Haier(object):
                 if tokenexpire > now:
                     return None
                 elif self.refreshtoken and refreshexpire > now:
-                    _LOGGER.debug(f"Token to be refreshed")
+                    # _LOGGER.debug(f"Token to be refreshed")
                     return self.login(refresh=True)
-            _LOGGER.debug(f"Token expired or empty")
+            # _LOGGER.debug(f"Token expired or empty")
             return self.login()
 
     def pull_data_from_api(self) -> dict:
         self.auth()
         response = None
         try:
-            devices_path = urljoin(C.API_PATH, C.API_DEVICES)
+            devices_path = urljoin(C.API_PATH, C.API_DEVICES.format(region=self.region))
             _LOGGER.debug(f"Getting devices, url: {devices_path}")
             response = requests.get(devices_path, headers={
                 'X-Auth-Token': self.token,
                 'User-Agent': 'evo-mobile',
-                'Device-Id': str(uuid.uuid4()),
+                'Device-Id': self._device_id,
                 'Content-Type': 'application/json'
             }, timeout=C.API_TIMEOUT)
             _LOGGER.debug(response.text)
@@ -411,13 +422,14 @@ class Haier(object):
         self.auth()
         response = None
         try:
-            status_url = C.API_STATUS.replace("{mac}", device_mac)
+            status_url = C.API_STATUS.format(mac=device_mac)
             _LOGGER.debug(f"Getting initial status of device {device_mac}, url: {status_url}")
-            response = requests.get(
-                url=status_url,
-                headers={"X-Auth-token": self.token},
-                timeout=C.API_TIMEOUT
-            )
+            response = requests.get(status_url, headers={
+                'X-Auth-Token': self.token,
+                'User-Agent': 'evo-mobile',
+                'Device-Id': self._device_id,
+                'Content-Type': 'application/json'
+            }, timeout=C.API_TIMEOUT)
             _LOGGER.debug(f"Update device {device_mac} status code: {response.status_code}")
             _LOGGER.debug(response.text)
             response.raise_for_status()
@@ -540,21 +552,24 @@ class Haier(object):
     def connect(self) -> None:
         self.socket_status = SocketStatus.NOT_INITIALIZED
         while not self.disconnect_requested:
-            _LOGGER.debug(f"Connecting to websocket ({C.API_WS_PATH})")
-            try:
-                self.socket_status = SocketStatus.INITIALIZING
-                self._init_ws()
-                self.socket_app.run_forever(ping_interval=10)
-            except WebSocketException: # socket is already opened
-                pass
-            except Exception as e:
-                _LOGGER.error(f"Error connecting to websocket: {e}")
+            self.run_forever()
         _LOGGER.debug("Connection stoped")
 
     def connect_in_thread(self) -> None:
         self.socket_thread = thread = threading.Thread(target=self.connect)
         thread.daemon = True
         thread.start()
+
+    @connect_limits.sleep_and_retry
+    @connect_limits
+    def run_forever(self) -> None:
+        _LOGGER.debug(f"Connecting to websocket ({C.API_WS_PATH})")
+        try:
+            self.socket_status = SocketStatus.INITIALIZING
+            self._init_ws()
+            self.socket_app.run_forever(ping_interval=10)
+        except Exception as e:
+            _LOGGER.error(f"Error connecting to websocket: {e}")
 
     @retry(
         retry=retry_if_exception_type(Exception),
@@ -653,7 +668,7 @@ class HaierDevice(object):
             "device_name": self.device_name,
             "device_serial": self.device_serial,
             "sw_version": self.sw_version,
-            "config": self.config.to_dict(),
+            "config": self.config.to_dict() if self.config else None,
             "backend_data": self.status_data,
         }
 
@@ -782,12 +797,11 @@ class HaierDevice(object):
         device_serial: str = None,
         device_title: str = None,
     ) -> HaierDevice:
-        if device_type == 'AC':
-            device_cls = HaierAC
-        elif device_type == 'REF':
-            device_cls = HaierREF
-        else:
-            device_cls = cls
+        device_cls = {
+            "AC": HaierAC,
+            "REF": HaierREF,
+        }.get(device_type, cls)
+        if device_cls is cls:
             _LOGGER.warning(f"Unknown device type: {device_type}")
         return device_cls(
             haier=haier,

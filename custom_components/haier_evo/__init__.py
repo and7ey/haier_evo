@@ -22,7 +22,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.debug(f'Integration version: {integration.version}')
     username = entry.data.get("email") or ""
     password = entry.data.get("password") or ""
-    haier_object = api.Haier(hass, username, password)
+    region = entry.data.get("region") or "ru"
+    haier_object = api.Haier(hass, username, password, region)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = haier_object
     await hass.async_add_executor_job(haier_object.load_tokens)
     await hass.async_add_executor_job(haier_object.pull_data)
