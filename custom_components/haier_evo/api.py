@@ -8,7 +8,6 @@ import threading
 import uuid
 import datetime
 import os
-import hashlib
 from homeassistant.core import HomeAssistant
 from homeassistant import config_entries, exceptions
 from urllib.parse import urlparse, urljoin, parse_qs
@@ -31,6 +30,19 @@ API_WS_PATH = "wss://iot-platform.evo.haieronline.ru/gateway-ws-service/ws/"
 
 _LOGGER = logging.getLogger(__name__)
 
+
+class RateLimited(exceptions.HomeAssistantError):
+    """Haier cloud returned HTTP 429."""
+
+
+def _parse_dt(value):
+    if not value:
+        return None
+    try:
+        return datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S%z")
+    except Exception:
+        return None
+
 class Haier:
 
     def __init__(self, hass: HomeAssistant, email: str, password: str) -> None:
@@ -43,133 +55,113 @@ class Haier:
         self._tokenexpire = None
         self._refreshexpire = None
         self._subscription: HaierSubscription = None
-        self._token_file = self._get_token_file()
+        safe_email = self._email.replace("@", "_").replace(".", "_")
+        self._token_cache_file = self.hass.config.path(f"haier_evo_tokens_{safe_email}.json")
         self._load_tokens()
-
-
-
-    def _get_token_file(self):
-        email_hash = hashlib.sha256(self._email.encode()).hexdigest()[:12]
-        return self.hass.config.path(f".storage/haier_evo_tokens_{email_hash}.json")
-
-    def _parse_dt(self, value):
-        if not value:
-            return None
-        try:
-            return datetime.datetime.strptime(value, "%Y-%m-%dT%H:%M:%S%z")
-        except Exception:
-            return None
 
     def _load_tokens(self):
         try:
-            if os.path.exists(self._token_file):
-                with open(self._token_file, "r", encoding="utf-8") as f:
+            if os.path.exists(self._token_cache_file):
+                with open(self._token_cache_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 self._token = data.get("accessToken")
                 self._refreshtoken = data.get("refreshToken")
-                self._tokenexpire = self._parse_dt(data.get("expire"))
-                self._refreshexpire = self._parse_dt(data.get("refreshExpire"))
-                _LOGGER.debug("Loaded Haier token cache")
-        except Exception:
-            _LOGGER.exception("Failed to load Haier token cache")
+                self._tokenexpire = _parse_dt(data.get("expire"))
+                self._refreshexpire = _parse_dt(data.get("refreshExpire"))
+                _LOGGER.debug("Loaded cached Haier tokens for %s", self._email)
+        except Exception as err:
+            _LOGGER.warning("Could not load cached Haier tokens: %s", err)
 
-    def _save_tokens(self, token):
+    def _save_tokens(self):
         try:
-            os.makedirs(os.path.dirname(self._token_file), exist_ok=True)
-            with open(self._token_file, "w", encoding="utf-8") as f:
-                json.dump(token, f)
-            os.chmod(self._token_file, 0o600)
-        except Exception:
-            _LOGGER.exception("Failed to save Haier token cache")
-
-    def _request_with_retry(self, method, url, *, retries=3, **kwargs):
-        headers = kwargs.pop("headers", {}) or {}
-        headers.setdefault("User-Agent", "evo-mobile")
-        headers.setdefault("Accept", "application/json")
-        kwargs.setdefault("timeout", 30)
-
-        last_resp = None
-        for attempt in range(retries):
-            resp = requests.request(method, url, headers=headers, **kwargs)
-            last_resp = resp
-            if resp.status_code != 429:
-                return resp
-
-            retry_after = resp.headers.get("Retry-After")
-            try:
-                sleep_for = int(retry_after) if retry_after else 60 * (attempt + 1)
-            except ValueError:
-                sleep_for = 60 * (attempt + 1)
-            _LOGGER.warning("Haier API returned 429. Waiting %s seconds before retry", sleep_for)
-            time.sleep(sleep_for)
-
-        return last_resp
+            data = {
+                "accessToken": self._token,
+                "refreshToken": self._refreshtoken,
+                "expire": self._tokenexpire.strftime("%Y-%m-%dT%H:%M:%S%z") if self._tokenexpire else None,
+                "refreshExpire": self._refreshexpire.strftime("%Y-%m-%dT%H:%M:%S%z") if self._refreshexpire else None,
+            }
+            with open(self._token_cache_file, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            os.chmod(self._token_cache_file, 0o600)
+        except Exception as err:
+            _LOGGER.warning("Could not save Haier tokens: %s", err)
 
     def login(self, refresh=False):
+        session = requests.Session()
+        headers = {
+            "User-Agent": "evo-mobile/1.0 okhttp/4.9.3",
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+
         if not refresh:
             login_path = urljoin(API_PATH, API_LOGIN)
-            _LOGGER.debug(f"Logging in to {login_path} with email {self._email}")
-            resp = self._request_with_retry(
-                "POST",
+            _LOGGER.debug("Logging in to %s with email %s", login_path, self._email)
+            time.sleep(8)
+            resp = session.post(
                 login_path,
                 data={"email": self._email, "password": self._password},
+                headers=headers,
+                timeout=30,
             )
-            _LOGGER.debug(f"Login ({self._email}) status code: {resp.status_code}")
+            _LOGGER.debug("Login (%s) status code: %s", self._email, resp.status_code)
         else:
             refresh_path = urljoin(API_PATH, API_TOKEN_REFRESH)
-            _LOGGER.debug(f"Refreshing token in to {refresh_path} with email {self._email}")
-            resp = self._request_with_retry(
-                "POST",
+            _LOGGER.debug("Refreshing token at %s for email %s", refresh_path, self._email)
+            time.sleep(3)
+            resp = session.post(
                 refresh_path,
                 data={"refreshToken": self._refreshtoken},
+                headers=headers,
+                timeout=30,
             )
-            _LOGGER.debug(f"Refresh ({self._email}) status code: {resp.status_code}")
-
-        try:
-            resp_json = resp.json()
-        except Exception:
-            resp_json = {}
+            _LOGGER.debug("Refresh (%s) status code: %s", self._email, resp.status_code)
 
         if resp.status_code == 429:
-            _LOGGER.error("Haier API rate limit 429. Stop re-login attempts, wait and retry later")
-            raise HaierRateLimit()
+            retry_after = resp.headers.get("Retry-After", "unknown")
+            _LOGGER.error("Haier cloud rate limit 429 for %s. Retry-After: %s", self._email, retry_after)
+            raise RateLimited()
+
+        try:
+            body = resp.json()
+        except Exception:
+            body = {}
 
         if (
             resp.status_code == 200
-            and "application/json" in resp.headers.get("content-type", "")
-            and "data" in resp_json
-            and "token" in resp_json.get("data", {})
-            and "accessToken" in resp_json.get("data", {}).get("token", {})
-            and "refreshToken" in resp_json.get("data", {}).get("token", {})
+            and "data" in body
+            and "token" in body.get("data", {})
+            and "accessToken" in body.get("data", {}).get("token", {})
+            and "refreshToken" in body.get("data", {}).get("token", {})
         ):
-
-            token = resp_json.get("data").get("token")
+            token = body.get("data").get("token")
             self._token = token.get("accessToken")
             self._refreshtoken = token.get("refreshToken")
-            self._tokenexpire = datetime.datetime.strptime(token.get("expire"), "%Y-%m-%dT%H:%M:%S%z")
-            self._refreshexpire = datetime.datetime.strptime(token.get("refreshExpire"), "%Y-%m-%dT%H:%M:%S%z")
-            self._save_tokens(token)
-            if refresh:
-                _LOGGER.debug(f"Successful refreshed token for email {self._email}")
-            else:
-                _LOGGER.debug(f"Successful login for email {self._email}")
+            self._tokenexpire = _parse_dt(token.get("expire"))
+            self._refreshexpire = _parse_dt(token.get("refreshExpire"))
+            self._save_tokens()
+            _LOGGER.debug("Successful %s token for email %s", "refreshed" if refresh else "login", self._email)
         else:
-            _LOGGER.error(f"Failed to login/refresh token for email {self._email}, response was: {resp}")
+            _LOGGER.error("Failed to login/refresh token for email %s, status=%s, body=%s", self._email, resp.status_code, body)
             raise InvalidAuth()
 
     def auth(self):
         timezone_offset = +3.0
         tzinfo = datetime.timezone(datetime.timedelta(hours=timezone_offset))
         now = datetime.datetime.now(tzinfo)
-        if self._tokenexpire and self._tokenexpire > now:
-            return
-        elif self._refreshexpire and self._refreshexpire > now:
-            _LOGGER.debug("Access token expired, refreshing with refresh token")
-            self.login(refresh=True)
-        else:
-            _LOGGER.debug("Refresh token expired or empty, doing full login")
-            self.login()
 
+        # First try cached token to avoid repeated login and HTTP 429.
+        if self._tokenexpire and self._tokenexpire > now + datetime.timedelta(minutes=2):
+            return
+
+        # If access token expired but refresh token is still valid, refresh it.
+        if self._refreshtoken and self._refreshexpire and self._refreshexpire > now + datetime.timedelta(minutes=2):
+            _LOGGER.debug("Access token expired; refreshing token")
+            self.login(refresh=True)
+            return
+
+        _LOGGER.debug("Refresh token expired or empty; doing full login")
+        self.login(refresh=False)
 
     def pull_data(self):
         self.auth()
@@ -178,15 +170,11 @@ class Haier:
         _LOGGER.debug(f"Getting devices, url: {devices_path}")
         devices_headers = {
             'X-Auth-Token': self._token,
-            'User-Agent': 'evo-mobile',
+            'User-Agent': 'evo-mobile/1.0 okhttp/4.9.3',
             'Device-Id': str(uuid.uuid4()),
             'Content-Type': 'application/json'
         }
-        resp = self._request_with_retry("GET", devices_path, headers=devices_headers)
-        if resp.status_code == 401 and self._refreshtoken:
-            self.login(refresh=True)
-            devices_headers["X-Auth-Token"] = self._token
-            resp = self._request_with_retry("GET", devices_path, headers=devices_headers)
+        resp = requests.get(devices_path, headers=devices_headers)
         if (
             resp.status_code == 200
             and "application/json" in resp.headers.get("content-type")
@@ -230,9 +218,6 @@ class Haier:
 
 class InvalidAuth(exceptions.HomeAssistantError):
     """Error to indicate we cannot connect."""
-
-class HaierRateLimit(exceptions.HomeAssistantError):
-    """Error to indicate Haier API rate limit."""
 
 class InvalidDevicesList(exceptions.HomeAssistantError):
     """Error to indicate we cannot connect."""
@@ -278,7 +263,6 @@ class HaierSubscription:
         device = self._devices.get(message_device)
         if device is None:
             _LOGGER.error(f"Got a message for a device we don't know about: {message_device}")
-            return
 
         device.on_message(message_dict)
 

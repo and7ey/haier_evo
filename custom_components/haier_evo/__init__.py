@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 import asyncio
 from . import api
@@ -24,8 +24,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = haier_object
     try:
         await hass.async_add_executor_job(haier_object.pull_data)
-    except api.HaierRateLimit as exc:
-        raise ConfigEntryNotReady("Haier API returned 429 Too Many Requests. Home Assistant will retry later") from exc
+    except api.RateLimited as err:
+        raise ConfigEntryNotReady("Haier cloud returned 429 Too Many Requests. Wait and retry later.") from err
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

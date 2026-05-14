@@ -63,17 +63,11 @@ class Haier_AC(ClimateEntity):
         """Return the supported step of target temperature."""
         return 1.0
 
-    async def async_turn_on(self):
+    async def async_turn_on(self) -> None:
         await self._hass1.async_add_executor_job(self._module.switchOn)
 
-    async def async_turn_off(self):
+    async def async_turn_off(self) -> None:
         await self._hass1.async_add_executor_job(self._module.switchOff)
-
-    def turn_on(self):
-        self._module.switchOn()
-
-    def turn_off(self):
-        self._module.switchOff()
 
     @property
     def hvac_mode(self) -> str:
@@ -90,23 +84,10 @@ class Haier_AC(ClimateEntity):
         else:
             await self._hass1.async_add_executor_job(self._module.switchOn, hvac_mode)
 
-    def set_hvac_mode(self, hvac_mode: str) -> None:
-        """Set new target hvac mode."""
-        _LOGGER.debug(f"Setting HVAC mode to {hvac_mode}")
-        if hvac_mode == HVACMode.OFF:
-            self._module.switchOff()
-        else:
-            self._module.switchOn(hvac_mode)
-
     async def async_set_fan_mode(self, fan_mode):
         """Set new target fan mode."""
         _LOGGER.debug(f"Setting fan mode to {fan_mode}")
         await self._hass1.async_add_executor_job(self._module.setFanMode, fan_mode)
-
-    def set_fan_mode(self, fan_mode):
-        """Set new target fan mode."""
-        _LOGGER.debug(f"Setting fan mode to {fan_mode}")
-        self._module.setFanMode(fan_mode)
 
     @property
     def fan_mode(self) -> str:
