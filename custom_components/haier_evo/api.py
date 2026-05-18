@@ -5,6 +5,7 @@ import time
 import threading
 import uuid
 import socket
+import os
 import weakref
 from aiohttp import web
 from enum import Enum
@@ -29,7 +30,10 @@ class InvalidAuth(HomeAssistantError):
     """Error to indicate we cannot connect."""
 
 class InvalidDevicesList(HomeAssistantError):
-    """Error to indicate we cannot connect."""
+    """Error to indicate the device list cannot be loaded."""
+
+class HaierRateLimitError(HomeAssistantError):
+    """Error to indicate Haier cloud has rate limited requests."""
 
 class AuthError(HTTPError):
     pass
@@ -57,7 +61,7 @@ class SocketStatus(Enum):
 class HaierAPI(HomeAssistantView):
     url = "/api/haier_evo"
     name = "/api:haier_evo"
-    requires_auth = False
+    requires_auth = True
 
     def __init__(self) -> None:
         self.haier = None
@@ -80,7 +84,10 @@ class AuthResponse(object):
 
     def __init__(self, response: requests.Response):
         self.response = response
-        self.json_data = response.json() or {}
+        try:
+            self.json_data = response.json() or {}
+        except ValueError:
+            self.json_data = {}
         self.data = self.json_data.get("data") or {}
         self.error = self.json_data.get("error")
         self.token = self.data.get("token") or {}
@@ -194,8 +201,14 @@ class Haier(object):
             "devices": [device.to_dict() for device in self.devices]
         }
 
+    def _tokens_filename(self) -> str:
+        storage_dir = self.hass.config.path(".storage")
+        os.makedirs(storage_dir, exist_ok=True)
+        safe_email = self.email.replace("@", "_").replace(".", "_")
+        return os.path.join(storage_dir, f"{C.DOMAIN}_{self.region}_{safe_email}_tokens.json")
+
     def load_tokens(self) -> None:
-        filename = self.hass.config.path(C.DOMAIN)
+        filename = self._tokens_filename()
         try:
             with open(filename, "r") as f:
                 data = json.load(f)
@@ -214,7 +227,7 @@ class Haier(object):
 
     def save_tokens(self) -> None:
         try:
-            filename = self.hass.config.path(C.DOMAIN)
+            filename = self._tokens_filename()
             with open(filename, "w") as f:
                 json.dump({
                     "token": self.token,
@@ -265,31 +278,32 @@ class Haier(object):
     @common_limits.sleep_and_retry
     @common_limits
     def make_request(self, method: str, url: str, **kwargs) -> requests.Response:
+        if self.disconnect_requested:
+            raise HomeAssistantError("Service already stopped")
+
+        kwargs.setdefault("timeout", C.API_TIMEOUT)
+        headers = kwargs.setdefault("headers", {})
+        headers.setdefault("User-Agent", "evo-mobile")
+        headers.setdefault("Accept", "application/json, */*")
         try:
-            assert self.disconnect_requested is False, 'Service already stoped'
-            # Setting a default timeout for requests
-            kwargs.setdefault('timeout', C.API_TIMEOUT)
-            headers = kwargs.setdefault('headers', {})
-            headers.setdefault('User-Agent', "evo-mobile")
-            headers.setdefault('Platform', "android")
-            headers.setdefault('Accept', "*/*")
             resp = requests.request(method, url, **kwargs)
-            # _LOGGER.debug(resp.text)
-            # Handling 429 Too Many Requests with retry
             if resp.status_code == 429:
-                raise ManyRequestsError("429 Too Many Requests", response=resp)
-            # Raise for other HTTP errors
+                retry_after = resp.headers.get("Retry-After")
+                message = "429 Too Many Requests"
+                if retry_after:
+                    message = f"{message}, retry after {retry_after}s"
+                raise ManyRequestsError(message, response=resp)
             resp.raise_for_status()
             return resp
         except (ConnectionError, NewConnectionError, socket.gaierror) as e:
-            _LOGGER.error(f"Network error occurred: {e}")
-            raise e  # Re-raise to allow retry mechanisms to handle this
+            _LOGGER.warning("Network error occurred: %s", e)
+            raise
         except Timeout as e:
-            _LOGGER.error(f"Request timed out: {e}")
-            raise e
+            _LOGGER.warning("Request timed out: %s", e)
+            raise
         except HTTPError as e:
-            _LOGGER.error(f"HTTP error occurred: {e}")
-            raise e
+            _LOGGER.warning("HTTP error occurred: %s", e)
+            raise
 
     @auth_login_limits.sleep_and_retry
     @auth_login_limits
@@ -354,35 +368,34 @@ class Haier(object):
     def login(self, refresh: bool = False) -> None:
         resp = None
         try:
-            if refresh and self.refreshtoken:  # token refresh
-                resp = self.auth_refresh()
-            else:  # initial login
-                resp = self.auth_login()
-            assert resp, "No response from login"
+            resp = self.auth_refresh() if refresh and self.refreshtoken else self.auth_login()
+            if resp is None:
+                raise InvalidAuth("No response from login")
             self.token = resp.access_token
             self.tokenexpire = resp.access_expire
             self.refreshtoken = resp.refresh_token
             self.refreshexpire = resp.refresh_expire
             self.save_tokens()
-        except AuthValidationError as e:
-            raise e
-        except AssertionError as e:
-            _LOGGER.error(f"Assertion error: {e}")
+        except ManyRequestsError as e:
+            _LOGGER.warning("Haier cloud rate limit during auth: %s", e)
+            raise HaierRateLimitError(str(e)) from e
+        except AuthValidationError:
+            raise
+        except AuthUserError as e:
+            _LOGGER.error("Invalid Haier credentials: %s", e)
+            raise InvalidAuth(str(e)) from e
+        except (ConnectionError, Timeout, HTTPError) as e:
+            _LOGGER.warning("Temporary auth error: response=%s, err=%s", resp, e)
+            raise HomeAssistantError(str(e)) from e
         except Exception as e:
-            _LOGGER.error(
-                f"Failed to login/refresh token, "
-                f"response was: {resp}, "
-                f"err: {e}"
-            )
-            raise InvalidAuth()
+            _LOGGER.error("Failed to login/refresh token, response was: %s, err: %s", resp, e)
+            raise InvalidAuth(str(e)) from e
         else:
-            _LOGGER.debug(f"Successful update tokens")
+            _LOGGER.debug("Successful update tokens")
 
     def auth(self) -> None:
         with self._lock:
-            tzinfo = timezone(timedelta(hours=+3.0))
-            # tzinfo = datetime.now(timezone.utc).astimezone().tzinfo
-            now = datetime.now(tzinfo)
+            now = datetime.now(timezone.utc)
             tokenexpire = self.tokenexpire or now
             refreshexpire = self.refreshexpire or now
             if self.token:
@@ -400,14 +413,13 @@ class Haier(object):
         try:
             devices_path = urljoin(C.API_PATH, C.API_DEVICES.format(region=self.region))
             _LOGGER.debug(f"Getting devices, url: {devices_path}")
-            response = requests.get(devices_path, headers={
-                'X-Auth-Token': self.token,
-                'User-Agent': 'evo-mobile',
-                'Platform': 'android',
-                'Device-Id': self._device_id,
-                'Content-Type': 'application/json'
-            }, timeout=C.API_TIMEOUT)
-            # _LOGGER.debug(response.text)
+            response = self.make_request("GET", devices_path, headers={
+                "X-Auth-Token": self.token,
+                "User-Agent": "evo-mobile",
+                "Device-Id": self._device_id,
+                "Content-Type": "application/json",
+            })
+            _LOGGER.debug(response.text)
             response.raise_for_status()
             data = response.json().get("data", {})
             assert isinstance(data, dict), f"Data is not dict: {data}"
@@ -426,15 +438,14 @@ class Haier(object):
         try:
             status_url = C.API_STATUS.format(mac=device_mac)
             _LOGGER.debug(f"Getting initial status of device {device_mac}, url: {status_url}")
-            response = requests.get(status_url, headers={
-                'X-Auth-Token': self.token,
-                'User-Agent': 'evo-mobile',
-                'Platform': 'android',
-                'Device-Id': self._device_id,
-                'Content-Type': 'application/json'
-            }, timeout=C.API_TIMEOUT)
-            # _LOGGER.debug(f"Update device {device_mac} status code: {response.status_code}")
-            # _LOGGER.debug(response.text)s
+            response = self.make_request("GET", status_url, headers={
+                "X-Auth-Token": self.token,
+                "User-Agent": "evo-mobile",
+                "Device-Id": self._device_id,
+                "Content-Type": "application/json",
+            })
+            _LOGGER.debug(f"Update device {device_mac} status code: {response.status_code}")
+            _LOGGER.debug(response.text)
             response.raise_for_status()
             data = response.json()
             return data
@@ -443,52 +454,63 @@ class Haier(object):
             raise
 
     def pull_data(self) -> None:
+        self.devices.clear()
         self._pull_data = data = self.pull_data_from_api()
         if not self._pull_data:
-            raise InvalidDevicesList()
-        need_container_id = "72a6d224-cb66-4e6d-b427-2e4609252684"
-        presentation = data.setdefault("presentation", {})
-        layout = presentation.setdefault("layout", {})
-        containers = layout.setdefault("scrollContainer", [])
-        for item in containers[:]:
-            tracking_data = item.setdefault("trackingData", {})
-            component = tracking_data.setdefault("component", {})
-            component_id = component.setdefault("componentId", "")
-            # _LOGGER.debug(component_id)
-            component_name = component.setdefault("componentName", "")
-            if not (
-                component_name == "deviceList"
-                and component_id == need_container_id
-            ):
-                containers.remove(item)
+            raise InvalidDevicesList("Haier cloud returned empty device list")
+
+        presentation = data.get("presentation") or {}
+        layout = presentation.get("layout") or {}
+        containers = layout.get("scrollContainer") or []
+
+        for item in containers:
+            tracking_data = item.get("trackingData") or {}
+            component = tracking_data.get("component") or {}
+            component_name = component.get("componentName", "")
+
+            if component_name != "deviceList":
                 continue
-            state_data = item.setdefault("state", "{}")
-            state_json = item['state'] = (
-                json.loads(state_data)
-                if isinstance(state_data, str)
-                else state_data
-            )
-            devices = state_json.setdefault("items", [])
+
+            state_data = item.get("state") or "{}"
+            try:
+                state_json = json.loads(state_data) if isinstance(state_data, str) else state_data
+            except ValueError as e:
+                _LOGGER.warning("Failed to parse deviceList state: %s", e)
+                continue
+
+            devices = state_json.get("items") or []
             for d in devices:
-                device_title = d.get('title', '')
-                device_link = d.get('action', {}).get('link', '')
+                device_title = d.get("title", "")
+                device_link = d.get("action", {}).get("link", "")
                 parsed_link = urlparse(device_link)
                 query_params = parse_qs(parsed_link.query)
-                device_type = query_params.setdefault('type', ['UNKNOWN'])[0]
-                device_mac = query_params.get('deviceId', [''])[0]
-                device_mac = device_mac.replace('%3A', ':')
-                device_serial = query_params.get('serialNum', [''])[0]
-                device = HaierDevice.create(
-                    haier=self,
-                    device_type=device_type,
-                    device_mac=device_mac,
-                    device_serial=device_serial,
-                    device_title=device_title,
-                )
+                device_type = query_params.get("type", ["UNKNOWN"])[0]
+                device_mac = query_params.get("deviceId", [""])[0].replace("%3A", ":").lower()
+                device_serial = query_params.get("serialNum", [""])[0]
+
+                if not device_mac:
+                    _LOGGER.warning("Skip device without mac: %s", d)
+                    continue
+
+                try:
+                    device = HaierDevice.create(
+                        haier=self,
+                        device_type=device_type,
+                        device_mac=device_mac,
+                        device_serial=device_serial,
+                        device_title=device_title,
+                    )
+                except Exception as e:
+                    _LOGGER.warning("Failed to create device %s: %s", device_mac, e)
+                    continue
+
                 self.devices.append(device)
-                _LOGGER.info(f"Added device: {device}")
-        if len(self.devices) > 0:
+                _LOGGER.info("Added device: %s", device)
+
+        if self.devices:
             self.connect_in_thread()
+        else:
+            raise InvalidDevicesList("No supported Haier devices found")
 
     def get_device_by_id(self, id_: str) -> HaierDevice | None:
         return next(filter(
@@ -559,7 +581,9 @@ class Haier(object):
         _LOGGER.debug("Connection stoped")
 
     def connect_in_thread(self) -> None:
-        self.socket_thread = thread = threading.Thread(target=self.connect)
+        if self.socket_thread and self.socket_thread.is_alive():
+            return
+        self.socket_thread = thread = threading.Thread(target=self.connect, name="haier_evo_ws")
         thread.daemon = True
         thread.start()
 
@@ -638,9 +662,7 @@ class HaierDevice(object):
 
     @property
     def available(self) -> bool:
-        # return self._available
-        # this works very bad
-        return True
+        return self._available
 
     @available.setter
     def available(self, value: bool | str):
@@ -699,8 +721,11 @@ class HaierDevice(object):
         pass
 
     def _handle_status_update(self, received_message: dict) -> None:
-        message_statuses = received_message.get("payload", {}).get("statuses", [{}])
-        for key, value in message_statuses[0]['properties'].items():
+        message_statuses = received_message.get("payload", {}).get("statuses") or []
+        if not message_statuses:
+            return
+        properties = message_statuses[0].get("properties") or {}
+        for key, value in properties.items():
             self._set_attribute_value(key, value)
         self.available = True
         self.write_ha_state()
@@ -722,16 +747,13 @@ class HaierDevice(object):
 
     def _send_group_command(self, commands: list[dict]) -> None:
         trace = str(uuid.uuid4())
-        _ = self._send_message({
+        self._send_message({
             "action": "operation",
             "macAddress": self.device_id,
             "commandName": self.config.command_name,
             "commands": commands,
             "trace": trace,
-        }) if self.config.command_name else [
-            self._send_single_command(c)
-            for c in commands
-        ]
+        })
 
     def _send_single_command(self, command: dict) -> None:
         trace = str(uuid.uuid4())
@@ -808,7 +830,6 @@ class HaierDevice(object):
         device_cls = {
             "AC": HaierAC,
             "REF": HaierREF,
-            "WM": HaierWM,
         }.get(device_type, cls)
         if device_cls is cls:
             _LOGGER.warning(f"Unknown device type: {device_type}")
@@ -1336,107 +1357,6 @@ class HaierREF(HaierDevice):
             entities.append(binary_sensor.HaierREFVacationSensor(self))
         if self.config['door_open'] is not None:
             entities.append(binary_sensor.HaierREFDoorSensor(self))
-        return entities
-
-
-class HaierWM(HaierDevice):
-
-    def __init__(
-        self,
-        backend_data: dict = None,
-        **kwargs
-    ) -> None:
-        super().__init__(**kwargs)
-        self.status = None
-        self.program = None
-        self.temperature = None
-        self.spin_speed = None
-        self.remaining_time = None
-        self._get_status(backend_data)
-
-    @property
-    def config(self) -> CFG.HaierWMConfig:
-        return self._config
-
-    def to_dict(self) -> dict:
-        data = super().to_dict()
-        data.update({
-            "status": self.status,
-            "program": self.program,
-            "temperature": self.temperature,
-            "spin_speed": self.spin_speed,
-            "remaining_time": self.remaining_time,
-        })
-        return data
-
-    def _load_config_from_attributes(self, data: dict) -> None:
-        self._config = CFG.HaierWMConfig(self.device_model, self.hass.config.path(C.DOMAIN))
-        attributes = data.setdefault("attributes", [])
-        attrs = list(sorted(map(lambda x: CFG.Attribute(x), attributes), key=lambda x: x.code))
-        for attr in attrs:
-            self.config.attrs.append(attr)
-        self.config.merge_attributes()
-        for attr in self.config.attrs:
-            self._set_attribute_value(str(attr.code), attr.current)
-            _LOGGER.debug(f"{self.device_name}: {attr}")
-
-    def _set_attribute_value(self, code: str, value: str) -> None:
-        attr = self.config.get_attr_by_code(code)
-        if not (attr and value is not None):
-            return
-        elif attr.name == "status":
-            self.status = attr.get_item_name(value)
-        elif attr.name == "program":
-            self.program = attr.get_item_name(value)
-        elif attr.name == "temperature":
-            self.temperature = attr.get_item_name(value)
-        elif attr.name == "spin_speed":
-            self.spin_speed = attr.get_item_name(value)
-        elif attr.name == "remaining_time":
-            self.remaining_time = float(value) if value else None
-
-    def get_program_options(self) -> list[str]:
-        return self.config.get_values('program')
-
-    def get_temperature_options(self) -> list[str]:
-        return self.config.get_values('temperature')
-
-    def get_spin_speed_options(self) -> list[str]:
-        return self.config.get_values('spin_speed')
-
-    def set_program(self, value: str) -> None:
-        if commands := self.get_commands("program", value):
-            self._send_single_command(commands[0])
-            self.program = value
-
-    def set_temperature(self, value: str) -> None:
-        if commands := self.get_commands("temperature", value):
-            self._send_single_command(commands[0])
-            self.temperature = value
-
-    def set_spin_speed(self, value: str) -> None:
-        if commands := self.get_commands("spin_speed", value):
-            self._send_single_command(commands[0])
-            self.spin_speed = value
-
-    def create_entities_select(self) -> list:
-        from . import select
-        entities = []
-        if self.config['program'] is not None:
-            entities.append(select.HaierWMProgramSelect(self))
-        if self.config['temperature'] is not None:
-            entities.append(select.HaierWMTemperatureSelect(self))
-        if self.config['spin_speed'] is not None:
-            entities.append(select.HaierWMSpinSpeedSelect(self))
-        return entities
-
-    def create_entities_sensor(self) -> list:
-        from . import sensor
-        entities = []
-        if self.config['remaining_time'] is not None:
-            entities.append(sensor.HaierWMRemainingTimeSensor(self))
-        if self.config['status'] is not None:
-            entities.append(sensor.HaierWMStatusSensor(self))
         return entities
 
 
