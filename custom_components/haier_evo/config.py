@@ -102,7 +102,6 @@ class HaierDeviceConfig(object):
                 "attrname": attr.get("name"),
                 "description": attr.get('description'),
                 "name": attr.get('id'),
-                "currentValue": attr.get('current'),
                 "list": {
                     "data": [{
                         "data": str(m.get('haier')),
@@ -209,20 +208,6 @@ class HaierREFConfig(HaierDeviceConfig):
         )
 
 
-class HaierWMConfig(HaierDeviceConfig):
-
-    def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}("
-            f"status={self['status']!r},"
-            f"program={self['program']!r},"
-            f"temperature={self['temperature']!r},"
-            f"spin_speed={self['spin_speed']!r},"
-            f"remaining_time={self['remaining_time']!r}"
-            f")"
-        )
-
-
 class Attribute(dict):
 
     def __init__(self, data: dict) -> None:
@@ -257,23 +242,16 @@ class Attribute(dict):
             "Режим Отпуск": "vacation_mode",
             "Состояние дверцы холодильника": "door_open",
             "My Zone": "my_zone",
-            # Стиральные машины:
-            "Статус": "status",
-            "Программа": "program",
-            "Температура": "temperature",
-            "Скорость отжима": "spin_speed",
-            "Оставшееся время": "remaining_time",
         }.get(data.get("attrname", self.description), data.get("attrname") or "unknown")
 
     def __repr__(self) -> str:
-        list_str = ",".join(repr(i) for i in self.list)
         return (
             f"{self.__class__.__name__}("
             f"{self.name}({self.code}),"
             f"desc={self.description!r},"
             f"current={self.current!r},"
             f"range={self.range!r},"
-            f"list=[{list_str}]"
+            f"list=[{",".join(repr(i) for i in self.list)}]"
             f")"
         )
 

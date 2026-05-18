@@ -1,38 +1,40 @@
 from __future__ import annotations
-
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.core import HomeAssistant
+from homeassistant.const import Platform
 from homeassistant.loader import async_get_integration
-import asyncio
-from . import api
+from .logger import _LOGGER
 from .const import DOMAIN
-import logging
+from . import api
 
 
-_LOGGER = logging.getLogger(__name__)
-
-PLATFORMS: list[str] = ["climate"]
-
+PLATFORMS: list[str] = [
+    Platform.CLIMATE,
+    Platform.SWITCH,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     integration = await async_get_integration(hass, DOMAIN)
     _LOGGER.debug(f'Integration version: {integration.version}')
-
-    haier_object = api.Haier(hass, entry.data["email"], entry.data["password"])
+    username = entry.data.get("email") or ""
+    password = entry.data.get("password") or ""
+    region = entry.data.get("region") or "ru"
+    haier_object = api.Haier(hass, username, password, region)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = haier_object
-    try:
-        await hass.async_add_executor_job(haier_object.pull_data)
-    except api.RateLimited as err:
-        raise ConfigEntryNotReady("Haier cloud returned 429 Too Many Requests. Wait and retry later.") from err
-
+    await hass.async_add_executor_job(haier_object.load_tokens)
+    await hass.async_add_executor_job(haier_object.pull_data)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-
+        haier_object = hass.data[DOMAIN].pop(entry.entry_id)
+        _LOGGER.debug(f'Integration {haier_object} unload...')
+        haier_object.stop()
     return unload_ok

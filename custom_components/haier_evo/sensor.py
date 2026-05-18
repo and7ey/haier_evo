@@ -88,26 +88,3 @@ class HaierREFFreezerModeSensor(HaierREFFridgeModeSensor):
         self._device_attr_name = "freezer_mode"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_freezer_mode"
         self._attr_name = f"{device.device_name} Режим морозильной камеры"
-
-
-class HaierWMRemainingTimeSensor(HaierSensor):
-
-    def __init__(self, device: api.HaierWM):
-        super().__init__(device)
-        self._device_attr_name = "remaining_time"
-        self._attr_unique_id = f"{device.device_id}_{device.device_model}_remaining_time"
-        self._attr_name = f"{device.device_name} Оставшееся время"
-        self._attr_native_unit_of_measurement = "мин"
-
-
-class HaierWMStatusSensor(HaierSensor):
-
-    def __init__(self, device: api.HaierWM):
-        super().__init__(device)
-        self._device_attr_name = "status"
-        self._attr_unique_id = f"{device.device_id}_{device.device_model}_status"
-        self._attr_name = f"{device.device_name} Статус"
-
-    @property
-    def native_value(self) -> str:
-        return str(getattr(self._device, self._device_attr_name, "unknown"))
