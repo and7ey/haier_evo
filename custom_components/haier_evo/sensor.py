@@ -2,7 +2,7 @@ import weakref
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.const import UnitOfTemperature
-from homeassistant.const import TEMPERATURE
+from homeassistant.components.sensor import SensorDeviceClass
 from .const import DOMAIN
 from . import api
 
@@ -40,7 +40,7 @@ class HaierSensor(SensorEntity):
 
 
 class HaierREFTemperatureSensor(HaierSensor):
-    _attr_device_class = TEMPERATURE
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
     def __init__(self, device: api.HaierREF):
