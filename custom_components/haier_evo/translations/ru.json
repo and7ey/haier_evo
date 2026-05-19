@@ -68,6 +68,74 @@
                 }
             }
         },
+        "sensor": {
+            "wm_program": {
+                "state": {
+                    "wash_auto": "Авто",
+                    "wash_shirts": "Рубашки",
+                    "wash_bulky": "Объёмные вещи",
+                    "wash_silk": "Шёлк",
+                    "wash_baby": "Детская одежда",
+                    "wash_spin": "Отжим",
+                    "wash_cotton": "Хлопок",
+                    "wash_quick": "Быстрая",
+                    "wash_wool": "Шерсть",
+                    "wash_down": "Пуховые вещи",
+                    "wash_delicate": "Деликатная",
+                    "wash_drum_clean": "Очистка барабана"
+                }
+            },
+            "wm_dry_mode": {
+                "state": {
+                    "dry": "Сушка",
+                    "care": "Уход"
+                }
+            },
+            "wm_dry_program": {
+                "state": {
+                    "dry_none": "Не выбрано",
+                    "dry_auto": "Авто",
+                    "dry_shirts": "Рубашки",
+                    "dry_bulky": "Объёмные вещи",
+                    "dry_silk": "Шёлк",
+                    "dry_baby": "Детская одежда",
+                    "dry_cotton": "Хлопок",
+                    "dry_quick": "Быстрая",
+                    "dry_wool": "Шерсть",
+                    "dry_down": "Пуховые вещи"
+                }
+            },
+            "wm_care_program": {
+                "state": {
+                    "care_none": "Не выбрано",
+                    "care_shirts": "Рубашки",
+                    "care_bulky": "Объёмные вещи",
+                    "care_silk": "Шёлк",
+                    "care_baby": "Детская одежда",
+                    "care_wool": "Шерсть",
+                    "care_down": "Пуховые вещи",
+                    "care_delicate": "Деликатная",
+                    "care_fur": "Меховые изделия"
+                }
+            },
+            "wm_dry_level": {
+                "state": {
+                    "dry_iron": "Сушка под утюг",
+                    "dry_closet": "Сушка в шкаф",
+                    "dry_extra": "Экстра сушка"
+                }
+            },
+            "wm_wash_temperature": {
+                "state": {
+                    "cold": "Без нагрева"
+                }
+            },
+            "wm_wash_spin_speed": {
+                "state": {
+                    "no_spin": "Без отжима"
+                }
+            }
+        },
         "select": {
             "conditioner_eco_sensor": {
                 "state": {

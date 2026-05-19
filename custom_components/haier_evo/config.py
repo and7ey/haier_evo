@@ -120,7 +120,15 @@ class HaierDeviceConfig(object):
         attributes = {a.name: a for a in self.get_config_attributes()}
         for i, attr in enumerate(self.attrs[:]):
             config_attr = attributes.pop(attr.name, None)
-            if config_attr and attr.name == config_attr.name:
+            if config_attr is None and attr.name == "unknown":
+                code_str = str(attr.code)
+                config_attr = next(
+                    (a for a in attributes.values() if str(a.code) == code_str),
+                    None,
+                )
+                if config_attr:
+                    attributes.pop(config_attr.name)
+            if config_attr:
                 config_attr.description = attr.description
                 config_attr.current = attr.current
                 config_attr.range = attr.range
@@ -209,20 +217,6 @@ class HaierREFConfig(HaierDeviceConfig):
         )
 
 
-class HaierWMConfig(HaierDeviceConfig):
-
-    def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}("
-            f"status={self['status']!r},"
-            f"program={self['program']!r},"
-            f"temperature={self['temperature']!r},"
-            f"spin_speed={self['spin_speed']!r},"
-            f"remaining_time={self['remaining_time']!r}"
-            f")"
-        )
-
-
 class Attribute(dict):
 
     def __init__(self, data: dict) -> None:
@@ -257,12 +251,6 @@ class Attribute(dict):
             "Режим Отпуск": "vacation_mode",
             "Состояние дверцы холодильника": "door_open",
             "My Zone": "my_zone",
-            # Стиральные машины:
-            "Статус": "status",
-            "Программа": "program",
-            "Температура": "temperature",
-            "Скорость отжима": "spin_speed",
-            "Оставшееся время": "remaining_time",
         }.get(data.get("attrname", self.description), data.get("attrname") or "unknown")
 
     def __repr__(self) -> str:

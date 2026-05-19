@@ -66,7 +66,9 @@ class HaierAPI(HomeAssistantView):
     async def get(self, request):
         if not getattr(self.haier, "allow_http", False):
             return web.Response(text="404: Not found", status=404, content_type="text/plain")
-        return self.json(self.haier.to_dict())
+        response = self.json(self.haier.to_dict())
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
 
     async def post(self, request):
         if not getattr(self.haier, "allow_http_post", False):
@@ -682,7 +684,7 @@ class HaierDevice(object):
         info = data.setdefault("info", {})
         self.device_serial = info.setdefault("serialNumber", self.device_serial)
         device_model = info.setdefault("model", "AC")
-        device_model = device_model.replace('-','').replace('/', '')[:11]
+        device_model = device_model.replace('-','').replace('/', '')
         self.device_model = device_model
         self.available = data.setdefault("status", "ONLINE")
         settings = data.setdefault("settings", {})
@@ -900,7 +902,9 @@ class HaierAC(HaierDevice):
         attr = self.config.get_attr_by_code(code)
         if not (attr and value is not None):
             return
-        elif attr.name == "current_temperature":
+        value = str(value)
+        attr.current = value
+        if attr.name == "current_temperature":
             self.current_temperature = float(value)
         elif attr.name == "status":
             self.status = int(value)
@@ -1141,7 +1145,7 @@ class HaierAC(HaierDevice):
     def create_entities_climate(self) -> list:
         from . import climate
         return [climate.HaierACEntity(self)]
-    
+
     def create_entities_switch(self) -> list:
         from . import switch
         entities = []
@@ -1228,7 +1232,9 @@ class HaierREF(HaierDevice):
         attr = self.config.get_attr_by_code(code)
         if not (attr and value is not None):
             return
-        elif attr.name == "current_fridge_temperature":
+        value = str(value)
+        attr.current = value
+        if attr.name == "current_fridge_temperature":
             self.current_fridge_temperature = float(value)
         elif attr.name == "current_freezer_temperature":
             self.current_freezer_temperature = float(value)
@@ -1339,6 +1345,16 @@ class HaierREF(HaierDevice):
         return entities
 
 
+_WM_BINARY_ATTRS = {
+    'status', 'connection', 'remote_control', 'wash_dry_mode', 'delayed_start',
+    'auto_detergent', 'auto_conditioner', 'steam_treatment', 'uv_sterilization', 'plasma_sterilization',
+}
+_WM_NUMERIC_ATTRS = {'dry_remaining_time'}
+_WM_ENUM_ATTRS = {
+    'wash_program', 'dry_mode', 'dry_level', 'dry_program', 'care_program', 'wash_temperature', 'wash_spin_speed',
+}
+
+
 class HaierWM(HaierDevice):
 
     def __init__(
@@ -1348,29 +1364,19 @@ class HaierWM(HaierDevice):
     ) -> None:
         super().__init__(**kwargs)
         self.status = None
-        self.program = None
-        self.temperature = None
-        self.spin_speed = None
-        self.remaining_time = None
         self._get_status(backend_data)
 
     @property
-    def config(self) -> CFG.HaierWMConfig:
+    def config(self) -> CFG.HaierDeviceConfig:
         return self._config
 
     def to_dict(self) -> dict:
         data = super().to_dict()
-        data.update({
-            "status": self.status,
-            "program": self.program,
-            "temperature": self.temperature,
-            "spin_speed": self.spin_speed,
-            "remaining_time": self.remaining_time,
-        })
+        data["status"] = self.status
         return data
 
     def _load_config_from_attributes(self, data: dict) -> None:
-        self._config = CFG.HaierWMConfig(self.device_model, self.hass.config.path(C.DOMAIN))
+        self._config = CFG.HaierDeviceConfig(self.device_model, self.hass.config.path(C.DOMAIN))
         attributes = data.setdefault("attributes", [])
         attrs = list(sorted(map(lambda x: CFG.Attribute(x), attributes), key=lambda x: x.code))
         for attr in attrs:
@@ -1384,59 +1390,38 @@ class HaierWM(HaierDevice):
         attr = self.config.get_attr_by_code(code)
         if not (attr and value is not None):
             return
-        elif attr.name == "status":
+        value = str(value)
+        attr.current = value
+        if attr.name == "status":
             self.status = attr.get_item_name(value)
-        elif attr.name == "program":
-            self.program = attr.get_item_name(value)
-        elif attr.name == "temperature":
-            self.temperature = attr.get_item_name(value)
-        elif attr.name == "spin_speed":
-            self.spin_speed = attr.get_item_name(value)
-        elif attr.name == "remaining_time":
-            self.remaining_time = float(value) if value else None
-
-    def get_program_options(self) -> list[str]:
-        return self.config.get_values('program')
-
-    def get_temperature_options(self) -> list[str]:
-        return self.config.get_values('temperature')
-
-    def get_spin_speed_options(self) -> list[str]:
-        return self.config.get_values('spin_speed')
-
-    def set_program(self, value: str) -> None:
-        if commands := self.get_commands("program", value):
-            self._send_single_command(commands[0])
-            self.program = value
-
-    def set_temperature(self, value: str) -> None:
-        if commands := self.get_commands("temperature", value):
-            self._send_single_command(commands[0])
-            self.temperature = value
-
-    def set_spin_speed(self, value: str) -> None:
-        if commands := self.get_commands("spin_speed", value):
-            self._send_single_command(commands[0])
-            self.spin_speed = value
 
     def create_entities_select(self) -> list:
-        from . import select
-        entities = []
-        if self.config['program'] is not None:
-            entities.append(select.HaierWMProgramSelect(self))
-        if self.config['temperature'] is not None:
-            entities.append(select.HaierWMTemperatureSelect(self))
-        if self.config['spin_speed'] is not None:
-            entities.append(select.HaierWMSpinSpeedSelect(self))
-        return entities
+        return []
 
     def create_entities_sensor(self) -> list:
         from . import sensor
         entities = []
-        if self.config['remaining_time'] is not None:
+        if (self.config.get_attr_by_name('wash_remaining_hours') is not None and
+                self.config.get_attr_by_name('wash_remaining_minutes') is not None):
             entities.append(sensor.HaierWMRemainingTimeSensor(self))
-        if self.config['status'] is not None:
-            entities.append(sensor.HaierWMStatusSensor(self))
+        skip = {'unknown', 'wash_remaining_hours', 'wash_remaining_minutes'} | _WM_BINARY_ATTRS
+        for attr in self.config.attrs:
+            if attr.name in skip:
+                continue
+            elif attr.name in _WM_NUMERIC_ATTRS:
+                entities.append(sensor.HaierWMNumericSensor(self, attr.name))
+            elif attr.name in _WM_ENUM_ATTRS:
+                entities.append(sensor.HaierWMEnumSensor(self, attr.name))
+            else:
+                entities.append(sensor.HaierWMAttributeSensor(self, attr.name))
+        return entities
+
+    def create_entities_binary_sensor(self) -> list:
+        from . import binary_sensor
+        entities = []
+        for attr in self.config.attrs:
+            if attr.name in _WM_BINARY_ATTRS:
+                entities.append(binary_sensor.HaierWMBinarySensor(self, attr.name))
         return entities
 
 

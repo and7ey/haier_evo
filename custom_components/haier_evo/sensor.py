@@ -1,7 +1,7 @@
 import weakref
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
 from homeassistant.core import HomeAssistant
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import UnitOfTemperature, UnitOfTime
 from homeassistant.const import TEMPERATURE
 from .const import DOMAIN
 from . import api
@@ -90,24 +90,131 @@ class HaierREFFreezerModeSensor(HaierREFFridgeModeSensor):
         self._attr_name = f"{device.device_name} Режим морозильной камеры"
 
 
-class HaierWMRemainingTimeSensor(HaierSensor):
+_WM_ATTR_NAMES = {
+    'care_program': 'Программа ухода',
+    'dry_mode': 'Режим сушки',
+    'dry_program': 'Программа сушки',
+    'wash_temperature': 'Температура стирки',
+    'dry_level': 'Степень сушки',
+    'wash_program': 'Программа стирки',
+    'wash_spin_speed': 'Скорость отжима',
+    'dry_remaining_time': 'Время до окончания сушки',
+}
 
-    def __init__(self, device: api.HaierWM):
+_WM_ATTR_TRANSLATION_KEYS = {
+    'care_program': 'wm_care_program',
+    'dry_mode': 'wm_dry_mode',
+    'dry_program': 'wm_dry_program',
+    'dry_level': 'wm_dry_level',
+    'wash_program': 'wm_program',
+    'wash_spin_speed': 'wm_wash_spin_speed',
+    'wash_temperature': 'wm_wash_temperature',
+}
+
+_WM_NUMERIC_CONFIG = {
+    'dry_remaining_time': (
+        UnitOfTime.MINUTES,
+        SensorDeviceClass.DURATION,
+        SensorStateClass.MEASUREMENT,
+    ),
+}
+
+
+class HaierWMAttributeSensor(HaierSensor):
+
+    def __init__(self, device: api.HaierWM, attr_name: str) -> None:
         super().__init__(device)
-        self._device_attr_name = "remaining_time"
-        self._attr_unique_id = f"{device.device_id}_{device.device_model}_remaining_time"
-        self._attr_name = f"{device.device_name} Оставшееся время"
-        self._attr_native_unit_of_measurement = "мин"
-
-
-class HaierWMStatusSensor(HaierSensor):
-
-    def __init__(self, device: api.HaierWM):
-        super().__init__(device)
-        self._device_attr_name = "status"
-        self._attr_unique_id = f"{device.device_id}_{device.device_model}_status"
-        self._attr_name = f"{device.device_name} Статус"
+        self._attr_name_key = attr_name
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_{attr_name}"
+        display = _WM_ATTR_NAMES.get(attr_name, attr_name.replace('_', ' '))
+        self._attr_name = f"{device.device_name} {display}"
+        tkey = _WM_ATTR_TRANSLATION_KEYS.get(attr_name)
+        if tkey:
+            self._attr_translation_key = tkey
 
     @property
-    def native_value(self) -> str:
-        return str(getattr(self._device, self._device_attr_name, "unknown"))
+    def native_value(self):
+        attr = self._device.config.get_attr_by_name(self._attr_name_key)
+        if attr is None or attr.current is None:
+            return None
+        current = str(attr.current)  # API sends ints; normalize for get_item_name
+        if attr.list:
+            mapped = attr.get_item_name(current)
+            if mapped not in ("None", "unknown"):
+                return mapped
+        return current
+
+
+class HaierWMRemainingTimeSensor(HaierSensor):
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, device: api.HaierWM):
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_wash_remaining_time"
+        self._attr_name = f"{device.device_name} Время до окончания стирки"
+
+    @property
+    def native_value(self):
+        hours_attr = self._device.config.get_attr_by_name('wash_remaining_hours')
+        minutes_attr = self._device.config.get_attr_by_name('wash_remaining_minutes')
+        if hours_attr is None or minutes_attr is None:
+            return None
+        try:
+            hours = int(hours_attr.current or 0)
+            minutes = int(minutes_attr.current or 0)
+        except (TypeError, ValueError):
+            return None
+        return hours * 60 + minutes
+
+
+class HaierWMNumericSensor(HaierSensor):
+
+    def __init__(self, device: api.HaierWM, attr_name: str) -> None:
+        super().__init__(device)
+        self._attr_name_key = attr_name
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_{attr_name}"
+        display = _WM_ATTR_NAMES.get(attr_name, attr_name.replace('_', ' '))
+        self._attr_name = f"{device.device_name} {display}"
+        unit, device_class, state_class = _WM_NUMERIC_CONFIG[attr_name]
+        self._attr_native_unit_of_measurement = unit
+        self._attr_device_class = device_class
+        self._attr_state_class = state_class
+
+    @property
+    def native_value(self):
+        attr = self._device.config.get_attr_by_name(self._attr_name_key)
+        if attr is None or attr.current is None:
+            return None
+        try:
+            return int(attr.current)
+        except (ValueError, TypeError):
+            return None
+
+
+class HaierWMEnumSensor(HaierSensor):
+    _attr_device_class = SensorDeviceClass.ENUM
+
+    def __init__(self, device: api.HaierWM, attr_name: str) -> None:
+        super().__init__(device)
+        self._attr_name_key = attr_name
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_{attr_name}"
+        display = _WM_ATTR_NAMES.get(attr_name, attr_name.replace('_', ' '))
+        self._attr_name = f"{device.device_name} {display}"
+        tkey = _WM_ATTR_TRANSLATION_KEYS.get(attr_name)
+        if tkey:
+            self._attr_translation_key = tkey
+        attr = device.config.get_attr_by_name(attr_name)
+        self._attr_options = [item.name for item in attr.list] if attr and attr.list else []
+
+    @property
+    def native_value(self):
+        attr = self._device.config.get_attr_by_name(self._attr_name_key)
+        if attr is None or attr.current is None:
+            return None
+        if attr.list:
+            mapped = attr.get_item_name(str(attr.current))
+            if mapped not in ("None", "unknown"):
+                return mapped
+        return None

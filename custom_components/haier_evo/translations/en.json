@@ -68,6 +68,74 @@
                 }
             }
         },
+        "sensor": {
+            "wm_program": {
+                "state": {
+                    "wash_auto": "Auto",
+                    "wash_shirts": "Shirts",
+                    "wash_bulky": "Bulky",
+                    "wash_silk": "Silk",
+                    "wash_baby": "Baby clothes",
+                    "wash_spin": "Spin",
+                    "wash_cotton": "Cotton",
+                    "wash_quick": "Quick",
+                    "wash_wool": "Wool",
+                    "wash_down": "Down",
+                    "wash_delicate": "Delicate",
+                    "wash_drum_clean": "Drum clean"
+                }
+            },
+            "wm_dry_mode": {
+                "state": {
+                    "dry": "Drying",
+                    "care": "Care"
+                }
+            },
+            "wm_dry_program": {
+                "state": {
+                    "dry_none": "Not selected",
+                    "dry_auto": "Auto",
+                    "dry_shirts": "Shirts",
+                    "dry_bulky": "Bulky",
+                    "dry_silk": "Silk",
+                    "dry_baby": "Baby clothes",
+                    "dry_cotton": "Cotton",
+                    "dry_quick": "Quick",
+                    "dry_wool": "Wool",
+                    "dry_down": "Down"
+                }
+            },
+            "wm_care_program": {
+                "state": {
+                    "care_none": "Not selected",
+                    "care_shirts": "Shirts",
+                    "care_bulky": "Bulky",
+                    "care_silk": "Silk",
+                    "care_baby": "Baby clothes",
+                    "care_wool": "Wool",
+                    "care_down": "Down",
+                    "care_delicate": "Delicate",
+                    "care_fur": "Fur items"
+                }
+            },
+            "wm_dry_level": {
+                "state": {
+                    "dry_iron": "Iron dry",
+                    "dry_closet": "Closet dry",
+                    "dry_extra": "Extra dry"
+                }
+            },
+            "wm_wash_temperature": {
+                "state": {
+                    "cold": "Cold"
+                }
+            },
+            "wm_wash_spin_speed": {
+                "state": {
+                    "no_spin": "No spin"
+                }
+            }
+        },
         "select": {
             "conditioner_eco_sensor": {
                 "state": {

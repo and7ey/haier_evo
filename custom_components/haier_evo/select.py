@@ -87,33 +87,3 @@ class HaierREFMyZoneSelect(HaierSelect):
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_my_zone"
         self._attr_name = f"{device.device_name} My Zone"
         self._attr_options = device.get_my_zone_options()
-
-
-class HaierWMProgramSelect(HaierSelect):
-
-    def __init__(self, device: api.HaierWM) -> None:
-        super().__init__(device)
-        self._device_attr_name = "program"
-        self._attr_unique_id = f"{device.device_id}_{device.device_model}_program"
-        self._attr_name = f"{device.device_name} Программа"
-        self._attr_options = device.get_program_options()
-
-
-class HaierWMTemperatureSelect(HaierSelect):
-
-    def __init__(self, device: api.HaierWM) -> None:
-        super().__init__(device)
-        self._device_attr_name = "temperature"
-        self._attr_unique_id = f"{device.device_id}_{device.device_model}_temperature"
-        self._attr_name = f"{device.device_name} Температура"
-        self._attr_options = device.get_temperature_options()
-
-
-class HaierWMSpinSpeedSelect(HaierSelect):
-
-    def __init__(self, device: api.HaierWM) -> None:
-        super().__init__(device)
-        self._device_attr_name = "spin_speed"
-        self._attr_unique_id = f"{device.device_id}_{device.device_model}_spin_speed"
-        self._attr_name = f"{device.device_name} Скорость отжима"
-        self._attr_options = device.get_spin_speed_options()
