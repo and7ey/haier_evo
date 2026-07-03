@@ -1,4 +1,4 @@
-import weakref
+import weakre
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.const import UnitOfTemperature
@@ -107,6 +107,20 @@ class HaierWMStatusSensor(HaierSensor):
         self._device_attr_name = "status"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_status"
         self._attr_name = f"{device.device_name} Статус"
+
+    @property
+    def native_value(self) -> str:
+        return str(getattr(self._device, self._device_attr_name, "unknown"))
+
+class HaierWHHeatingStatusSensor(HaierSensor):
+    _attr_icon = "mdi:water-boiler"
+
+    def __init__(self, device: api.HaierWH):
+        super().__init__(device)
+
+        self._device_attr_name = "heating_status"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_heating_status"
+        self._attr_name = f"{device.device_name} Статус нагрева"
 
     @property
     def native_value(self) -> str:
