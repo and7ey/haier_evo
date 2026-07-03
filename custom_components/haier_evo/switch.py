@@ -165,6 +165,16 @@ class HaierREFVacationSwitch(HaierSwitch):
         self._attr_name = f"{device.device_name} Режим Отпуск"
 
 
+class HaierWHSterilizationSwitch(HaierSwitch):
+    _attr_icon = "mdi:bacteria-outline"
+
+    def __init__(self, device: api.HaierWH) -> None:
+        super().__init__(device)
+        self._device_attr_name = "sterilization"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_sterilization"
+        self._attr_name = f"{device.device_name} Дезинфекция"
+
+
 class HttpSwitch(SwitchEntity):
     _attr_icon = "mdi:toggle-switch"
 

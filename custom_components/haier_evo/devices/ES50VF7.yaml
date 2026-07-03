@@ -1,0 +1,40 @@
+attributes:
+  - name: current_temperature
+    id: "0"
+
+  - name: target_temperature
+    id: "1"
+
+  - name: sterilization
+    id: "38"
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+
+  - name: heating_status
+    id: "43"
+    mappings:
+      - haier: "1"
+        value: "keep_warm"
+      - haier: "2"
+        value: "heating"
+
+  - name: operation_mode
+    id: "41"
+    mappings:
+      - haier: "0"
+        value: "none"
+      - haier: "1"
+        value: "eco"
+      - haier: "2"
+        value: "max"
+
+  - name: status
+    id: "35"
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"

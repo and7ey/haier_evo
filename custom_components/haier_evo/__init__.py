@@ -10,6 +10,7 @@ from . import api
 
 PLATFORMS: list[str] = [
     Platform.CLIMATE,
+    Platform.WATER_HEATER,
     Platform.SWITCH,
     Platform.SELECT,
     Platform.SENSOR,

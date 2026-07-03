@@ -223,6 +223,21 @@ class HaierWMConfig(HaierDeviceConfig):
         )
 
 
+class HaierWHConfig(HaierDeviceConfig):
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"current_temperature={self['current_temperature']!r},"
+            f"target_temperature={self['target_temperature']!r},"
+            f"status={self['status']!r},"
+            f"operation_mode={self['operation_mode']!r},"
+            f"heating_status={self['heating_status']!r},"
+            f"sterilization={self['sterilization']!r}"
+            f")"
+        )
+
+
 class Attribute(dict):
 
     def __init__(self, data: dict) -> None:
@@ -263,6 +278,13 @@ class Attribute(dict):
             "Температура": "temperature",
             "Скорость отжима": "spin_speed",
             "Оставшееся время": "remaining_time",
+            # Водонагреватель:
+            "Текущая температура": "current_temperature",
+            "Целевая температура": "target_temperature",
+            "Включение/выключение": "status",
+            "Режим нагрева": "operation_mode",
+            "Поддержка температуры/обогрев": "heating_status",
+            "Дезинфекция": "sterilization",
         }.get(data.get("attrname", self.description), data.get("attrname") or "unknown")
 
     def __repr__(self) -> str:
@@ -440,6 +462,8 @@ class Item(dict):
             "fridge_mode": Temperature,
             "freezer_mode": Temperature,
             "my_zone": Temperature,
+            "operation_mode": WaterHeaterOperationMode,
+            "heating_status": WaterHeaterHeatingStatus,
         }.get(name, cls)(data)
 
 
@@ -508,6 +532,21 @@ class Temperature(Item):
             description.replace("℃", "").strip()
         )
         super().__init__(data)
+
+
+class WaterHeaterOperationMode(Item):
+    mappings = {
+        "Не установлен": "none",
+        "Половинка": "eco",
+        "Вся емкость": "max",
+    }
+
+
+class WaterHeaterHeatingStatus(Item):
+    mappings = {
+        "В режиме сохранения тепла": "keep_warm",
+        "Режим нагрева": "heating",
+    }
 
 
 class Constraint(list):
