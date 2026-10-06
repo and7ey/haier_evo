@@ -532,8 +532,9 @@ class Haier(object):
     def _on_ping(self, ws: WebSocket) -> None:
         self.socket_app.sock.pong()
 
-    # noinspection PyMethodMayBeStatic,PyUnusedLocal
+    # noinspection PyUnusedLocal
     def _on_close(self, ws: WebSocket, close_code: int, close_message: str) -> None:
+        self.socket_status = SocketStatus.NOT_INITIALIZED
         _LOGGER.debug(f"Websocket closed. Code: {close_code}, message: {close_message}")
 
     def _wait_websocket(self, timeout: float) -> None:
@@ -583,7 +584,23 @@ class Haier(object):
     def send_message(self, payload: str) -> None:
         _LOGGER.debug(f"Sending message: {payload}")
         try:
+            if self.socket_status != SocketStatus.INITIALIZED:
+                self.connect_if_needed()
+                if self.socket_status != SocketStatus.INITIALIZED:
+                    raise ConnectionError("WebSocket is not ready")
+
+            socket = self.socket_app.sock if self.socket_app else None
+            if socket is None or not socket.connected:
+                raise ConnectionError("WebSocket is disconnected")
+
             self.socket_app.send(payload)
+
+            # websocket-client can accept a write just before the server closes
+            # an idle connection, silently losing the command. The close callback
+            # updates socket_status; detect that race and retry once.
+            time.sleep(0.06)
+            if self.socket_status != SocketStatus.INITIALIZED:
+                raise ConnectionError("WebSocket closed immediately after send")
         except Exception as e:
             _LOGGER.warning(f"Failed to send message: {e}")
             self.connect_if_needed()
