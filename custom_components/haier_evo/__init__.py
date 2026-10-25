@@ -1,5 +1,10 @@
 from __future__ import annotations
+
+from requests.exceptions import RequestException
+from tenacity import RetryError
+
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.core import HomeAssistant
 from homeassistant.const import Platform
 from homeassistant.loader import async_get_integration
@@ -25,8 +30,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     region = entry.data.get("region") or "ru"
     haier_object = api.Haier(hass, username, password, region)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = haier_object
-    await hass.async_add_executor_job(haier_object.load_tokens)
-    await hass.async_add_executor_job(haier_object.pull_data)
+    try:
+        await hass.async_add_executor_job(haier_object.load_tokens)
+        await hass.async_add_executor_job(haier_object.pull_data)
+    except (api.InvalidDevicesList, RequestException, RetryError) as err:
+        haier_object.stop()
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+        raise ConfigEntryNotReady("Haier device discovery is temporarily unavailable") from err
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

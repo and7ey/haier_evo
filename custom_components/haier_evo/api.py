@@ -444,51 +444,41 @@ class Haier(object):
 
     def pull_data(self) -> None:
         self._pull_data = data = self.pull_data_from_api()
-        if not self._pull_data:
-            raise InvalidDevicesList()
-        need_container_id = "72a6d224-cb66-4e6d-b427-2e4609252684"
-        presentation = data.setdefault("presentation", {})
-        layout = presentation.setdefault("layout", {})
-        containers = layout.setdefault("scrollContainer", [])
-        for item in containers[:]:
-            tracking_data = item.setdefault("trackingData", {})
-            component = tracking_data.setdefault("component", {})
-            component_id = component.setdefault("componentId", "")
-            # _LOGGER.debug(component_id)
-            component_name = component.setdefault("componentName", "")
-            if not (
-                component_name == "deviceList"
-                and component_id == need_container_id
-            ):
-                containers.remove(item)
+        if not data:
+            raise InvalidDevicesList("Haier returned no discovery data")
+        containers = data.get("presentation", {}).get("layout", {}).get("scrollContainer", [])
+        discovered_devices = []
+        for item in containers:
+            component = item.get("trackingData", {}).get("component", {})
+            if component.get("componentName") != "deviceList":
                 continue
-            state_data = item.setdefault("state", "{}")
-            state_json = item['state'] = (
-                json.loads(state_data)
-                if isinstance(state_data, str)
-                else state_data
-            )
-            devices = state_json.setdefault("items", [])
-            for d in devices:
-                device_title = d.get('title', '')
-                device_link = d.get('action', {}).get('link', '')
-                parsed_link = urlparse(device_link)
-                query_params = parse_qs(parsed_link.query)
-                device_type = query_params.setdefault('type', ['UNKNOWN'])[0]
+            state_data = item.get("state", {})
+            try:
+                state = json.loads(state_data) if isinstance(state_data, str) else state_data
+            except ValueError as err:
+                raise InvalidDevicesList("Haier returned invalid device list JSON") from err
+            if not isinstance(state, dict):
+                raise InvalidDevicesList("Haier returned an invalid device list")
+            for device_data in state.get("items", []):
+                device_link = device_data.get('action', {}).get('link', '')
+                query_params = parse_qs(urlparse(device_link).query)
                 device_mac = query_params.get('deviceId', [''])[0]
-                device_mac = device_mac.replace('%3A', ':')
-                device_serial = query_params.get('serialNum', [''])[0]
+                if not device_mac:
+                    continue
                 device = HaierDevice.create(
                     haier=self,
-                    device_type=device_type,
-                    device_mac=device_mac,
-                    device_serial=device_serial,
-                    device_title=device_title,
+                    device_type=query_params.get('type', ['UNKNOWN'])[0],
+                    device_mac=device_mac.replace('%3A', ':'),
+                    device_serial=query_params.get('serialNum', [''])[0],
+                    device_title=device_data.get('title', ''),
                 )
-                self.devices.append(device)
-                _LOGGER.info(f"Added device: {device}")
-        if len(self.devices) > 0:
-            self.connect_in_thread()
+                discovered_devices.append(device)
+        if not discovered_devices:
+            raise InvalidDevicesList("Haier returned no devices; discovery will be retried")
+        # Publish only a complete discovery; failed status reads must not leave
+        # an apparently loaded integration with missing devices.
+        self.devices = discovered_devices
+        self.connect_in_thread()
 
     def get_device_by_id(self, id_: str) -> HaierDevice | None:
         return next(filter(
