@@ -1,6 +1,7 @@
 import weakref
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
+from homeassistant.const import EntityCategory
 from .const import DOMAIN
 from . import api
 
@@ -117,3 +118,25 @@ class HaierWMSpinSpeedSelect(HaierSelect):
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_spin_speed"
         self._attr_name = f"{device.device_name} Скорость отжима"
         self._attr_options = device.get_spin_speed_options()
+
+
+class HaierLaundryProgramSelect(HaierSelect):
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_has_entity_name = True
+    _attr_translation_key = "laundry_program_selection"
+    _attr_icon = None
+
+    def __init__(self, device: api.HaierLaundry) -> None:
+        super().__init__(device)
+        self._device_attr_name = "selected_program"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_selected_program"
+        language = getattr(device.hass.config, "language", "en")
+        self._unselected = "Не выбрана" if isinstance(language, str) and language.startswith("ru") else "Not selected"
+        self._attr_options = [self._unselected, *device.programs]
+
+    @property
+    def current_option(self) -> str:
+        return self._device.selected_program or self._unselected
+
+    def set_option(self, value: str) -> None:
+        self._device.set_selected_program(None if value == self._unselected else value)

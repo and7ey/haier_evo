@@ -76,6 +76,65 @@
                     "related": "Related",
                     "on": "Active"
                 }
+            },
+            "laundry_program_selection": {
+                "name": "Program to start"
+            }
+        },
+        "sensor": {
+            "laundry_phase": {
+                "name": "Phase"
+            },
+            "laundry_phase_code": {
+                "name": "Phase"
+            },
+            "laundry_program_time": {
+                "name": "Program time"
+            },
+            "laundry_program_status": {
+                "name": "Program status",
+                "state": {
+                    "idle": "Idle",
+                    "running": "Running",
+                    "finished": "Finished",
+                    "paused": "Paused",
+                    "cancelled": "Cancelled"
+                }
+            },
+            "laundry_program_name": {
+                "name": "Program"
+            },
+            "laundry_fault": {
+                "name": "Device error"
+            }
+        },
+        "binary_sensor": {
+            "laundry_remote_control": {
+                "name": "Remote control"
+            }
+        },
+        "haier_evo": {
+            "laundry_machine": {
+                "state": {
+                    "idle": "Idle",
+                    "running": "Running",
+                    "finished": "Finished",
+                    "paused": "Paused",
+                    "cancelled": "Cancelled",
+                    "not_reported": "Cycle data unavailable"
+                }
+            }
+        }
+    },
+    "services": {
+        "execute_action": {
+            "name": "Control laundry machine",
+            "description": "Send an explicit command to a washer or dryer.",
+            "fields": {
+                "action": {
+                    "name": "Action",
+                    "description": "Start, pause, resume or cancel the program."
+                }
             }
         }
     }

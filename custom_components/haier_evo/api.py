@@ -1,5 +1,6 @@
 from __future__ import annotations
 import requests
+import asyncio
 import json
 import time
 import threading
@@ -14,11 +15,12 @@ from websocket import WebSocketApp, WebSocket
 from requests.exceptions import ConnectionError, Timeout, HTTPError
 from urllib.parse import urlparse, urljoin, parse_qs
 from urllib3.exceptions import NewConnectionError
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode, SWING_OFF, PRESET_NONE
 from homeassistant.components.http import HomeAssistantView
+from .programs import active_program_details, build_catalogue, program_settings, value_valid as _laundry_value_valid
 from .logger import _LOGGER
 from .limits import ResettableLimits
 from . import config as CFG # noqa
@@ -167,6 +169,9 @@ class Haier(object):
         http: bool = C.API_HTTP_ROUTE
     ) -> None:
         self._lock = threading.Lock()
+        self._laundry_poll_lock = asyncio.Lock()
+        self._laundry_retry_until = 0.0
+        self._laundry_next_request = 0.0
         self._pull_data = None
         self._device_id = str(uuid.uuid4())
         self.hass: HomeAssistant = hass
@@ -416,31 +421,26 @@ class Haier(object):
             _LOGGER.error(f"Failed to get devices {e}, response was: {response}")
             return {}
 
-    @retry(
-        retry=retry_if_exception_type(HTTPError),
-        stop=stop_after_attempt(2),
-    )
-    def pull_device_data(self, device_mac: str) -> dict:
+    def read_device_snapshot(self, device_mac: str) -> dict:
         self.auth()
-        response = None
-        try:
-            status_url = C.API_STATUS.format(mac=device_mac)
-            _LOGGER.debug(f"Getting initial status of device {device_mac}, url: {status_url}")
-            response = requests.get(status_url, headers={
-                'X-Auth-Token': self.token,
-                'User-Agent': 'evo-mobile',
-                'Platform': 'android',
-                'Device-Id': self._device_id,
-                'Content-Type': 'application/json'
-            }, timeout=C.API_TIMEOUT)
-            # _LOGGER.debug(f"Update device {device_mac} status code: {response.status_code}")
-            # _LOGGER.debug(response.text)s
-            response.raise_for_status()
-            data = response.json()
-            return data
-        except Exception as e:
-            _LOGGER.error(f"Failed to get status: {e}, response was: {response}")
-            raise
+        token = self.token
+        response = requests.get(C.API_STATUS.format(mac=device_mac), headers={
+            "X-Auth-Token": token, "User-Agent": "evo-mobile", "Platform": "android",
+            "Device-Id": self._device_id, "Content-Type": "application/json",
+        }, timeout=C.API_TIMEOUT)
+        if response.status_code == 401:
+            with self._lock:
+                if self.token == token:
+                    self.tokenexpire = datetime.now(timezone.utc)
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError("Invalid Haier snapshot")
+        return data
+
+    @retry(retry=retry_if_exception_type(HTTPError), stop=stop_after_attempt(2))
+    def pull_device_data(self, device_mac: str) -> dict:
+        return self.read_device_snapshot(device_mac)
 
     def pull_data(self) -> None:
         self._pull_data = data = self.pull_data_from_api()
@@ -504,7 +504,6 @@ class Haier(object):
                 url=url,
                 on_message=self._on_message,
                 on_open=self._on_open,
-                on_ping=self._on_ping,
                 on_close=self._on_close,
             )
         else:
@@ -527,14 +526,17 @@ class Haier(object):
         _LOGGER.debug("Websocket opened")
         for device in self.devices:
             device.init_if_needed()
-
-    # noinspection PyUnusedLocal
-    def _on_ping(self, ws: WebSocket) -> None:
-        self.socket_app.sock.pong()
+            if isinstance(device, HaierLaundry):
+                device.write_ha_state()
+                device.request_snapshot()
 
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def _on_close(self, ws: WebSocket, close_code: int, close_message: str) -> None:
         _LOGGER.debug(f"Websocket closed. Code: {close_code}, message: {close_message}")
+        self.socket_status = SocketStatus.NOT_INITIALIZED
+        for device in self.devices:
+            if isinstance(device, HaierLaundry):
+                device.mark_stale()
 
     def _wait_websocket(self, timeout: float) -> None:
         current = time.time()
@@ -570,7 +572,7 @@ class Haier(object):
         try:
             self.socket_status = SocketStatus.INITIALIZING
             self._init_ws()
-            self.socket_app.run_forever(ping_interval=10)
+            self.socket_app.run_forever(ping_interval=30, ping_timeout=15)
         except Exception as e:
             _LOGGER.error(f"Error connecting to websocket: {e}")
 
@@ -776,6 +778,10 @@ class HaierDevice(object):
         if callback not in self._write_ha_state_callbacks:
             self._write_ha_state_callbacks.append(callback)
 
+    def remove_write_ha_state_callback(self, callback) -> None:
+        if callback in self._write_ha_state_callbacks:
+            self._write_ha_state_callbacks.remove(callback)
+
     # noinspection PyMethodMayBeStatic
     def create_entities_climate(self) -> list:
         return []
@@ -805,11 +811,19 @@ class HaierDevice(object):
         device_serial: str = None,
         device_title: str = None,
     ) -> HaierDevice:
+        backend_data = haier.pull_device_data(device_mac)
         device_cls = {
             "AC": HaierAC,
             "REF": HaierREF,
             "WM": HaierWM,
         }.get(device_type, cls)
+        if (
+            device_type in ("WM", "DRY")
+            and isinstance(backend_data, dict)
+            and isinstance(backend_data.get("smartDeviceControl"), dict)
+            and (device_type == "DRY" or not backend_data.get("attributes"))
+        ):
+            device_cls = HaierLaundry
         if device_cls is cls:
             _LOGGER.warning(f"Unknown device type: {device_type}")
         return device_cls(
@@ -817,7 +831,7 @@ class HaierDevice(object):
             device_mac=device_mac,
             device_serial=device_serial,
             device_title=device_title,
-            backend_data=haier.pull_device_data(device_mac),
+            backend_data=backend_data,
         )
 
 
@@ -1437,6 +1451,649 @@ class HaierWM(HaierDevice):
             entities.append(sensor.HaierWMRemainingTimeSensor(self))
         if self.config['status'] is not None:
             entities.append(sensor.HaierWMStatusSensor(self))
+        return entities
+
+
+def _laundry_selected_values(program) -> dict | None:
+    config = program.get("config") if isinstance(program, dict) else None
+    values = config.get("selectedValues") if isinstance(config, dict) else None
+    if not isinstance(values, list):
+        return None
+    return {str(item["attrName"]): item["attrValue"] for item in values
+            if isinstance(item, dict) and isinstance(item.get("attrName"), (str, int))
+            and isinstance(item.get("attrValue"), (str, int, float, bool))}
+
+
+def _laundry_programs(data: dict) -> dict:
+    """Build only complete commands described by Evo; never send them here."""
+    control = data.get("smartDeviceControl") or {}
+    raw_groups = control.get("groupCommands") or []
+    raw_business = control.get("businessAttributes") or []
+    if not isinstance(raw_groups, list) or not isinstance(raw_business, list):
+        return {}
+    groups = {}
+    for item in raw_groups:
+        if not isinstance(item, dict) or item.get("name") is None or not isinstance(item.get("attrNameList"), list):
+            continue
+        name = str(item["name"])
+        groups[name] = set(map(str, item["attrNameList"])) if name not in groups else None
+    business = {}
+    for item in raw_business:
+        if isinstance(item, dict) and isinstance(item.get("name"), str):
+            name = item["name"]
+            business[name] = item.get("commandParameters") if name not in business else None
+    delay = ((data.get("controlBlock") or {}).get("delayStart") or {})
+    delay = delay if isinstance(delay, dict) else {}
+    delay_link = delay.get("link")
+    status_link = delay.get("statusLink")
+    delay_key = str(delay_link.get("name", "")) if isinstance(delay_link, dict) else ""
+    delay_status = str(status_link.get("name", "")) if isinstance(status_link, dict) else ""
+    status_attributes = [attr for attr in control.get("attributes", [])
+                         if isinstance(attr, dict) and str(attr.get("name")) == delay_status]
+    status_attribute = status_attributes[0] if len(status_attributes) == 1 else {}
+    status_list = status_attribute.get("list") or {}
+    can_disable_delay = (status_attribute.get("writable") is True
+                         and isinstance(status_list, dict)
+                         and isinstance(status_list.get("data"), list)
+                         and any(isinstance(item, dict) and item.get("data") == "false"
+                                 for item in status_list["data"]))
+    entries = []
+    dryer = (data.get("device") or {}).get("programDetails") or {}
+    for item in dryer.get("details", []):
+        if isinstance(item, dict):
+            entries.append(((item.get("detail") or {}).get("name"), item))
+    for block in (data.get("allProgram") or {}).get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for item in block.get("programs", []):
+            if not isinstance(item, dict):
+                continue
+            name = (item.get("preview") or {}).get("name")
+            if name and block.get("title"):
+                entries.append((f"{block['title']} - {name}", item))
+    counts = {}
+    for title, _ in entries:
+        if isinstance(title, str):
+            counts[title] = counts.get(title, 0) + 1
+    result = {}
+    for title, item in entries:
+        if not isinstance(title, str) or not title or title in ("Не выбрана", "Not selected") or len(title) > 255 or counts[title] != 1:
+            continue
+        config = item.get("programConfig") or {}
+        if not isinstance(config, dict) or not isinstance(config.get("link"), dict):
+            continue
+        param = business.get(config["link"].get("name"))
+        if not isinstance(param, dict):
+            continue
+        group = str(param.get("name", ""))
+        fields = param.get("attrNameList") or []
+        if not isinstance(groups.get(group), set) or not isinstance(fields, list) or not fields or not all(isinstance(f, dict) and f.get("name") is not None for f in fields):
+            continue
+        field_names = [str(f["name"]) for f in fields]
+        if len(set(field_names)) != len(field_names) or not set(field_names) <= groups[group]:
+            continue
+        selected = config.get("selectedValues") or []
+        if not isinstance(selected, list) or not all(isinstance(v, dict) and v.get("attrName") is not None and "attrValue" in v for v in selected):
+            continue
+        override = {str(v["attrName"]): v["attrValue"] for v in selected}
+        if len(override) != len(selected) or not set(override) <= set(field_names):
+            continue
+        delay_field = next((field for field in fields if str(field["name"]) == delay_key), {})
+        delay_value = override.get(delay_key, delay_field.get("defaultValue"))
+        commands = []
+        for field in fields:
+            name = str(field["name"])
+            value = override.get(name, field.get("defaultValue"))
+            if (value is None and field.get("valueType") == "2"
+                    and name == delay_status and can_disable_delay
+                    and str(delay_value) in ("0", "0.0")
+                    and _laundry_value_valid(delay_field, delay_value)):
+                # Immediate start has no scheduled finish time; Evo leaves this slot dynamic.
+                value = "false"
+            if not _laundry_value_valid(field, value):
+                break
+            commands.append({"commandName": name, "value": value})
+        else:
+            result[title] = {"commandName": group, "commands": commands}
+    return result
+
+
+def _laundry_actions(data: dict) -> dict:
+    """Read pause, resume and cancel values from the appliance's descriptors."""
+    control = data.get("smartDeviceControl") or {}
+    writable = {str(a.get("name")): a for a in control.get("attributes", [])
+                if isinstance(a, dict) and a.get("writable") is True}
+    dryer = (data.get("device") or {}).get("mainControl") or {}
+    washer = data.get("controlBlock") or {}
+    pause = (dryer.get("resumePause") or {}).get("pause") or washer.get("pause") or {}
+    resume = washer.get("resumeProgram") or {}
+    cancel = dryer.get("cancel") or washer.get("cancel") or {}
+    main = pause.get("mainBtn") or {}
+    candidates = {
+        "pause": ((pause.get("link") or {}).get("name"), pause.get("pauseValue", (main.get("onButton") or {}).get("commandValue"))),
+        "resume": ((resume.get("link") or pause.get("link") or {}).get("name"), resume.get("resumeValue", (main.get("offButton") or {}).get("commandValue"))),
+        "cancel": ((cancel.get("link") or {}).get("name"), cancel.get("cancelValue")),
+    }
+    result = {}
+    for action, (name, value) in candidates.items():
+        if name is None or str(name) not in writable or not isinstance(value, (str, int, float, bool)):
+            continue
+        choices = ((writable[str(name)].get("list") or {}).get("data") or [])
+        if choices and str(value) not in {str(item.get("data")) for item in choices if isinstance(item, dict)}:
+            continue
+        result[action] = {"commandName": str(name), "value": value}
+    return result
+
+
+
+LAUNDRY_ACTION_STATES = {"start": {"idle"}, "pause": {"running"},
+                         "resume": {"paused"}, "cancel": {"running", "paused"}}
+
+
+class HaierLaundry(HaierDevice):
+    """Read laundry data described by the nested Evo response."""
+
+    def __init__(self, backend_data: dict = None, **kwargs) -> None:
+        super().__init__(**kwargs)
+        data = backend_data or {}
+        control = data.get("smartDeviceControl") or {}
+        self.fresh = True
+        self._state_revision = 0
+        self._last_observed = time.monotonic()
+        self.recovery = None
+        self._start_phase = None
+        alarms = control.get("alarms")
+        self.alarm_codes = tuple(sorted(set(alarms))) if isinstance(alarms, list) and all(isinstance(x, str) for x in alarms) else None
+        self._last_notified_alarms = self.alarm_codes
+        errors = control.get("errors")
+        descriptions = errors.get("alarmToResult") if isinstance(errors, dict) else None
+        self.alarm_descriptions = descriptions if isinstance(descriptions, dict) else {}
+        self.machine_entity_id = None
+        self._last_finished_trace = None
+        self._finish_unsub = None
+        self.programs = _laundry_programs(data)
+        self._program_data = data
+        self.program_catalog = build_catalogue(data, self.programs)
+        self._program_parameters = {}
+        self.connection_status = None
+        self.actions = _laundry_actions(data)
+        self.selected_program = None
+        self._start_pending = False
+        self._laundry_lock = threading.Lock()
+        remote = ((data.get("device") or {}).get("mainControl") or {}).get("remoteControlMode") or data.get("remoteControlMode") or {}
+        self.remote_key = (remote.get("link") or {}).get("name")
+        self.values = {
+            str(attr["name"]): attr.get("currentValue")
+            for attr in control.get("attributes", [])
+            if attr.get("readable") and "name" in attr
+        }
+        self.is_dryer = "monitoringScreen" in (data.get("device") or {})
+        monitor = (data.get("device") or {}).get("monitoringScreen") or (
+            data.get("allProgram") or {}
+        ).get("monitoringScreen") or {}
+        phase = monitor.get("phase") or {}
+        self.phase_key = (phase.get("phase") or phase).get("name")
+        self.phase_labels = dict(phase.get("cyclePhaseValueToTitle") or {})
+        for key, value_key in (("weighing", "weightAttrValue"),
+                               ("finishing", "finishingAttrValue"),
+                               ("freshAirSystem", "freshAirSystemAttrValue")):
+            description = monitor.get(key) or {}
+            if isinstance(description, dict) and description.get(value_key) is not None and description.get("title"):
+                self.phase_labels[str(description[value_key])] = description["title"]
+        timer = monitor.get("timer") or {}
+        self.hours_key = (timer.get("remainingTimeHH") or {}).get("name")
+        self.minutes_key = (timer.get("remainingTimeMM") or {}).get("name")
+        program = data.get("program")
+        program = program if isinstance(program, dict) else {}
+        self._program_status = program.get("status")
+        self._program_name = program.get("title")
+        self._active_program_values = _laundry_selected_values(program) or {}
+        self.has_program = isinstance(data.get("program"), dict) or "monitoringScreen" in (data.get("device") or {})
+        observed_status = control.get("status")
+        self._get_status(dict(control))
+        self.available = observed_status if observed_status in (True, False, "ONLINE", "OFFLINE") else False
+        self._status_data = data
+        self._cycle_active = self.program_status in ("running", "paused")
+
+    @property
+    def available(self) -> bool:
+        return self._available and self.fresh and self._haier.socket_status == SocketStatus.INITIALIZED
+
+    @available.setter
+    def available(self, value: bool | str):
+        HaierDevice.available.fset(self, value)
+
+    @property
+    def phase(self) -> str | None:
+        value = self.values.get(str(self.phase_key))
+        if value is None:
+            return None
+        label = self.phase_labels.get(str(value))
+        if label is not None:
+            return label
+        language = getattr(self.hass.config, "language", "en")
+        prefix = "Код" if isinstance(language, str) and language.startswith("ru") else "Code"
+        return f"{prefix} {value}"
+
+    @property
+    def program_status(self) -> str | None:
+        if self._start_pending:
+            return None
+        raw = str(self._program_status or "").upper().removeprefix("PROGRAM_")
+        states = {"IN_PROGRESS": "running", "FINISHED": "finished", "PAUSED": "paused",
+                  "CANCELED": "cancelled", "CANCELLED": "cancelled"}
+        if raw in states:
+            return states[raw]
+        phase = self.values.get(str(self.phase_key))
+        label = str(self.phase_labels.get(str(phase), "")).casefold()
+        if not raw and str(phase) == "0" and label in ("режим ожидания", "standby", "idle"):
+            return "idle"
+        return None
+
+    @property
+    def program_name(self) -> str | None:
+        if self._program_name:
+            return self._program_name
+        if self.program_status == "idle":
+            language = getattr(self.hass.config, "language", "en")
+            return "Нет активной программы" if isinstance(language, str) and language.startswith("ru") else "No active program"
+        return None
+
+    @property
+    def remaining_time(self) -> int | None:
+        try:
+            hours = int(self.values[str(self.hours_key)])
+            minutes = int(self.values[str(self.minutes_key)])
+            return hours * 60 + minutes if hours >= 0 and 0 <= minutes < 60 else None
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def request_snapshot(self) -> None:
+        if self.recovery is not None:
+            self.recovery.request_refresh()
+
+    def _push_updated(self) -> None:
+        if self.recovery is not None:
+            self.recovery.push_updated()
+
+    def mark_stale(self) -> None:
+        with self._laundry_lock:
+            self._state_revision += 1
+            self.fresh = False
+            self.values.clear()
+            self._program_status = None
+            self._program_name = None
+            self.selected_program = None
+            self.alarm_codes = None
+        self.write_ha_state()
+
+    def apply_snapshot(self, data: dict, revision: int) -> bool:
+        control = data.get("smartDeviceControl") if isinstance(data, dict) else None
+        if not isinstance(control, dict) or control.get("status") not in (True, False, "ONLINE", "OFFLINE"):
+            raise ValueError("Missing Haier availability")
+        online = control["status"] in (True, "ONLINE")
+        attributes = control.get("attributes")
+        if not isinstance(attributes, list):
+            raise ValueError("Missing Haier attributes")
+        values = {str(item["name"]): item.get("currentValue") for item in attributes
+                  if isinstance(item, dict) and item.get("readable") and "name" in item}
+        required = {str(key) for key in (self.phase_key, self.remote_key) if key is not None}
+        if online and (not values or not required.issubset(values)):
+            raise ValueError("Incomplete Haier snapshot")
+        alarms = control.get("alarms")
+        codes = tuple(sorted(set(alarms))) if isinstance(alarms, list) and all(isinstance(x, str) for x in alarms) else None
+        program = data.get("program")
+        with self._laundry_lock:
+            if revision != self._state_revision:
+                return False
+            was_active = self._cycle_active or self.program_status in ("running", "paused")
+            previous = self.program_status
+            previous_phase = self.values.get(str(self.phase_key))
+            self._state_revision += 1
+            self._last_observed = time.monotonic()
+            self.available = online
+            self.fresh = online
+            self.values = values if online else {}
+            self.alarm_codes = codes if online else None
+            self._status_data = data
+            if not online:
+                self._program_status = None
+                self._program_name = None
+                self.selected_program = None
+            elif isinstance(program, dict):
+                selected = _laundry_selected_values(program)
+                if selected is not None:
+                    self._active_program_values = selected
+                elif program.get("title") and program["title"] != self._program_name:
+                    self._active_program_values = {}
+                if program.get("status"):
+                    self._program_status = program["status"]
+                if program.get("title"):
+                    self._program_name = program["title"]
+                if str(self._program_status or "").upper().removeprefix("PROGRAM_") in {"IN_PROGRESS", "FINISHED", "PAUSED", "CANCELED", "CANCELLED"}:
+                    self._start_pending = False
+            elif (str(values.get(str(self.phase_key))) == "0"
+                  and str(self.phase_labels.get("0", "")).casefold() in ("режим ожидания", "standby", "idle")):
+                self._program_status = None
+                self._program_name = None
+            elif str(values.get(str(self.phase_key))) != str(previous_phase):
+                if previous not in ("running", "paused"):
+                    self._program_status = None
+                    self._program_name = None
+            if online and self._start_pending and str(values.get(str(self.phase_key))) != str(self._start_phase):
+                self._start_pending = False
+            if online and was_active and self.program_status == "finished":
+                self._fire_laundry_event("program_finished")
+            if online and self.program_status is not None:
+                self._cycle_active = self.program_status in ("running", "paused")
+            if online and codes is not None and codes != self._last_notified_alarms:
+                had_errors = bool(self._last_notified_alarms)
+                self._last_notified_alarms = codes
+                if codes or had_errors:
+                    self._fire_laundry_event("error" if codes else "error_cleared")
+        self.write_ha_state()
+        return True
+
+    def _set_attribute_value(self, code: str, value: str) -> None:
+        self.values[str(code)] = value
+
+    def _handle_status_update(self, received_message: dict) -> None:
+        payload = received_message.get("payload") or {}
+        statuses = payload.get("statuses") if isinstance(payload, dict) else None
+        if not isinstance(statuses, list) or not statuses or not isinstance(statuses[0], dict):
+            return
+        properties = statuses[0].get("properties")
+        if not isinstance(properties, dict) or not properties:
+            return
+        was_fresh = self.fresh
+        with self._laundry_lock:
+            self._state_revision += 1
+            self._last_observed = time.monotonic()
+            phase = str(self.phase_key)
+            if phase in properties and str(properties[phase]) != str(self.values.get(phase)):
+                if str(properties[phase]) != str(self._start_phase):
+                    self._start_pending = False
+                if self.program_status not in ("running", "paused"):
+                    self._program_status = None
+                    self._program_name = None
+            for code, value in properties.items():
+                self._set_attribute_value(code, value)
+            self.fresh = True
+            self.available = True
+        self.write_ha_state()
+        self._push_updated()
+        if not was_fresh:
+            self.request_snapshot()
+
+    def _handle_device_status_update(self, received_message: dict) -> None:
+        payload = received_message.get("payload") or {}
+        status = payload.get("status") if isinstance(payload, dict) else None
+        if status not in (True, False, "ONLINE", "OFFLINE"):
+            return
+        with self._laundry_lock:
+            self._state_revision += 1
+            if status in (False, "OFFLINE"):
+                self.fresh = False
+                self.alarm_codes = None
+                self.values.clear()
+                self._program_status = None
+                self._program_name = None
+                self.selected_program = None
+            self.available = status
+        self.write_ha_state()
+        if status in (True, "ONLINE"):
+            self.request_snapshot()
+
+    @property
+    def error_details(self) -> list[dict] | None:
+        if self.alarm_codes is None:
+            return None
+        result = []
+        for key in self.alarm_codes:
+            definition = self.alarm_descriptions.get(key)
+            definition = definition if isinstance(definition, dict) else {}
+            text = definition.get("text")
+            text = text if isinstance(text, str) and text else key
+            code = text[1:].split("]", 1)[0] if text.startswith("[") and "]" in text else key
+            result.append({"key": key, "code": code, "text": text,
+                           "description": definition.get("description") if isinstance(definition.get("description"), str) else ""})
+        return result
+
+    def _fire_laundry_event(self, event_type: str) -> None:
+        if not self.machine_entity_id:
+            return
+        event = {
+            "type": event_type, "entity_id": self.machine_entity_id,
+            "name": self.device_name, "model": self.device_model,
+            "kind": "dryer" if self.is_dryer else "washer",
+            "program": self.program_name, "errors": self.error_details or [],
+        }
+        if event_type == "program_finished":
+            self.hass.loop.call_soon_threadsafe(self._schedule_finish_confirmation, event)
+        else:
+            self.hass.loop.call_soon_threadsafe(self.hass.bus.async_fire, "haier_evo_laundry_event", event)
+
+    def cancel_pending_finish(self) -> None:
+        if self._finish_unsub is not None:
+            self._finish_unsub()
+            self._finish_unsub = None
+
+    def _schedule_finish_confirmation(self, event: dict) -> None:
+        from homeassistant.helpers.event import async_call_later
+        if self.recovery is None:
+            return
+        self.cancel_pending_finish()
+
+        @callback
+        def confirm(_now):
+            self._finish_unsub = None
+            # Evo can finish a stage and immediately report the same cycle running again.
+            if self.available and not self._cycle_active and self.program_status != "cancelled":
+                event["errors"] = self.error_details or []
+                self.hass.bus.async_fire("haier_evo_laundry_event", event)
+
+        self._finish_unsub = async_call_later(self.hass, 10, confirm)
+
+    def on_message(self, message_dict: dict) -> None:
+        event = message_dict.get("event")
+        if event == "deviceConnectionStatusEvent":
+            payload = message_dict.get("payload")
+            status = payload.get("status") if isinstance(payload, dict) else None
+            if isinstance(status, str) and 0 < len(status) <= 64:
+                self.connection_status = status
+                self.write_ha_state()
+            return
+        if event == "alarms":
+            payload = message_dict.get("payload") or {}
+            alarms = payload.get("alarms") if isinstance(payload, dict) else None
+            valid = isinstance(alarms, list) and all(isinstance(x, str) for x in alarms)
+            codes = tuple(sorted(set(alarms))) if valid else None
+            with self._laundry_lock:
+                self._state_revision += 1
+                self._last_observed = time.monotonic()
+                previous = self.alarm_codes
+                self.alarm_codes = codes
+                if codes is not None and codes != self._last_notified_alarms:
+                    had_errors = bool(self._last_notified_alarms)
+                    self._last_notified_alarms = codes
+                    if codes or had_errors:
+                        self._fire_laundry_event("error" if codes else "error_cleared")
+            self.write_ha_state()
+            if valid:
+                self._push_updated()
+            return
+        if event in ("ProgramDryerBaseEvent", "ProgramWasherBaseEvent"):
+            data = message_dict.get("data")
+            program = data.get("program") if isinstance(data, dict) else None
+            if isinstance(program, dict) or (isinstance(data, dict) and data.get("status") == "PROGRAM_FINISHED"):
+                with self._laundry_lock:
+                    self._state_revision += 1
+                    self._last_observed = time.monotonic()
+                    previous = self.program_status
+                    event_status = program.get("status") if isinstance(program, dict) else None
+                    if not event_status and data.get("status") == "PROGRAM_FINISHED":
+                        event_status = "FINISHED"
+                    if event_status:
+                        self._program_status = event_status
+                        if str(event_status).upper().removeprefix("PROGRAM_") in {"IN_PROGRESS", "FINISHED", "PAUSED", "CANCELED", "CANCELLED"}:
+                            self._start_pending = False
+                    if isinstance(program, dict):
+                        selected = _laundry_selected_values(program)
+                        if selected is not None:
+                            self._active_program_values = selected
+                        elif program.get("title") and program["title"] != self._program_name:
+                            self._active_program_values = {}
+                        self._program_name = program.get("title", self._program_name)
+                    trace = message_dict.get("trace")
+                    if self.program_status in ("running", "paused"):
+                        self._cycle_active = True
+                    if (self.program_status == "finished" and previous != "finished"
+                            and (not trace or trace != self._last_finished_trace)):
+                        self._last_finished_trace = trace
+                        self._fire_laundry_event("program_finished")
+                    if self.program_status in ("finished", "cancelled", "idle"):
+                        self._cycle_active = False
+                self.write_ha_state()
+                self._push_updated()
+            return
+        super().on_message(message_dict)
+
+    @property
+    def remote_control(self) -> bool | None:
+        value = self.values.get(str(self.remote_key))
+        if isinstance(value, bool):
+            return value
+        value = str(value).lower()
+        if value in ("1", "true", "on"):
+            return True
+        if value in ("0", "false", "off"):
+            return False
+        return None
+
+    def set_selected_program(self, value: str | None) -> None:
+        with self._laundry_lock:
+            if value is not None and value not in self.programs:
+                raise HomeAssistantError("Неизвестная программа")
+            self.selected_program = value
+            self._program_parameters = {}
+        self.write_ha_state()
+
+    @property
+    def program_settings(self) -> dict:
+        if self.selected_program not in self.programs:
+            return {}
+        try:
+            settings = program_settings(self._program_data, self.selected_program,
+                                        self.programs[self.selected_program], self._program_parameters,
+                                        self.values, self.alarm_codes)
+        except ValueError as err:
+            return {"program": self.selected_program, "fields": [], "error": str(err)}
+        return {key: value for key, value in settings.items() if key != "commands"}
+
+    @property
+    def active_program_details(self) -> dict:
+        if not self.available or not self._program_name:
+            return {}
+        details = active_program_details(self._program_data, self._program_name, self.programs,
+                                         self.values, self._active_program_values)
+        if self.remaining_time is not None:
+            details["remaining_minutes"] = self.remaining_time
+        return details
+
+    def configure_program(self, program: str, parameters: dict) -> None:
+        with self._laundry_lock:
+            if program != self.selected_program or program not in self.programs:
+                raise ServiceValidationError("Выбранная программа изменилась; откройте параметры заново")
+            if self._start_pending or self.program_status in ("running", "paused"):
+                raise ServiceValidationError("Параметры можно изменить до запуска программы")
+            settings = self.program_settings
+            editable = {field["key"] for field in settings.get("fields", []) if not field.get("disabled")}
+            if not isinstance(parameters, dict) or not parameters or not set(parameters) <= editable:
+                raise ServiceValidationError("Параметр недоступен для выбранной программы")
+            updated = {**self._program_parameters, **parameters}
+            try:
+                program_settings(self._program_data, program, self.programs[program], updated,
+                                 self.values, self.alarm_codes)
+            except ValueError as err:
+                raise ServiceValidationError(str(err)) from err
+            self._program_parameters = updated
+        self.write_ha_state()
+
+    def send_laundry_action(self, action: str) -> None:
+        try:
+            with self._laundry_lock:
+                if not self.available or self.remote_control is not True:
+                    raise HomeAssistantError("Дистанционное управление недоступно")
+                if (self._start_pending or action not in LAUNDRY_ACTION_STATES
+                        or (self.program_status is not None
+                            and self.program_status not in LAUNDRY_ACTION_STATES[action])):
+                    raise HomeAssistantError("Состояние программы не позволяет выполнить команду")
+                if action == "start":
+                    if self.selected_program not in self.programs:
+                        raise HomeAssistantError("Сначала выберите программу")
+                    try:
+                        settings = program_settings(self._program_data, self.selected_program,
+                                                    self.programs[self.selected_program], self._program_parameters,
+                                                    self.values, self.alarm_codes)
+                    except ValueError as err:
+                        raise HomeAssistantError(str(err)) from err
+                    message = {"action": "operation", **self.programs[self.selected_program],
+                               "commands": settings["commands"]}
+                elif action in self.actions:
+                    message = {"action": "command", "command": self.actions[action]}
+                else:
+                    raise HomeAssistantError("Команда не поддерживается")
+                socket_app = self._haier.socket_app
+                if socket_app is None or socket_app.sock is None or not socket_app.sock.connected:
+                    raise HomeAssistantError("Связь с Haier отсутствует")
+                message.update({"macAddress": self.device_id, "trace": str(uuid.uuid4())})
+                if action == "start":
+                    self._start_phase = self.values.get(str(self.phase_key))
+                    self.selected_program = None
+                    self._start_pending = True
+                try:
+                    socket_app.send(json.dumps(message))
+                except Exception as err:
+                    raise HomeAssistantError("Не удалось подтвердить отправку команды Haier; проверьте машину") from err
+        finally:
+            if action == "start":
+                self.write_ha_state()
+
+    def create_entities_select(self) -> list:
+        if not self.programs:
+            return []
+        from .select import HaierLaundryProgramSelect
+        return [HaierLaundryProgramSelect(self)]
+
+    @property
+    def available_actions(self) -> list[str]:
+        if not self.available or self.remote_control is not True or self._start_pending:
+            return []
+        actions = ["start", *self.actions] if self.programs else list(self.actions)
+        return [action for action in actions
+                if (self.program_status is None
+                    or self.program_status in LAUNDRY_ACTION_STATES[action])
+                and (action != "start" or self.selected_program in self.programs)]
+
+    def create_entities_binary_sensor(self) -> list:
+        if self.remote_key is None:
+            return []
+        from .binary_sensor import HaierLaundryRemoteControlSensor
+        return [HaierLaundryRemoteControlSensor(self)]
+
+    def create_entities_sensor(self) -> list:
+        from .sensor import HaierLaundrySensor
+        entities = []
+        if self.alarm_codes is not None or self.alarm_descriptions:
+            from .sensor import HaierLaundryFaultSensor
+            entities.append(HaierLaundryFaultSensor(self))
+        if self.phase_key is not None:
+            key = "laundry_phase" if self.is_dryer else "laundry_phase_code"
+            entities.append(HaierLaundrySensor(self, "phase", key))
+        if self.hours_key is not None and self.minutes_key is not None:
+            entities.append(HaierLaundrySensor(self, "remaining_time", "laundry_program_time"))
+        entities.append(HaierLaundrySensor(self, "program_status", "laundry_program_status"))
+        entities.append(HaierLaundrySensor(self, "program_name", "laundry_program_name"))
         return entities
 
 

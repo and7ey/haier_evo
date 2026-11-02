@@ -76,3 +76,13 @@ class HaierREFSuperCoolingSensor(HaierREFBinarySensor):
         self._device_attr_name = "super_cooling"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_super_cooling"
         self._attr_name = f"{device.device_name} Супер-охлаждение"
+
+
+class HaierLaundryRemoteControlSensor(HaierBinarySensor):
+    _attr_has_entity_name = True
+    _attr_translation_key = "laundry_remote_control"
+
+    def __init__(self, device: api.HaierLaundry) -> None:
+        super().__init__(device)
+        self._device_attr_name = "remote_control"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_remote_control"

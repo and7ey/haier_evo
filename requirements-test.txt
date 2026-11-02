@@ -1,0 +1,6 @@
+pytest-homeassistant-custom-component==0.13.373
+pytest-xdist==3.8.0
+pytest-timeout==2.4.0
+requests==2.34.2
+websocket-client==1.9.2
+ratelimit==2.2.1

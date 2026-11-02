@@ -1,7 +1,7 @@
 import weakref
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
 from homeassistant.core import HomeAssistant
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime
 from homeassistant.const import TEMPERATURE
 from .const import DOMAIN
 from . import api
@@ -111,3 +111,48 @@ class HaierWMStatusSensor(HaierSensor):
     @property
     def native_value(self) -> str:
         return str(getattr(self._device, self._device_attr_name, "unknown"))
+
+
+class HaierLaundrySensor(HaierSensor):
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+
+    def __init__(self, device: api.HaierLaundry, field: str, translation_key: str):
+        super().__init__(device)
+        self._device_attr_name = field
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_{field}"
+        self._attr_translation_key = translation_key
+        if translation_key == "laundry_phase_code":
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        elif field == "remaining_time":
+            self._attr_device_class = SensorDeviceClass.DURATION
+            self._attr_native_unit_of_measurement = UnitOfTime.MINUTES
+        elif field == "program_status":
+            self._attr_device_class = SensorDeviceClass.ENUM
+            self._attr_options = ["idle", "running", "finished", "paused", "cancelled"]
+
+
+class HaierLaundryFaultSensor(HaierSensor):
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "laundry_fault"
+    _attr_icon = "mdi:alert-circle-outline"
+
+    def __init__(self, device):
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_fault"
+
+    @property
+    def native_value(self):
+        errors = self._device.error_details
+        if errors is None:
+            return None
+        if not errors:
+            return "Нет активных ошибок" if self.hass.config.language.startswith("ru") else "No active errors"
+        text = "; ".join(error["text"] for error in errors)
+        return text if len(text) <= 255 else text[:252] + "..."
+
+    @property
+    def extra_state_attributes(self):
+        return {"errors": self._device.error_details}
