@@ -1,7 +1,7 @@
 import weakref
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
 from homeassistant.core import HomeAssistant
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime
 from homeassistant.const import TEMPERATURE
 from .const import DOMAIN
 from . import api
@@ -111,3 +111,32 @@ class HaierWMStatusSensor(HaierSensor):
     @property
     def native_value(self) -> str:
         return str(getattr(self._device, self._device_attr_name, "unknown"))
+
+
+class HaierLaundrySensor(HaierSensor):
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+
+    def __init__(self, device: api.HaierLaundry, field: str, translation_key: str):
+        super().__init__(device)
+        self._device_attr_name = field
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_{field}"
+        self._attr_translation_key = translation_key
+        if field == "overview":
+            self._attr_device_class = SensorDeviceClass.ENUM
+            self._attr_options = ["idle", "running", "finished", "paused", "cancelled", "not_reported"]
+            self._attr_icon = "mdi:tumble-dryer" if device.is_dryer else "mdi:washing-machine"
+        elif translation_key == "laundry_phase_code":
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        elif field == "remaining_time":
+            self._attr_device_class = SensorDeviceClass.DURATION
+            self._attr_native_unit_of_measurement = UnitOfTime.MINUTES
+        elif field == "program_status":
+            self._attr_device_class = SensorDeviceClass.ENUM
+            self._attr_options = ["idle", "running", "finished", "paused", "cancelled"]
+
+    @property
+    def native_value(self):
+        if self._device_attr_name == "overview":
+            return self._device.program_status or "not_reported"
+        return super().native_value

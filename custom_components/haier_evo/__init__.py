@@ -1,4 +1,8 @@
 from __future__ import annotations
+from pathlib import Path
+
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.const import Platform
@@ -14,7 +18,16 @@ PLATFORMS: list[str] = [
     Platform.SELECT,
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
 ]
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    card_path = Path(__file__).parent / "haier-laundry-card.js"
+    url = "/haier_evo_frontend/haier-laundry-card.js"
+    await hass.http.async_register_static_paths([StaticPathConfig(url, str(card_path), False)])
+    add_extra_js_url(hass, url)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

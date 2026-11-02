@@ -1,0 +1,55 @@
+{
+  "entity": {
+    "sensor": {
+      "laundry_phase": {
+        "default": "mdi:tumble-dryer"
+      },
+      "laundry_phase_code": {
+        "default": "mdi:washing-machine"
+      },
+      "laundry_program_time": {
+        "default": "mdi:timer-outline"
+      },
+      "laundry_program_status": {
+        "default": "mdi:progress-clock",
+        "state": {
+          "idle": "mdi:pause-circle-outline",
+          "running": "mdi:progress-clock",
+          "finished": "mdi:check-circle-outline",
+          "paused": "mdi:pause-circle",
+          "cancelled": "mdi:stop-circle-outline"
+        }
+      },
+      "laundry_program_name": {
+        "default": "mdi:format-list-bulleted"
+      },
+      "laundry_overview": {
+        "default": "mdi:washing-machine"
+      }
+    },
+    "select": {
+      "laundry_program_selection": {
+        "default": "mdi:format-list-bulleted"
+      }
+    },
+    "button": {
+      "laundry_start": {
+        "default": "mdi:play"
+      },
+      "laundry_pause": {
+        "default": "mdi:pause"
+      },
+      "laundry_resume": {
+        "default": "mdi:play-pause"
+      },
+      "laundry_cancel": {
+        "default": "mdi:stop"
+      }
+    },
+    "binary_sensor": {
+      "laundry_remote_control": {
+        "default": "mdi:remote"
+      }
+    }
+  }
+}

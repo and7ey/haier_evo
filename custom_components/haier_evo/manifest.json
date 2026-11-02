@@ -3,7 +3,7 @@
   "name": "Haier Evo",
   "codeowners": ["@and7ey"],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["frontend"],
   "documentation": "https://github.com/and7ey/haier_evo",
   "homekit": {},
   "iot_class": "cloud_polling",

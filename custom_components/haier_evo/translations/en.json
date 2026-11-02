@@ -76,6 +76,63 @@
                     "related": "Related",
                     "on": "Active"
                 }
+            },
+            "laundry_program_selection": {
+                "name": "Program to start"
+            }
+        },
+        "sensor": {
+            "laundry_phase": {
+                "name": "Phase"
+            },
+            "laundry_phase_code": {
+                "name": "Phase"
+            },
+            "laundry_program_time": {
+                "name": "Program time"
+            },
+            "laundry_program_status": {
+                "name": "Program status",
+                "state": {
+                    "idle": "Idle",
+                    "running": "Running",
+                    "finished": "Finished",
+                    "paused": "Paused",
+                    "cancelled": "Cancelled"
+                }
+            },
+            "laundry_program_name": {
+                "name": "Program"
+            },
+            "laundry_overview": {
+                "name": "Machine status",
+                "state": {
+                    "idle": "Idle",
+                    "running": "Running",
+                    "finished": "Finished",
+                    "paused": "Paused",
+                    "cancelled": "Cancelled",
+                    "not_reported": "Cycle data unavailable"
+                }
+            }
+        },
+        "button": {
+            "laundry_start": {
+                "name": "Start selected program"
+            },
+            "laundry_pause": {
+                "name": "Pause"
+            },
+            "laundry_resume": {
+                "name": "Resume"
+            },
+            "laundry_cancel": {
+                "name": "Cancel program"
+            }
+        },
+        "binary_sensor": {
+            "laundry_remote_control": {
+                "name": "Remote control"
             }
         }
     }

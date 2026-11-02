@@ -76,6 +76,63 @@
                     "related": "Сопутствующий",
                     "on": "Активен"
                 }
+            },
+            "laundry_program_selection": {
+                "name": "Программа для запуска"
+            }
+        },
+        "sensor": {
+            "laundry_phase": {
+                "name": "Этап"
+            },
+            "laundry_phase_code": {
+                "name": "Этап"
+            },
+            "laundry_program_time": {
+                "name": "Время программы"
+            },
+            "laundry_program_status": {
+                "name": "Статус программы",
+                "state": {
+                    "idle": "Ожидание",
+                    "running": "Выполняется",
+                    "finished": "Завершена",
+                    "paused": "Пауза",
+                    "cancelled": "Отменена"
+                }
+            },
+            "laundry_program_name": {
+                "name": "Программа"
+            },
+            "laundry_overview": {
+                "name": "Состояние машины",
+                "state": {
+                    "idle": "Ожидание",
+                    "running": "Выполняется",
+                    "finished": "Завершена",
+                    "paused": "Пауза",
+                    "cancelled": "Отменена",
+                    "not_reported": "Нет данных о цикле"
+                }
+            }
+        },
+        "button": {
+            "laundry_start": {
+                "name": "Запустить выбранную программу"
+            },
+            "laundry_pause": {
+                "name": "Пауза"
+            },
+            "laundry_resume": {
+                "name": "Продолжить"
+            },
+            "laundry_cancel": {
+                "name": "Отменить программу"
+            }
+        },
+        "binary_sensor": {
+            "laundry_remote_control": {
+                "name": "Дистанционное управление"
             }
         }
     }
