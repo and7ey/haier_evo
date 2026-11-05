@@ -77,6 +77,29 @@
                     "on": "Активен"
                 }
             }
+        },
+        "water_heater": {
+            "water_heater": {
+                "state": {
+                    "off": "Выключен",
+                    "eco": "Eco (половина бака)",
+                    "performance": "Max (весь бак)"
+                }
+            }
+        }
+    },
+    "exceptions": {
+        "wh_locked_off": {
+            "message": "{device} выключен: сначала включите его"
+        },
+        "wh_locked_sterilization": {
+            "message": "{device}: идёт дезинфекция (BPS), целевую температуру нельзя изменить до её окончания"
+        },
+        "wh_locked_alarm": {
+            "message": "{device} сообщает об ошибке, управление заблокировано"
+        },
+        "wh_locked": {
+            "message": "{device} сейчас не принимает эту команду"
         }
     }
 }

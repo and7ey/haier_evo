@@ -77,6 +77,29 @@
                     "on": "Active"
                 }
             }
+        },
+        "water_heater": {
+            "water_heater": {
+                "state": {
+                    "off": "Off",
+                    "eco": "Eco (half tank)",
+                    "performance": "Max (whole tank)"
+                }
+            }
+        }
+    },
+    "exceptions": {
+        "wh_locked_off": {
+            "message": "{device} is off: turn it on first"
+        },
+        "wh_locked_sterilization": {
+            "message": "{device} is running sterilization (BPS): the target temperature cannot be changed until it ends"
+        },
+        "wh_locked_alarm": {
+            "message": "{device} reports an error, control is blocked"
+        },
+        "wh_locked": {
+            "message": "{device} does not accept this command right now"
         }
     }
 }
