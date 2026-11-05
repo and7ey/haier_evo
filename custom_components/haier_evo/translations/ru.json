@@ -100,6 +100,12 @@
         },
         "wh_locked": {
             "message": "{device} сейчас не принимает эту команду"
+        },
+        "not_connected": {
+            "message": "Нет связи с облаком Haier Evo: команда для «{device}» не отправлена"
+        },
+        "command_rejected": {
+            "message": "Haier Evo отклонил команду для «{device}» (код ошибки {code})"
         }
     }
 }
