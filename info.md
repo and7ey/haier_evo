@@ -1,18 +1,19 @@
 # Haier Evo integration
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs) [![stability-beta](https://img.shields.io/badge/stability-beta-33bbff.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#beta)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs) [![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#stable)
 
 Неофициальная интеграция для работы [Haier Evo](https://haieronline.ru/evo-iot/) (RU, KZ, BY).
 
-Бета-версия: может работать некорректно.
+Форк [and7ey/haier_evo](https://github.com/and7ey/haier_evo) с поддержкой водонагревателей (бойлеров).
 
 ## Поддерживаемые устройства
 Ниже приведен список типов устройств, работа с которыми была **проверена пользователями**:
 
 - Кондиционеры
 - Холодильники
+- Водонагреватели (бойлеры) серии F7 — проверено на ES80V-F7
 
 В действительности интеграция должна поддерживать больше устройств. 
-Если интеграция некорректно работает с вашим устройством или поддерживает не все функции - сообщите в [Issues](https://github.com/and7ey/haier_evo/issues) об этом. 
+Если интеграция некорректно работает с вашим устройством или поддерживает не все функции - сообщите в [Issues](https://github.com/AGrigorii/haier_evo/issues) об этом. 
 
 ## Совместимость
 Haier предлагает разные мобильные приложения для разных рынков и стран. Некоторые устройства совместимы с более чем одним приложением. Эта интеграция поддерживает только устройства, которыми можно управлять через приложение [Evo](https://haieronline.ru/evo-iot/). Загрузите приложение Evo и проверьте совместимость с вашим устройством.

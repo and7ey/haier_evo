@@ -1,9 +1,9 @@
 # Haier Evo integration
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs) [![stability-beta](https://img.shields.io/badge/stability-beta-33bbff.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#beta)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs) [![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#stable)
 
 Неофициальная интеграция для работы [Haier Evo](https://haieronline.ru/evo-iot/) (RU, KZ, BY).
 
-Бета-версия: может работать некорректно.
+Форк [and7ey/haier_evo](https://github.com/and7ey/haier_evo) с поддержкой водонагревателей (бойлеров).
 
 ## Поддерживаемые устройства
 Ниже приведен список типов устройств, работа с которыми была **проверена пользователями**:
@@ -11,6 +11,9 @@
 - Кондиционеры
 - Холодильники
 - Водонагреватели (бойлеры) серии F7 — проверено на ES80V-F7
+
+В действительности интеграция должна поддерживать больше устройств. 
+Если интеграция некорректно работает с вашим устройством или поддерживает не все функции - сообщите в [Issues](https://github.com/AGrigorii/haier_evo/issues) об этом. 
 
 ### Водонагреватели
 Для бойлера создаются:
@@ -21,9 +24,6 @@
 - бинарные датчики «Нагрев» (нагревает / поддерживает температуру) и «Неисправность» (ошибки E3, E6, H0 с текстом из облака Haier в атрибутах).
 
 Интеграция соблюдает облачные ограничения приложения Evo: пока бойлер выключен, нельзя менять температуру и включать дезинфекцию, во время дезинфекции нельзя менять температуру, при ошибке устройства управление заблокировано. В этих случаях Home Assistant покажет понятную ошибку вместо команды, которую бойлер проигнорирует. Выбор режима Eco/Max у выключенного бойлера сначала включает его.
-
-В действительности интеграция должна поддерживать больше устройств. 
-Если интеграция некорректно работает с вашим устройством или поддерживает не все функции - сообщите в [Issues](https://github.com/and7ey/haier_evo/issues) об этом. 
 
 ## Совместимость
 Haier предлагает разные мобильные приложения для разных рынков и стран. Некоторые устройства совместимы с более чем одним приложением. Эта интеграция поддерживает только устройства, которыми можно управлять через приложение [Evo](https://haieronline.ru/evo-iot/). Загрузите приложение Evo и проверьте совместимость с вашим устройством.
@@ -46,7 +46,7 @@ Haier предлагает разные мобильные приложения 
 
 1. Откройте **HACS** в боковой панели Home Assistant.
 2. Нажмите на три точки (⋮) в верхнем правом углу и выберите **Custom repositories** (Пользовательские репозитории).
-3. В поле **Repository** вставьте ссылку: `https://github.com/and7ey/haier_evo`
+3. В поле **Repository** вставьте ссылку: `https://github.com/AGrigorii/haier_evo`
 4. В поле **Category** выберите **Integration** (Интеграция).
 5. Нажмите **Add** (Добавить).
 6. Теперь найдите **Haier Evo** в поиске HACS и нажмите **Download** (Загрузить).
