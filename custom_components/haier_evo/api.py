@@ -587,7 +587,10 @@ class Haier(object):
         self._connected.set()
         _LOGGER.debug("Websocket opened")
         for device in self.devices:
-            device.init_if_needed()
+            try:
+                device.init_if_needed()
+            except Exception as e:
+                _LOGGER.warning(f"{device.device_name}: init after connect failed: {e!r}")
 
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def _on_close(self, ws: WebSocketApp, close_code: int, close_message: str) -> None:
@@ -764,6 +767,9 @@ class HaierDevice(object):
         self._available = True
         self._config = None
         self._status_data = backend_data
+        self.alarms: list[str] = []
+        self._values: dict[str, str] = {}  # raw attribute values by code (for modifiers)
+        self._modifiers = CFG.Modifiers([])
 
     def __repr__(self) -> str:
         return (
@@ -808,6 +814,107 @@ class HaierDevice(object):
         return self._status_data
 
     @property
+    def connected(self) -> bool:
+        """The cloud reports the device online (entities stay available anyway)."""
+        return self._available
+
+    @property
+    def problem(self) -> bool:
+        return any(a not in MAINTENANCE_ALARMS for a in self.alarms)
+
+    @property
+    def filter_cleaning(self) -> bool:
+        return FILTER_ALARM in self.alarms
+
+    @property
+    def alarm_texts(self) -> list[str]:
+        """Human-readable alarms from the cloud's own table (errors.alarmToResult)."""
+        errors = (self.status_data or {}).get("errors") or {}
+        table = errors.get("alarmToResult") or {}
+        unknown = (errors.get("undefinedAlarm") or {}).get("text") or "Unknown error"
+        return [
+            (table.get(alarm) or {}).get("text") or f"{unknown} ({alarm})"
+            for alarm in self.alarms
+        ]
+
+    def _store_value(self, code, value) -> None:
+        if value is not None:
+            self._values[str(code)] = CFG.Constraint.value2code(str(value))
+
+    def _set_alarms(self, alarms) -> None:
+        names = []
+        for alarm in alarms if isinstance(alarms, list) else []:
+            if isinstance(alarm, dict):
+                alarm = alarm.get("name") or alarm.get("alarmName") or alarm.get("code")
+            # "alarmCancel" is Haier's "alarms cleared" marker, not an alarm
+            if alarm and str(alarm) != "alarmCancel" and str(alarm) not in names:
+                names.append(str(alarm))
+        self.alarms = names
+
+    def _cloud_attribute(self, code) -> dict:
+        return next((
+            a for a in (self.status_data or {}).get("attributes") or []
+            if isinstance(a, dict) and str(a.get("name")) == str(code)
+        ), {})
+
+    def _cloud_value_name(self, code, value) -> str:
+        """The cloud's own (Russian) name of a list value, e.g. 2/"6" -> "Вентилятор"."""
+        for item in (self._cloud_attribute(code).get("list") or {}).get("data") or []:
+            if CFG.Constraint.value2code(str(item.get("data"))) == CFG.Constraint.value2code(str(value)):
+                return str(item.get("name") or value)
+        return str(value)
+
+    def _locked(self, values: dict | None = None) -> dict[str, str]:
+        alarms = set(self.alarms) if self.enforce_alarm_locks else set()
+        return self._modifiers.locked(values or self._values, alarms)
+
+    # alarms lock attributes in the cloud's rules; some devices list mere
+    # maintenance reminders there, so this is decided per device type
+    enforce_alarm_locks = True
+
+    def _check_writable(self, name: str, value=None, assume: dict | None = None) -> None:
+        """Refuse a command the cloud marks read-only right now (CFG.Modifiers).
+
+        assume: raw values (code -> value) the same command changes first,
+        e.g. power on together with a new mode.
+        """
+        attr = self.config.get_attr_by_name(name) if self.config else None
+        if attr is None:
+            return
+        code = str(attr.code)
+        values = {**self._values, **{str(k): CFG.Constraint.value2code(str(v)) for k, v in (assume or {}).items()}}
+        placeholders = {
+            "device": str(self.device_name),
+            "attribute": attr.description or name,
+        }
+        reason = self._locked(values).get(code)
+        if reason is None:
+            allowed = self._modifiers.allowed(values, set(self.alarms) if self.enforce_alarm_locks else set()).get(code)
+            if value is not None and allowed is not None:
+                item = CFG.Constraint.value2code(str(attr.get_item_code(str(value), value)))
+                if item not in allowed[0]:
+                    raise HaierCommandLocked(
+                        translation_domain=C.DOMAIN,
+                        translation_key="value_not_allowed",
+                        translation_placeholders={**placeholders, "allowed": ", ".join(allowed[1])},
+                    )
+            return
+        if reason == CFG.Modifiers.ALARM:
+            key, extra = "locked_alarm", {}
+        elif reason == self.config["status"]:
+            key, extra = "locked_off", {}
+        elif reason == self.config["mode"]:
+            key, extra = "locked_mode", {"mode": self._cloud_value_name(reason, values.get(reason))}
+        else:
+            cause = self._cloud_attribute(reason).get("description") or reason
+            key, extra = "locked_by", {"cause": str(cause).strip()}
+        raise HaierCommandLocked(
+            translation_domain=C.DOMAIN,
+            translation_key=key,
+            translation_placeholders={**placeholders, **extra},
+        )
+
+    @property
     def hass(self) -> HomeAssistant:
         return self._haier.hass
 
@@ -842,6 +949,11 @@ class HaierDevice(object):
         settings = data.setdefault("settings", {})
         self.device_name = settings.setdefault("name", {}).setdefault("name", self.device_name)
         self.sw_version = settings.setdefault('firmware', {}).setdefault('value', None)
+        for attr in data.get("attributes") or []:
+            if isinstance(attr, dict):
+                self._store_value(attr.get("name"), attr.get("currentValue"))
+        self._modifiers = CFG.Modifiers(data.get("modifiers"))
+        self._set_alarms(data.get("alarms"))
         # read config and current values
         self._load_config_from_attributes(data)
         return data
@@ -853,8 +965,12 @@ class HaierDevice(object):
         pass
 
     def _handle_status_update(self, received_message: dict) -> None:
-        message_statuses = received_message.get("payload", {}).get("statuses", [{}])
-        for key, value in message_statuses[0]['properties'].items():
+        message_statuses = received_message.get("payload", {}).get("statuses") or [{}]
+        for status in message_statuses:
+            if isinstance(status, dict) and "alarms" in status:
+                self._set_alarms(status["alarms"])
+        for key, value in (message_statuses[0].get("properties") or {}).items():
+            self._store_value(key, value)
             self._set_attribute_value(key, value)
         self.available = True
         self.write_ha_state()
@@ -876,8 +992,10 @@ class HaierDevice(object):
         if not isinstance(data, dict) or self.config is None:
             return
         self.available = data.get("status") or "ONLINE"
+        self._set_alarms(data.get("alarms"))
         for attr in data.get("attributes") or []:
             if isinstance(attr, dict) and attr.get("currentValue") is not None:
+                self._store_value(attr.get("name"), attr.get("currentValue"))
                 self._set_attribute_value(str(attr.get("name")), attr.get("currentValue"))
         self.write_ha_state()
 
@@ -893,6 +1011,9 @@ class HaierDevice(object):
 
     def _send_commands(self, commands: list[dict]) -> None:
         self._send_group_command(commands)
+        # keep the modifiers right until the device echoes the new values
+        for command in commands:
+            self._store_value(command.get("commandName"), command.get("value"))
 
     def _send_group_command(self, commands: list[dict]) -> None:
         trace = str(uuid.uuid4())
@@ -1001,6 +1122,9 @@ class HaierDevice(object):
 
 
 class HaierAC(HaierDevice):
+    # the cloud locks almost everything on any alarm, filterCleaningAlarm
+    # included: a filter reminder must not take the AC away from HA
+    enforce_alarm_locks = False
 
     def __init__(
         self,
@@ -1028,6 +1152,7 @@ class HaierAC(HaierDevice):
         self.antifreeze_on = False
         self.autohumidity_on = False
         self.eco_sensor = None
+        self._deferred_target = None  # setpoint chosen while the unit was off
         self._get_status(backend_data)
         self._inited = False
 
@@ -1072,6 +1197,10 @@ class HaierAC(HaierDevice):
             "antifreeze_on": self.antifreeze_on,
             "autohumidity_on": self.autohumidity_on,
             "eco_sensor": self.eco_sensor,
+            "alarms": self.alarms,
+            "connected": self.connected,
+            "deferred_target": self._deferred_target,
+            "locked": self._locked(),
         })
         return data
 
@@ -1083,6 +1212,8 @@ class HaierAC(HaierDevice):
             self.current_temperature = float(value)
         elif attr.name == "status":
             self.status = int(value)
+            if self.status:
+                self._deferred_target = None
         elif attr.name == "target_temperature":
             self.target_temperature = float(value)
         elif attr.name == "mode":
@@ -1158,7 +1289,10 @@ class HaierAC(HaierDevice):
 
     def get_commands(self, name: str, value: str | bool) -> list[dict]:
         if name != "preset_mode":
+            self._check_writable(name, value)
             return super().get_commands(name, value)
+        if value not in ("none", None):
+            self._check_writable(f"preset_mode_{value}")
         func = getattr(self, f"get_preset_mode_{value}", None)
         if func is not None:
             return func()
@@ -1224,6 +1358,16 @@ class HaierAC(HaierDevice):
         return self.config.get_values('eco_sensor')
 
     def set_temperature(self, value: float) -> None:
+        try:
+            self._check_writable("target_temperature")
+        except HaierCommandLocked as e:
+            if e.translation_key != "locked_off":
+                raise
+            # the unit ignores a setpoint while off: keep it for the next "on"
+            self._deferred_target = value
+            self.target_temperature = value
+            self.write_ha_state()
+            return
         self._send_commands([
             {
                 "commandName": self.config['target_temperature'],
@@ -1234,10 +1378,37 @@ class HaierAC(HaierDevice):
 
     def switch_on(self, value: str = None) -> None:
         value = value or self.mode or HVACMode.AUTO
-        self._send_commands([
-            *(self.get_commands("status", "on") if not self.status else []),
-            *self.get_commands("mode", value),
-        ])
+        # the mode is locked while off, but goes out together with "power on"
+        assume = {}
+        if status_code := self.config["status"]:
+            assume[status_code] = "1"
+        if mode_attr := self.config.get_attr_by_name("mode"):
+            assume[str(mode_attr.code)] = mode_attr.get_item_code(value, value)
+        self._check_writable("mode", value, assume=assume)
+        commands = [
+            *(HaierDevice.get_commands(self, "status", "on") if not self.status else []),
+            *HaierDevice.get_commands(self, "mode", value),
+        ]
+        if self._deferred_target is not None and self.config["target_temperature"]:
+            try:
+                self._check_writable("target_temperature", assume=assume)
+            except HaierCommandLocked:
+                # the new mode has no setpoint (fan only): drop it and show the
+                # unit's own one again (its echo of "on" would drop it anyway)
+                self._deferred_target = None
+                raw = self._values.get(str(self.config["target_temperature"]))
+                try:
+                    self.target_temperature = float(raw)
+                except (TypeError, ValueError):
+                    pass
+            else:
+                commands.append({
+                    "commandName": self.config["target_temperature"],
+                    "value": str(self._deferred_target),
+                })
+                self.target_temperature = self._deferred_target
+                self._deferred_target = None
+        self._send_commands(commands)
         self.status = 1
         self.mode = value
 
@@ -1350,6 +1521,21 @@ class HaierAC(HaierDevice):
         if self.config['eco_sensor'] is not None:
             entities.append(select.HaierACEcoSensorSelect(self))
         return entities
+
+    def create_entities_sensor(self) -> list:
+        from . import sensor
+        entities = []
+        if self.config['current_temperature'] is not None:
+            entities.append(sensor.HaierACTemperatureSensor(self))
+        return entities
+
+    def create_entities_binary_sensor(self) -> list:
+        from . import binary_sensor
+        return [
+            binary_sensor.HaierProblemSensor(self),
+            binary_sensor.HaierFilterSensor(self),
+            binary_sensor.HaierConnectivitySensor(self),
+        ]
 
 
 class HaierREF(HaierDevice):
@@ -1641,29 +1827,11 @@ class HaierWH(HaierDevice):
         self.heating_mode = None
         self.heating = False
         self.sterilization_on = False
-        self.alarms: list[str] = []
-        self._values: dict[str, str] = {}
-        self._modifiers = CFG.Modifiers([])
         self._get_status(backend_data)
 
     @property
     def config(self) -> CFG.HaierWHConfig:
         return self._config
-
-    @property
-    def problem(self) -> bool:
-        return bool(self.alarms)
-
-    @property
-    def alarm_texts(self) -> list[str]:
-        """Human-readable alarms from the cloud's own table (errors.alarmToResult)."""
-        errors = (self.status_data or {}).get("errors") or {}
-        table = errors.get("alarmToResult") or {}
-        unknown = (errors.get("undefinedAlarm") or {}).get("text") or "Unknown error"
-        return [
-            (table.get(alarm) or {}).get("text") or f"{unknown} ({alarm})"
-            for alarm in self.alarms
-        ]
 
     def to_dict(self) -> dict:
         data = super().to_dict()
@@ -1677,14 +1845,9 @@ class HaierWH(HaierDevice):
             "heating": self.heating,
             "sterilization_on": self.sterilization_on,
             "alarms": self.alarms,
+            "connected": self.connected,
             "locked": self._locked(),
         })
-        return data
-
-    def _get_status(self, data: dict) -> dict:
-        data = super()._get_status(data)
-        self._modifiers = CFG.Modifiers(data.get("modifiers"))
-        self._set_alarms(data.get("alarms"))
         return data
 
     def _load_config_from_attributes(self, data: dict) -> None:
@@ -1708,7 +1871,6 @@ class HaierWH(HaierDevice):
             return
         # booleans come as "true"/"false" in the attribute lists and as "1"/"0" in values
         value = CFG.Constraint.value2code(str(value))
-        self._values[str(attr.code)] = value
         try:
             if attr.name == "current_temperature":
                 self.current_temperature = float(value)
@@ -1727,48 +1889,6 @@ class HaierWH(HaierDevice):
                 self.sterilization_on = parsebool(value)
         except ValueError:
             _LOGGER.warning(f"{self.device_name}: bad value {value!r} for {attr.name}")
-
-    def _set_alarms(self, alarms) -> None:
-        names = []
-        for alarm in alarms if isinstance(alarms, list) else []:
-            if isinstance(alarm, dict):
-                alarm = alarm.get("name") or alarm.get("alarmName") or alarm.get("code")
-            # "alarmCancel" is Haier's "alarms cleared" marker, not an alarm
-            if alarm and str(alarm) != "alarmCancel" and str(alarm) not in names:
-                names.append(str(alarm))
-        self.alarms = names
-
-    def _handle_status_update(self, received_message: dict) -> None:
-        for status in received_message.get("payload", {}).get("statuses") or []:
-            if isinstance(status, dict) and "alarms" in status:
-                self._set_alarms(status["alarms"])
-        super()._handle_status_update(received_message)
-
-    def update_from_backend(self, data: dict) -> None:
-        if isinstance(data, dict):
-            self._set_alarms(data.get("alarms"))
-        super().update_from_backend(data)
-
-    def _locked(self) -> dict[str, str]:
-        return self._modifiers.locked(self._values, set(self.alarms))
-
-    def _check_writable(self, name: str) -> None:
-        code = self.config[name]
-        if code is None or (reason := self._locked().get(code)) is None:
-            return
-        if reason == CFG.Modifiers.ALARM:
-            key = "wh_locked_alarm"
-        elif reason == self.config["status"]:
-            key = "wh_locked_off"
-        elif reason == self.config["sterilization"]:
-            key = "wh_locked_sterilization"
-        else:
-            key = "wh_locked"
-        raise HaierCommandLocked(
-            translation_domain=C.DOMAIN,
-            translation_key=key,
-            translation_placeholders={"device": str(self.device_name)},
-        )
 
     def _apply(self, commands: list[dict]) -> None:
         """Send commands and show the expected state until the device echoes it."""
@@ -1806,8 +1926,7 @@ class HaierWH(HaierDevice):
             # the mode cannot be changed while the device is off: turn it on first
             self._check_writable("status")
             commands += self.get_commands("status", "on")
-        else:
-            self._check_writable("heating_mode")
+        self._check_writable("heating_mode", value, assume={self.config["status"]: "1"})
         commands += self.get_commands("heating_mode", value)
         self._apply(commands)
 
@@ -1835,7 +1954,10 @@ class HaierWH(HaierDevice):
 
     def create_entities_binary_sensor(self) -> list:
         from . import binary_sensor
-        entities = [binary_sensor.HaierWHProblemSensor(self)]
+        entities = [
+            binary_sensor.HaierProblemSensor(self),
+            binary_sensor.HaierConnectivitySensor(self),
+        ]
         if self.config['heating_status'] is not None:
             entities.append(binary_sensor.HaierWHHeatingSensor(self))
         return entities
@@ -1862,6 +1984,10 @@ def already_applied(message: dict, data: dict) -> bool:
         and _same_value(current[str(c.get("commandName"))], c.get("value"))
         for c in commands
     )
+
+
+MAINTENANCE_ALARMS = {"filterCleaningAlarm"}
+FILTER_ALARM = "filterCleaningAlarm"
 
 
 def parsebool(value) -> bool:

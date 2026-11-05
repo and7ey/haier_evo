@@ -127,3 +127,19 @@ class HaierWHTemperatureSensor(HaierSensor):
     @property
     def native_value(self) -> float | None:
         return self._device.current_temperature
+
+
+class HaierACTemperatureSensor(HaierSensor):
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, device: api.HaierAC):
+        super().__init__(device)
+        self._device_attr_name = "current_temperature"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_temperature"
+        self._attr_name = f"{device.device_name} Температура в комнате"
+
+    @property
+    def native_value(self) -> float | None:
+        return self._device.current_temperature
