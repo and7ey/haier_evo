@@ -212,3 +212,13 @@ class HttpSwitchPOST(HttpSwitch):
     async def async_turn_off(self, **kwargs):
         self._haier.allow_http_post = False
         self.async_write_ha_state()
+
+
+class HaierWHSterilizationSwitch(HaierSwitch):
+    _attr_icon = "mdi:bacteria-outline"
+
+    def __init__(self, device: api.HaierWH) -> None:
+        super().__init__(device)
+        self._device_attr_name = "sterilization_on"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_sterilization"
+        self._attr_name = f"{device.device_name} Дезинфекция (BPS)"

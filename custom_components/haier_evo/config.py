@@ -223,6 +223,21 @@ class HaierWMConfig(HaierDeviceConfig):
         )
 
 
+class HaierWHConfig(HaierDeviceConfig):
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"current_temperature={self['current_temperature']!r},"
+            f"target_temperature={self['target_temperature']!r},"
+            f"status={self['status']!r},"
+            f"heating_mode={self['heating_mode']!r},"
+            f"heating_status={self['heating_status']!r},"
+            f"sterilization={self['sterilization']!r}"
+            f")"
+        )
+
+
 class Attribute(dict):
 
     def __init__(self, data: dict) -> None:
@@ -263,6 +278,11 @@ class Attribute(dict):
             "Температура": "temperature",
             "Скорость отжима": "spin_speed",
             "Оставшееся время": "remaining_time",
+            # Водонагреватели:
+            "Текущая температура": "current_temperature",
+            "Режим нагрева": "heating_mode",
+            "Поддержка температуры/обогрев": "heating_status",
+            "Дезинфекция": "sterilization",
         }.get(data.get("attrname", self.description), data.get("attrname") or "unknown")
 
     def __repr__(self) -> str:
@@ -440,6 +460,8 @@ class Item(dict):
             "fridge_mode": Temperature,
             "freezer_mode": Temperature,
             "my_zone": Temperature,
+            "heating_mode": HeatingMode,
+            "heating_status": HeatingStatus,
         }.get(name, cls)(data)
 
 
@@ -497,6 +519,23 @@ class EcoSensor(Item):
         "Обводящий": "outlining",
         "Сопутствующий": "related",
         "Активен": "on",
+    }
+
+
+class HeatingMode(Item):
+    # Eco heats half of the tank, Max the whole tank (names as in the Evo app).
+    # The device reports "Не установлен" while sterilization (BPS) is running.
+    mappings = {
+        "Не установлен": "none",
+        "Половинка": "eco",
+        "Вся емкость": "performance",
+    }
+
+
+class HeatingStatus(Item):
+    mappings = {
+        "В режиме сохранения тепла": "keep_warm",
+        "Режим нагрева": "heating",
     }
 
 
@@ -563,3 +602,59 @@ class Constraint(list):
     @staticmethod
     def value2code(value: str) -> str:
         return {"true": "1", "false": "0"}.get(value, value)
+
+
+class Modifiers(list):
+    """Cloud rules ("modifiers") that make attributes read-only for a while.
+
+    Every rule has a trigger (attribute values and/or active alarms) and
+    actions. An action with "W" in rewriteFields and writable=false means
+    the attribute must not be written while the trigger holds: the Evo app
+    greys such controls out and the device ignores commands for them.
+    Example (water heater): while it is off ("35" == false) the target
+    temperature, the mode and sterilization cannot be changed.
+    """
+
+    ALARM = "alarm"
+
+    def __init__(self, data: list | None) -> None:
+        super().__init__(r for r in (data or []) if isinstance(r, dict))
+
+    def locked(self, values: dict[str, str], alarms: set[str]) -> dict[str, str]:
+        """Return {attribute code: reason} for attributes that are read-only now.
+
+        The reason is either ALARM or the code of the attribute whose value
+        fired the rule. Rules are applied by ascending priority and the first
+        firing rule that rewrites a field decides it.
+        """
+        locked = {}
+        decided = set()
+        for rule in sorted(self, key=lambda r: int(r.get("priority") or 0)):
+            reason = self._fired(rule.get("trigger") or {}, values, alarms)
+            if reason is None:
+                continue
+            for action in rule.get("actions") or []:
+                code = str(action.get("name"))
+                if "W" not in str(action.get("rewriteFields") or "") or code in decided:
+                    continue
+                decided.add(code)
+                if action.get("writable") is False:
+                    locked[code] = reason
+        return locked
+
+    @classmethod
+    def _fired(cls, trigger: dict, values: dict[str, str], alarms: set[str]) -> str | None:
+        results = []
+        for cond in (trigger.get("conditions") or {}).get("condition") or []:
+            code = str(cond.get("mode"))
+            expected = {Constraint.value2code(str(v)) for v in cond.get("values") or []}
+            actual = values.get(code)
+            matched = actual is not None and Constraint.value2code(str(actual)) in expected
+            results.append((matched, code))
+        if trigger_alarms := set(trigger.get("alarms") or []):
+            results.append((bool(trigger_alarms & alarms), cls.ALARM))
+        if not results:
+            return None
+        if str(trigger.get("operator") or "AND").upper() == "OR":
+            return next((reason for matched, reason in results if matched), None)
+        return results[0][1] if all(matched for matched, _ in results) else None

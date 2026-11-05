@@ -46,6 +46,9 @@ class AuthInternalError(AuthError):
 class ManyRequestsError(HTTPError):
     pass
 
+class HaierCommandLocked(HomeAssistantError):
+    """The cloud marks the attribute read-only right now (see CFG.Modifiers)."""
+
 
 class SocketStatus(Enum):
     PRE_INITIALIZATION = 0
@@ -781,6 +784,10 @@ class HaierDevice(object):
         return []
 
     # noinspection PyMethodMayBeStatic
+    def create_entities_water_heater(self) -> list:
+        return []
+
+    # noinspection PyMethodMayBeStatic
     def create_entities_switch(self) -> list:
         return []
 
@@ -809,6 +816,7 @@ class HaierDevice(object):
             "AC": HaierAC,
             "REF": HaierREF,
             "WM": HaierWM,
+            "WH": HaierWH,
         }.get(device_type, cls)
         if device_cls is cls:
             _LOGGER.warning(f"Unknown device type: {device_type}")
@@ -1437,6 +1445,226 @@ class HaierWM(HaierDevice):
             entities.append(sensor.HaierWMRemainingTimeSensor(self))
         if self.config['status'] is not None:
             entities.append(sensor.HaierWMStatusSensor(self))
+        return entities
+
+
+class HaierWH(HaierDevice):
+    """Water heater (device type "WH"), e.g. ES80V-F7.
+
+    Attributes reported by the cloud: current/target water temperature,
+    power, heating mode (Eco = half of the tank, Max = whole tank),
+    heating status (heating / keeping warm) and sterilization (BPS).
+    """
+
+    def __init__(
+        self,
+        backend_data: dict = None,
+        **kwargs
+    ) -> None:
+        super().__init__(**kwargs)
+        self.current_temperature = None
+        self.target_temperature = None
+        self.min_temperature = 35
+        self.max_temperature = 75
+        self.status = False
+        self.heating_mode = None
+        self.heating = False
+        self.sterilization_on = False
+        self.alarms: list[str] = []
+        self._values: dict[str, str] = {}
+        self._modifiers = CFG.Modifiers([])
+        self._get_status(backend_data)
+
+    @property
+    def config(self) -> CFG.HaierWHConfig:
+        return self._config
+
+    @property
+    def problem(self) -> bool:
+        return bool(self.alarms)
+
+    @property
+    def alarm_texts(self) -> list[str]:
+        """Human-readable alarms from the cloud's own table (errors.alarmToResult)."""
+        errors = (self.status_data or {}).get("errors") or {}
+        table = errors.get("alarmToResult") or {}
+        unknown = (errors.get("undefinedAlarm") or {}).get("text") or "Unknown error"
+        return [
+            (table.get(alarm) or {}).get("text") or f"{unknown} ({alarm})"
+            for alarm in self.alarms
+        ]
+
+    def to_dict(self) -> dict:
+        data = super().to_dict()
+        data.update({
+            "current_temperature": self.current_temperature,
+            "target_temperature": self.target_temperature,
+            "min_temperature": self.min_temperature,
+            "max_temperature": self.max_temperature,
+            "status": self.status,
+            "heating_mode": self.heating_mode,
+            "heating": self.heating,
+            "sterilization_on": self.sterilization_on,
+            "alarms": self.alarms,
+            "locked": self._locked(),
+        })
+        return data
+
+    def _get_status(self, data: dict) -> dict:
+        data = super()._get_status(data)
+        self._modifiers = CFG.Modifiers(data.get("modifiers"))
+        self._set_alarms(data.get("alarms"))
+        return data
+
+    def _load_config_from_attributes(self, data: dict) -> None:
+        self._config = CFG.HaierWHConfig(self.device_model, self.hass.config.path(C.DOMAIN))
+        attributes = data.setdefault("attributes", [])
+        attrs = list(sorted(map(lambda x: CFG.Attribute(x), attributes), key=lambda x: x.code))
+        for attr in attrs:
+            self.config.attrs.append(attr)
+        self.config.merge_attributes()
+        for attr in self.config.attrs:
+            self._set_attribute_value(str(attr.code), attr.current)
+            if attr.name == "target_temperature" and attr.range:
+                self.min_temperature = float(attr.range.min_value)
+                self.max_temperature = float(attr.range.max_value)
+            _LOGGER.debug(f"{self.device_name}: {attr}")
+        self.constraint.extend(data.setdefault("constraint", []))
+
+    def _set_attribute_value(self, code: str, value: str) -> None:
+        attr = self.config.get_attr_by_code(code)
+        if not (attr and value is not None):
+            return
+        # booleans come as "true"/"false" in the attribute lists and as "1"/"0" in values
+        value = CFG.Constraint.value2code(str(value))
+        self._values[str(attr.code)] = value
+        try:
+            if attr.name == "current_temperature":
+                self.current_temperature = float(value)
+            elif attr.name == "target_temperature":
+                self.target_temperature = float(value)
+            elif attr.name == "status":
+                self.status = parsebool(value)
+            elif attr.name == "heating_mode":
+                # "none" is reported while sterilization runs, afterwards the
+                # device returns to the previous mode: keep showing that one
+                if (mode := attr.get_item_name(value)) not in ("none", "None"):
+                    self.heating_mode = mode
+            elif attr.name == "heating_status":
+                self.heating = attr.get_item_name(value) == "heating"
+            elif attr.name == "sterilization":
+                self.sterilization_on = parsebool(value)
+        except ValueError:
+            _LOGGER.warning(f"{self.device_name}: bad value {value!r} for {attr.name}")
+
+    def _set_alarms(self, alarms) -> None:
+        names = []
+        for alarm in alarms if isinstance(alarms, list) else []:
+            if isinstance(alarm, dict):
+                alarm = alarm.get("name") or alarm.get("alarmName") or alarm.get("code")
+            # "alarmCancel" is Haier's "alarms cleared" marker, not an alarm
+            if alarm and str(alarm) != "alarmCancel" and str(alarm) not in names:
+                names.append(str(alarm))
+        self.alarms = names
+
+    def _handle_status_update(self, received_message: dict) -> None:
+        for status in received_message.get("payload", {}).get("statuses") or []:
+            if isinstance(status, dict) and "alarms" in status:
+                self._set_alarms(status["alarms"])
+        super()._handle_status_update(received_message)
+
+    def _locked(self) -> dict[str, str]:
+        return self._modifiers.locked(self._values, set(self.alarms))
+
+    def _check_writable(self, name: str) -> None:
+        code = self.config[name]
+        if code is None or (reason := self._locked().get(code)) is None:
+            return
+        if reason == CFG.Modifiers.ALARM:
+            key = "wh_locked_alarm"
+        elif reason == self.config["status"]:
+            key = "wh_locked_off"
+        elif reason == self.config["sterilization"]:
+            key = "wh_locked_sterilization"
+        else:
+            key = "wh_locked"
+        raise HaierCommandLocked(
+            translation_domain=C.DOMAIN,
+            translation_key=key,
+            translation_placeholders={"device": str(self.device_name)},
+        )
+
+    def _apply(self, commands: list[dict]) -> None:
+        """Send commands and show the expected state until the device echoes it."""
+        if not commands:
+            return
+        self._send_commands(commands)
+        for command in commands:
+            self._set_attribute_value(str(command.get("commandName")), command.get("value"))
+        self.write_ha_state()
+
+    def get_heating_modes(self) -> list[str]:
+        return [m for m in self.config.get_values("heating_mode") if m != "none"]
+
+    def set_temperature(self, value: float) -> None:
+        self._check_writable("target_temperature")
+        value = int(round(min(max(float(value), self.min_temperature), self.max_temperature)))
+        self._apply([{
+            "commandName": self.config["target_temperature"],
+            "value": str(value),
+        }])
+
+    def switch_on(self) -> None:
+        if not self.status:
+            self._check_writable("status")
+            self._apply(self.get_commands("status", "on"))
+
+    def switch_off(self) -> None:
+        if self.status:
+            self._check_writable("status")
+            self._apply(self.get_commands("status", "off"))
+
+    def set_heating_mode(self, value: str) -> None:
+        if value not in self.get_heating_modes():
+            raise ValueError(f"Unsupported heating mode: {value}")
+        commands = []
+        if not self.status:
+            # the mode cannot be changed while the device is off: turn it on first
+            self._check_writable("status")
+            commands += self.get_commands("status", "on")
+        else:
+            self._check_writable("heating_mode")
+        if value != self.heating_mode or not self.status:
+            commands += self.get_commands("heating_mode", value)
+        self._apply(commands)
+
+    def set_sterilization_on(self, value: bool) -> None:
+        self._check_writable("sterilization")
+        self._apply(self.get_commands("sterilization", value))
+
+    def create_entities_water_heater(self) -> list:
+        from . import water_heater
+        return [water_heater.HaierWHEntity(self)]
+
+    def create_entities_switch(self) -> list:
+        from . import switch
+        entities = []
+        if self.config['sterilization'] is not None:
+            entities.append(switch.HaierWHSterilizationSwitch(self))
+        return entities
+
+    def create_entities_sensor(self) -> list:
+        from . import sensor
+        entities = []
+        if self.config['current_temperature'] is not None:
+            entities.append(sensor.HaierWHTemperatureSensor(self))
+        return entities
+
+    def create_entities_binary_sensor(self) -> list:
+        from . import binary_sensor
+        entities = [binary_sensor.HaierWHProblemSensor(self)]
+        if self.config['heating_status'] is not None:
+            entities.append(binary_sensor.HaierWHHeatingSensor(self))
         return entities
 
 
