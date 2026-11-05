@@ -100,6 +100,12 @@
         },
         "wh_locked": {
             "message": "{device} does not accept this command right now"
+        },
+        "not_connected": {
+            "message": "No connection to the Haier Evo cloud: the command for {device} was not sent"
+        },
+        "command_rejected": {
+            "message": "Haier Evo rejected the command for {device} (error {code})"
         }
     }
 }

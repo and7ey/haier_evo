@@ -1,24 +1,27 @@
 from __future__ import annotations
 import requests
 import json
-import time
 import threading
 import uuid
 import socket
+import ssl
 import weakref
 from aiohttp import web
 from enum import Enum
 from datetime import datetime, timezone, timedelta
-from tenacity import retry, stop_after_attempt, retry_if_exception_type, wait_fixed
+from tenacity import retry, stop_after_attempt, retry_if_exception_type
 from websocket import WebSocketApp, WebSocket
+from requests.adapters import HTTPAdapter
 from requests.exceptions import ConnectionError, Timeout, HTTPError
 from urllib.parse import urlparse, urljoin, parse_qs
 from urllib3.exceptions import NewConnectionError
+from urllib3.util.retry import Retry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode, SWING_OFF, PRESET_NONE
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.util.ssl import get_default_context
 from .logger import _LOGGER
 from .limits import ResettableLimits
 from . import config as CFG # noqa
@@ -49,6 +52,12 @@ class ManyRequestsError(HTTPError):
 class HaierCommandLocked(HomeAssistantError):
     """The cloud marks the attribute read-only right now (see CFG.Modifiers)."""
 
+class HaierNotConnected(HomeAssistantError):
+    """No WebSocket connection to the cloud: the command was not sent."""
+
+class HaierCommandRejected(HomeAssistantError):
+    """The cloud answered command_response with a non-zero errNo."""
+
 
 class SocketStatus(Enum):
     PRE_INITIALIZATION = 0
@@ -60,7 +69,7 @@ class SocketStatus(Enum):
 class HaierAPI(HomeAssistantView):
     url = "/api/haier_evo"
     name = "/api:haier_evo"
-    requires_auth = False
+    requires_auth = True
 
     def __init__(self) -> None:
         self.haier = None
@@ -187,8 +196,42 @@ class Haier(object):
         self.disconnect_requested = False
         self.socket_status: SocketStatus = SocketStatus.PRE_INITIALIZATION
         self.socket_thread = None
+        self._session = self._build_session()
+        self._connected = threading.Event()
+        # trace -> {"event": Event, "mac": str, "err": errNo} for commands awaiting command_response
+        self._pending: dict[str, dict] = {}
+        self._pending_lock = threading.Lock()
         self.reset_limits()
         self.register_view()
+
+    @staticmethod
+    def _build_session() -> requests.Session:
+        """HTTP session: keep-alive (fewer new TCP connections) and retries.
+
+        Connection errors are retried for every method (the request has not
+        reached the server), read errors only for idempotent GETs.
+        """
+        retries = Retry(
+            total=None,
+            connect=C.API_CONNECT_RETRIES,
+            read=C.API_READ_RETRIES,
+            status=0,
+            other=0,
+            backoff_factor=0.5,
+            raise_on_status=False,
+        )
+        session = requests.Session()
+        session.mount("https://", HTTPAdapter(max_retries=retries))
+        session.headers.update({
+            "User-Agent": "evo-mobile",
+            "Platform": "android",
+            "Accept": "*/*",
+        })
+        return session
+
+    @staticmethod
+    def _timeout() -> tuple[float, float]:
+        return C.API_CONNECT_TIMEOUT, C.API_READ_TIMEOUT
 
     def to_dict(self) -> dict:
         return {
@@ -260,9 +303,11 @@ class Haier(object):
 
     def stop(self) -> None:
         self.disconnect_requested = True
+        self._connected.clear()
         self.reset_limits()
         if self.socket_app is not None:
             self.socket_app.close()
+        self._session.close()  # idle keep-alive connections
         self.unregister_view()
 
     @common_limits.sleep_and_retry
@@ -271,12 +316,8 @@ class Haier(object):
         try:
             assert self.disconnect_requested is False, 'Service already stoped'
             # Setting a default timeout for requests
-            kwargs.setdefault('timeout', C.API_TIMEOUT)
-            headers = kwargs.setdefault('headers', {})
-            headers.setdefault('User-Agent', "evo-mobile")
-            headers.setdefault('Platform', "android")
-            headers.setdefault('Accept', "*/*")
-            resp = requests.request(method, url, **kwargs)
+            kwargs.setdefault('timeout', self._timeout())
+            resp = self._session.request(method, url, **kwargs)
             # _LOGGER.debug(resp.text)
             # Handling 429 Too Many Requests with retry
             if resp.status_code == 429:
@@ -403,13 +444,11 @@ class Haier(object):
         try:
             devices_path = urljoin(C.API_PATH, C.API_DEVICES.format(region=self.region))
             _LOGGER.debug(f"Getting devices, url: {devices_path}")
-            response = requests.get(devices_path, headers={
+            response = self._session.get(devices_path, headers={
                 'X-Auth-Token': self.token,
-                'User-Agent': 'evo-mobile',
-                'Platform': 'android',
                 'Device-Id': self._device_id,
                 'Content-Type': 'application/json'
-            }, timeout=C.API_TIMEOUT)
+            }, timeout=self._timeout())
             # _LOGGER.debug(response.text)
             response.raise_for_status()
             data = response.json().get("data", {})
@@ -429,13 +468,11 @@ class Haier(object):
         try:
             status_url = C.API_STATUS.format(mac=device_mac)
             _LOGGER.debug(f"Getting initial status of device {device_mac}, url: {status_url}")
-            response = requests.get(status_url, headers={
+            response = self._session.get(status_url, headers={
                 'X-Auth-Token': self.token,
-                'User-Agent': 'evo-mobile',
-                'Platform': 'android',
                 'Device-Id': self._device_id,
                 'Content-Type': 'application/json'
-            }, timeout=C.API_TIMEOUT)
+            }, timeout=self._timeout())
             # _LOGGER.debug(f"Update device {device_mac} status code: {response.status_code}")
             # _LOGGER.debug(response.text)s
             response.raise_for_status()
@@ -499,61 +536,88 @@ class Haier(object):
             self.devices
         ), None)
 
+    def _open_socket(self) -> ssl.SSLSocket:
+        """TCP + TLS with a timeout (websocket-client only knows a process-wide one).
+
+        The timeout also covers the WebSocket upgrade, _on_open removes it.
+        """
+        host = urlparse(C.API_WS_PATH).hostname
+        raw = socket.create_connection((host, 443), timeout=C.WS_CONNECT_TIMEOUT)
+        try:
+            return get_default_context().wrap_socket(raw, server_hostname=host)
+        except Exception:
+            raw.close()
+            raise
+
     def _init_ws(self) -> None:
         self.auth()
         url = urljoin(C.API_WS_PATH, self.token)
-        if self.socket_app is None:
-            self.socket_app = WebSocketApp(
-                url=url,
-                on_message=self._on_message,
-                on_open=self._on_open,
-                on_ping=self._on_ping,
-                on_close=self._on_close,
-            )
-        else:
-            self.socket_app.url = url
+        # a prepared socket is used once, so every connection gets a new app
+        self.socket_app = WebSocketApp(
+            url=url,
+            on_message=self._on_message,
+            on_open=self._on_open,
+            on_close=self._on_close,
+            socket=self._open_socket(),
+        )
 
     # noinspection PyUnusedLocal
     def _on_message(self, ws: WebSocket, message: str) -> None:
         _LOGGER.debug(f"Received WSS message: {message}")
         message_dict: dict = json.loads(message)
+        if message_dict.get("event") == "command_response":
+            self._handle_ack(message_dict)
+        if not message_dict.get("macAddress"):
+            return  # e.g. deviceStatusEvent without a device: nothing to apply
         message_device = str(message_dict.get("macAddress")).lower()
         device = self.get_device_by_id(message_device)
         if device is None:
-            _LOGGER.error(f"Got a message for a device we don't know about: {message_device}")
+            _LOGGER.debug(f"Got a message for a device we don't know about: {message_device}")
         else:
             device.on_message(message_dict)
 
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
-    def _on_open(self, ws: WebSocket) -> None:
+    def _on_open(self, ws: WebSocketApp) -> None:
+        if self.disconnect_requested:
+            ws.close()  # stop() came while this connection was being opened
+            return
+        if ws.sock is not None:
+            ws.sock.settimeout(None)  # connect timeout must not limit reads
         self.socket_status = SocketStatus.INITIALIZED
+        self._connected.set()
         _LOGGER.debug("Websocket opened")
         for device in self.devices:
             device.init_if_needed()
 
-    # noinspection PyUnusedLocal
-    def _on_ping(self, ws: WebSocket) -> None:
-        self.socket_app.sock.pong()
-
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
-    def _on_close(self, ws: WebSocket, close_code: int, close_message: str) -> None:
+    def _on_close(self, ws: WebSocketApp, close_code: int, close_message: str) -> None:
+        if ws is self.socket_app:
+            self._connected.clear()
+            self.socket_status = SocketStatus.NOT_INITIALIZED
         _LOGGER.debug(f"Websocket closed. Code: {close_code}, message: {close_message}")
-
-    def _wait_websocket(self, timeout: float) -> None:
-        current = time.time()
-        while time.time() <= (current + timeout):
-            if self.socket_status == SocketStatus.INITIALIZED:
-                return
-            time.sleep(0.1)
 
     def write_ha_state(self) -> None:
         for device in self.devices:
             device.write_ha_state()
 
-    def connect_if_needed(self, timeout: float = 4.0) -> None:
-        if self.socket_thread and self.socket_thread.is_alive():
-            return self._wait_websocket(timeout)
-        return self.connect_in_thread()
+    def _wait_connected(self, timeout: float) -> WebSocketApp | None:
+        """Return the connected app, (re)starting the connection thread if needed."""
+        if self.disconnect_requested:
+            return None
+        if not (self.socket_thread and self.socket_thread.is_alive()):
+            self.connect_in_thread()
+        if self._connected.wait(timeout):
+            return self.socket_app
+        return None
+
+    def _drop_socket(self, app: WebSocketApp | None) -> None:
+        """Close a connection that looks dead, the connection thread reconnects."""
+        if app is not None and app is self.socket_app:
+            self._connected.clear()
+            try:
+                app.close()
+            except Exception as e:
+                _LOGGER.debug(f"Failed to close websocket: {e}")
 
     def connect(self) -> None:
         self.socket_status = SocketStatus.NOT_INITIALIZED
@@ -571,26 +635,113 @@ class Haier(object):
     def run_forever(self) -> None:
         _LOGGER.debug(f"Connecting to websocket ({C.API_WS_PATH})")
         try:
+            self._connected.clear()
             self.socket_status = SocketStatus.INITIALIZING
             self._init_ws()
-            self.socket_app.run_forever(ping_interval=10)
+            if self.disconnect_requested:
+                self.socket_app.prepared_socket.close()
+                return
+            self.socket_app.run_forever(
+                ping_interval=C.WS_PING_INTERVAL,
+                ping_timeout=C.WS_PING_TIMEOUT,
+            )
         except Exception as e:
-            _LOGGER.error(f"Error connecting to websocket: {e}")
+            _LOGGER.warning(f"Error connecting to websocket: {e!r}")
+        finally:
+            self._connected.clear()
+            self.socket_status = SocketStatus.NOT_INITIALIZED
 
-    @retry(
-        retry=retry_if_exception_type(Exception),
-        stop=stop_after_attempt(2),
-        retry_error_callback=lambda _: None,
-        wait=wait_fixed(0.5),
-    )
     def send_message(self, payload: str) -> None:
+        """Send a raw message as is, without waiting (debug HTTP endpoint)."""
         _LOGGER.debug(f"Sending message: {payload}")
-        try:
-            self.socket_app.send(payload)
-        except Exception as e:
-            _LOGGER.warning(f"Failed to send message: {e}")
-            self.connect_if_needed()
-            raise e
+        app = self.socket_app if self._connected.is_set() else None
+        if app is None:
+            raise HaierNotConnected("Websocket is not connected")
+        app.send(payload)
+
+    def _handle_ack(self, message: dict) -> None:
+        trace = message.get("trace")
+        err = message.get("errNo")
+        mac = str(message.get("macAddress") or "").lower()
+        with self._pending_lock:
+            pending = self._pending.get(trace) if trace else None
+            if pending is None and not trace:
+                # no trace in the answer: count it for the oldest command to that device
+                pending = next((p for p in self._pending.values() if p["mac"] == mac), None)
+            if pending is None:
+                _LOGGER.debug(f"command_response for a foreign or late command: {message}")
+                return
+            pending["err"] = err
+            pending["event"].set()
+
+    def send_command(self, message: dict) -> None:
+        """Send a device command and wait for its command_response.
+
+        Commands carry absolute values, so re-sending one is harmless. Without
+        an answer the socket is treated as dead (it may accept writes but not
+        deliver them), dropped, and the command goes once more over a new one.
+        """
+        mac = str(message.get("macAddress") or "").lower()
+        device = self.get_device_by_id(mac)
+        name = str(device.device_name if device else mac)
+        if threading.current_thread() is self.socket_thread:
+            # called from a websocket callback: an ack could not arrive while we wait
+            self.send_message(json.dumps({**message, "trace": str(uuid.uuid4())}))
+            return
+        sent = False
+        for attempt in (1, 2):
+            app = self._wait_connected(C.WS_SEND_WAIT)
+            if app is None:
+                break
+            trace = str(uuid.uuid4())
+            pending = {"event": threading.Event(), "mac": mac, "err": None}
+            with self._pending_lock:
+                self._pending[trace] = pending
+            try:
+                payload = json.dumps({**message, "trace": trace})
+                _LOGGER.debug(f"Sending message: {payload}")
+                app.send(payload)
+                sent = True
+                acked = pending["event"].wait(C.WS_ACK_TIMEOUT)
+            except Exception as e:
+                _LOGGER.warning(f"{name}: failed to send a command: {e!r}")
+                acked = False
+            finally:
+                with self._pending_lock:
+                    self._pending.pop(trace, None)
+            if acked:
+                err = pending["err"]
+                if str(err) not in ("0", "None"):
+                    # a non-zero errNo also comes for values the device already has
+                    # (-1 for a setpoint or mode, 22 for power): check the real state
+                    data = device.resync() if device is not None else None
+                    if data is not None and already_applied(message, data):
+                        _LOGGER.debug(f"{name}: errNo={err}, the device already has the requested values")
+                        return
+                    _LOGGER.warning(f"{name}: the cloud rejected a command, errNo={err}")
+                    raise HaierCommandRejected(
+                        translation_domain=C.DOMAIN,
+                        translation_key="command_rejected",
+                        translation_placeholders={"device": name, "code": str(err)},
+                    )
+                if attempt > 1:
+                    _LOGGER.info(f"{name}: command confirmed after re-sending")
+                return
+            _LOGGER.warning(
+                f"{name}: no confirmation in {C.WS_ACK_TIMEOUT} s (attempt {attempt}), "
+                f"reconnecting the websocket"
+            )
+            self._drop_socket(app)
+        if not sent:
+            raise HaierNotConnected(
+                translation_domain=C.DOMAIN,
+                translation_key="not_connected",
+                translation_placeholders={"device": name},
+            )
+        # sent but never confirmed: show the real state instead of the expected one
+        _LOGGER.error(f"{name}: command was not confirmed by the cloud, reading the state back")
+        if device is not None:
+            device.resync()
 
 
 class HaierDevice(object):
@@ -718,7 +869,27 @@ class HaierDevice(object):
         self.sw_version = payload.get("swVersion") or self.sw_version
 
     def _send_message(self, message: dict) -> None:
-        self._haier.send_message(json.dumps(message))
+        self._haier.send_command(message)
+
+    def update_from_backend(self, data: dict) -> None:
+        """Apply a fresh REST status (values only, the config stays)."""
+        if not isinstance(data, dict) or self.config is None:
+            return
+        self.available = data.get("status") or "ONLINE"
+        for attr in data.get("attributes") or []:
+            if isinstance(attr, dict) and attr.get("currentValue") is not None:
+                self._set_attribute_value(str(attr.get("name")), attr.get("currentValue"))
+        self.write_ha_state()
+
+    def resync(self) -> dict | None:
+        """Read the real state back from the cloud (after a lost or rejected command)."""
+        try:
+            data = self._haier.pull_device_data(self.device_id)
+        except Exception as e:
+            _LOGGER.warning(f"{self.device_name}: failed to read the state back: {e!r}")
+            return None
+        self.update_from_backend(data)
+        return data
 
     def _send_commands(self, commands: list[dict]) -> None:
         self._send_group_command(commands)
@@ -1573,6 +1744,11 @@ class HaierWH(HaierDevice):
                 self._set_alarms(status["alarms"])
         super()._handle_status_update(received_message)
 
+    def update_from_backend(self, data: dict) -> None:
+        if isinstance(data, dict):
+            self._set_alarms(data.get("alarms"))
+        super().update_from_backend(data)
+
     def _locked(self) -> dict[str, str]:
         return self._modifiers.locked(self._values, set(self.alarms))
 
@@ -1615,14 +1791,12 @@ class HaierWH(HaierDevice):
         }])
 
     def switch_on(self) -> None:
-        if not self.status:
-            self._check_writable("status")
-            self._apply(self.get_commands("status", "on"))
+        self._check_writable("status")
+        self._apply(self.get_commands("status", "on"))
 
     def switch_off(self) -> None:
-        if self.status:
-            self._check_writable("status")
-            self._apply(self.get_commands("status", "off"))
+        self._check_writable("status")
+        self._apply(self.get_commands("status", "off"))
 
     def set_heating_mode(self, value: str) -> None:
         if value not in self.get_heating_modes():
@@ -1634,8 +1808,7 @@ class HaierWH(HaierDevice):
             commands += self.get_commands("status", "on")
         else:
             self._check_writable("heating_mode")
-        if value != self.heating_mode or not self.status:
-            commands += self.get_commands("heating_mode", value)
+        commands += self.get_commands("heating_mode", value)
         self._apply(commands)
 
     def set_sterilization_on(self, value: bool) -> None:
@@ -1666,6 +1839,29 @@ class HaierWH(HaierDevice):
         if self.config['heating_status'] is not None:
             entities.append(binary_sensor.HaierWHHeatingSensor(self))
         return entities
+
+
+def _same_value(a, b) -> bool:
+    a, b = CFG.Constraint.value2code(str(a)), CFG.Constraint.value2code(str(b))
+    try:
+        return float(a) == float(b)  # "24.00" == "24"
+    except ValueError:
+        return a == b
+
+
+def already_applied(message: dict, data: dict) -> bool:
+    """True if a REST status already holds every value the command asks for."""
+    current = {
+        str(a.get("name")): a.get("currentValue")
+        for a in (data.get("attributes") or [])
+        if isinstance(a, dict)
+    }
+    commands = message.get("commands") or ([message["command"]] if message.get("command") else [])
+    return bool(commands) and all(
+        current.get(str(c.get("commandName"))) is not None
+        and _same_value(current[str(c.get("commandName"))], c.get("value"))
+        for c in commands
+    )
 
 
 def parsebool(value) -> bool:
