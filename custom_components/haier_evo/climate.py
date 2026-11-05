@@ -96,8 +96,18 @@ class HaierACEntity(ClimateEntity):
         return self._device.device_info
 
     async def async_set_temperature(self, **kwargs) -> None:
-        """Set new target temperature."""
+        """Set new target temperature (and the mode, if the call has one)."""
         temp = kwargs.get("temperature", self.target_temperature)
+        if (hvac_mode := kwargs.get("hvac_mode")) is not None:
+            if self._device.status and hvac_mode != HVACMode.OFF:
+                # running: the new mode first (fan-only has no setpoint)
+                await self.hass.async_add_executor_job(self.set_hvac_mode, hvac_mode)
+                await self.hass.async_add_executor_job(self.set_temperature, temp)
+            else:
+                # off: the setpoint is kept and goes out together with "power on"
+                await self.hass.async_add_executor_job(self.set_temperature, temp)
+                await self.hass.async_add_executor_job(self.set_hvac_mode, hvac_mode)
+            return
         await self.hass.async_add_executor_job(self.set_temperature, temp)
 
     def set_temperature(self, temp: float) -> None:

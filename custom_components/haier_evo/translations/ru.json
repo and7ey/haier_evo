@@ -89,23 +89,26 @@
         }
     },
     "exceptions": {
-        "wh_locked_off": {
-            "message": "{device} выключен: сначала включите его"
-        },
-        "wh_locked_sterilization": {
-            "message": "{device}: идёт дезинфекция (BPS), целевую температуру нельзя изменить до её окончания"
-        },
-        "wh_locked_alarm": {
-            "message": "{device} сообщает об ошибке, управление заблокировано"
-        },
-        "wh_locked": {
-            "message": "{device} сейчас не принимает эту команду"
-        },
         "not_connected": {
             "message": "Нет связи с облаком Haier Evo: команда для «{device}» не отправлена"
         },
         "command_rejected": {
             "message": "Haier Evo отклонил команду для «{device}» (код ошибки {code})"
+        },
+        "locked_off": {
+            "message": "{device} выключен: «{attribute}» сейчас изменить нельзя"
+        },
+        "locked_alarm": {
+            "message": "{device} сообщает об ошибке: «{attribute}» сейчас изменить нельзя"
+        },
+        "locked_by": {
+            "message": "{device}: «{attribute}» нельзя изменить, пока включено «{cause}»"
+        },
+        "locked_mode": {
+            "message": "{device}: в режиме «{mode}» «{attribute}» изменить нельзя"
+        },
+        "value_not_allowed": {
+            "message": "{device}: для «{attribute}» сейчас доступно только: {allowed}"
         }
     }
 }

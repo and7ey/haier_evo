@@ -642,6 +642,29 @@ class Modifiers(list):
                     locked[code] = reason
         return locked
 
+    def allowed(self, values: dict[str, str], alarms: set[str]) -> dict[str, tuple[set[str], list[str]]]:
+        """Return {attribute code: (allowed values, their cloud names)} restricted right now.
+
+        "V" actions narrow the value list, e.g. fan speed without "auto" in
+        fan-only mode. The first firing rule by priority decides a field.
+        """
+        allowed = {}
+        for rule in sorted(self, key=lambda r: int(r.get("priority") or 0)):
+            if self._fired(rule.get("trigger") or {}, values, alarms) is None:
+                continue
+            for action in rule.get("actions") or []:
+                code = str(action.get("name"))
+                if "V" not in str(action.get("rewriteFields") or "") or code in allowed:
+                    continue
+                items = ((action.get("valueRange") or {}).get("list") or {}).get("data") or []
+                items = [i for i in items if isinstance(i, dict) and i.get("data") is not None]
+                if items:
+                    allowed[code] = (
+                        {Constraint.value2code(str(i["data"])) for i in items},
+                        [str(i.get("name") or i["data"]) for i in items],
+                    )
+        return allowed
+
     @classmethod
     def _fired(cls, trigger: dict, values: dict[str, str], alarms: set[str]) -> str | None:
         results = []
