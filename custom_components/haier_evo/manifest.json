@@ -1,14 +1,14 @@
 {
   "domain": "haier_evo",
   "name": "Haier Evo",
-  "codeowners": ["@and7ey"],
+  "codeowners": ["@AGrigorii"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/and7ey/haier_evo",
+  "documentation": "https://github.com/AGrigorii/haier_evo",
   "homekit": {},
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/and7ey/haier_evo/issues",
+  "issue_tracker": "https://github.com/AGrigorii/haier_evo/issues",
   "requirements": ["requests", "websocket-client", "ratelimit"],
-  "version": "0.3.15",
+  "version": "1.0.0",
   "zeroconf": []
 }
