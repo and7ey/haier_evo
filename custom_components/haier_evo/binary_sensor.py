@@ -1,5 +1,6 @@
 import weakref
 from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from .const import DOMAIN
 from . import api
@@ -89,11 +90,15 @@ class HaierWHHeatingSensor(HaierBinarySensor):
         self._attr_name = f"{device.device_name} Нагрев"
 
 
-class HaierWHProblemSensor(HaierBinarySensor):
-    """On while the device reports alarms (E3/E6/H0...), texts come from the cloud."""
+class HaierProblemSensor(HaierBinarySensor):
+    """On while the device reports a fault (E3/E6/H0 on water heaters, AC unit errors).
+
+    Codes and the cloud's own texts are in the attributes; maintenance
+    reminders (filter cleaning) have their own sensor.
+    """
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
-    def __init__(self, device: api.HaierWH) -> None:
+    def __init__(self, device: api.HaierDevice) -> None:
         super().__init__(device)
         self._device_attr_name = "problem"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_problem"
@@ -105,3 +110,31 @@ class HaierWHProblemSensor(HaierBinarySensor):
             "alarms": self._device.alarms,
             "errors": self._device.alarm_texts,
         }
+
+
+class HaierFilterSensor(HaierBinarySensor):
+    """The cloud's filterCleaningAlarm: time to clean the AC filter."""
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = "mdi:air-filter"
+
+    def __init__(self, device: api.HaierDevice) -> None:
+        super().__init__(device)
+        self._device_attr_name = "filter_cleaning"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_filter"
+        self._attr_name = f"{device.device_name} Чистка фильтра"
+
+
+class HaierConnectivitySensor(HaierBinarySensor):
+    """Online/offline as the cloud reports it (ONLINE / OFFLINE)."""
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, device: api.HaierDevice) -> None:
+        super().__init__(device)
+        self._device_attr_name = "connected"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_connected"
+        self._attr_name = f"{device.device_name} Связь с облаком"
+
+    @property
+    def available(self) -> bool:
+        return True
