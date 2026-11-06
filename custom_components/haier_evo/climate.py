@@ -19,6 +19,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     return True
 
 
+def _with_current(options: list[str] | None, current: str | None) -> list[str] | None:
+    """Options plus the current value when the unit sits in a position the app does not offer."""
+    if not options or not current or current in options:
+        return options
+    return [*options, current]
+
+
 # https://developers.home-assistant.io/docs/core/entity/climate
 class HaierACEntity(ClimateEntity):
     _attr_translation_key = "conditioner"
@@ -54,6 +61,14 @@ class HaierACEntity(ClimateEntity):
     @property
     def swing_mode(self) -> str:
         return self._device.swing_mode
+
+    @property
+    def swing_horizontal_modes(self) -> list[str] | None:
+        return _with_current(self._attr_swing_horizontal_modes, self.swing_horizontal_mode)
+
+    @property
+    def swing_modes(self) -> list[str] | None:
+        return _with_current(self._attr_swing_modes, self.swing_mode)
 
     @property
     def preset_mode(self) -> str:
