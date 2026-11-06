@@ -1,26 +1,29 @@
 {
     "config": {
         "abort": {
-            "already_configured": "already configured"
+            "already_configured": "Этот аккаунт Haier Evo уже добавлен",
+            "reauth_successful": "Вход выполнен, интеграция перезапускается"
         },
         "error": {
-            "cannot_connect": "cannot connect",
-            "invalid_auth": "invalid_auth",
-            "unknown": "unknown"
+            "cannot_connect": "Облако Haier Evo недоступно, попробуйте позже",
+            "invalid_auth": "Неверный логин или пароль",
+            "unknown": "Непредвиденная ошибка, подробности в журнале"
         },
         "step": {
             "user": {
+                "title": "Аккаунт Haier Evo",
+                "description": "Пароль нужен один раз для входа и не сохраняется: Home Assistant хранит только токены облака.",
                 "data": {
-                    "password": "Пароль",
                     "email": "Логин (email)",
+                    "password": "Пароль",
                     "region": "Регион"
                 }
             },
-            "init": {
+            "reauth_confirm": {
+                "title": "Повторный вход в Haier Evo",
+                "description": "Облако Haier Evo больше не принимает сохранённый вход для {email}. Введите пароль ещё раз, он не сохраняется.",
                 "data": {
-                    "password": "Пароль",
-                    "email": "Логин (email)",
-                    "region": "Регион"
+                    "password": "Пароль"
                 }
             }
         }
@@ -109,6 +112,9 @@
         },
         "value_not_allowed": {
             "message": "{device}: для «{attribute}» сейчас доступно только: {allowed}"
+        },
+        "too_many_commands": {
+            "message": "{device}: слишком много команд ждут связи с облаком Haier Evo, попробуйте позже"
         }
     }
 }
