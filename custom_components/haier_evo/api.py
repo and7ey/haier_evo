@@ -535,7 +535,9 @@ class Haier(object):
         The list is found by its component name ("deviceList"), not by the
         layout UUID the app happens to use today; every such block counts, a
         device listed twice is taken once, a block that cannot be read is
-        skipped. The cloud's answer is not changed.
+        skipped. Appliances registered without Wi-Fi come in a block of their
+        own ("non-iot" links, UUID ids) and are left out quietly. The cloud's
+        answer is not changed.
         """
         listed, seen = [], set()
         presentation = data.get("presentation") if isinstance(data, dict) else None
@@ -559,13 +561,17 @@ class Haier(object):
             for d in devices if isinstance(devices, list) else []:
                 if not isinstance(d, dict):
                     continue
-                device_link = (d.get('action') or {}).get('link', '')
-                query_params = parse_qs(urlparse(str(device_link)).query)
+                device_link = urlparse(str((d.get('action') or {}).get('link', '')))
+                if device_link.netloc == "non-iot" or device_link.path.startswith("/non-iot"):
+                    # an appliance registered in the app without Wi-Fi (dishwasher,
+                    # hood...): its own "deviceList" block, UUID ids, nothing to control
+                    continue
+                query_params = parse_qs(device_link.query)
                 device_type = query_params.get('type', ['UNKNOWN'])[0]
                 device_mac = query_params.get('deviceId', [''])[0].replace('%3A', ':')
                 device_serial = query_params.get('serialNum', [''])[0]
                 if not MAC_RE.match(device_mac):
-                    _LOGGER.warning(f"Skipping a device with an unexpected id: {device_mac!r}")
+                    _LOGGER.debug(f"Skipping a device list item with an unexpected id: {device_mac!r}")
                     continue
                 if device_mac.lower() in seen:
                     continue
