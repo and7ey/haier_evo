@@ -36,6 +36,9 @@ WS_ACK_TIMEOUT = 6
 # One command never holds an executor thread longer than WS_COMMAND_BUDGET s,
 # and at most WS_MAX_PENDING_COMMANDS wait at once (others fail after WS_SLOT_WAIT s).
 WS_COMMAND_BUDGET = 30
+# After the websocket was down this long (s), the state of every device is
+# read again: changes made meanwhile (remote, app) sent no event to us.
+WS_RESYNC_AFTER = 30
 WS_MAX_PENDING_COMMANDS = 4
 WS_SLOT_WAIT = 1
 # How many setups in a row may retry because the cloud returned fewer devices

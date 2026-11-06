@@ -42,6 +42,10 @@ class CannotConnect(exceptions.HomeAssistantError):
     """The cloud could not be reached."""
 
 
+class TooManyRequests(exceptions.HomeAssistantError):
+    """The cloud limits sign-ins (HTTP 429): not a wrong password."""
+
+
 async def sign_in(hass: HomeAssistant, email: str, password: str, region: str) -> dict:
     """Sign in once and return the tokens; the password is not kept anywhere."""
     def run() -> dict:
@@ -55,7 +59,11 @@ async def sign_in(hass: HomeAssistant, email: str, password: str, region: str) -
         return await hass.async_add_executor_job(run)
     except api.AuthUserError as e:
         raise InvalidCredentials from e
+    except api.ManyRequestsError as e:
+        raise TooManyRequests from e
     except api.InvalidAuth as e:
+        if isinstance(e.__cause__, api.ManyRequestsError):
+            raise TooManyRequests from e
         if isinstance(e.__cause__, (RequestsConnectionError, Timeout)):
             raise CannotConnect from e
         raise InvalidCredentials from e
@@ -73,6 +81,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors["base"] = "invalid_auth"
         except CannotConnect:
             errors["base"] = "cannot_connect"
+        except TooManyRequests:
+            errors["base"] = "too_many_requests"
         except Exception:  # pylint: disable=broad-except
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"

@@ -185,6 +185,8 @@ class Haier(object):
         self.socket_thread = None
         self._session = self._build_session()
         self._connected = threading.Event()
+        self._ever_connected = False
+        self._down_since: float | None = None  # time.monotonic() when the socket was lost
         # trace -> {"event": Event, "mac": str, "err": errNo} for commands awaiting command_response
         self._pending: dict[str, dict] = {}
         self._pending_lock = threading.Lock()
@@ -528,48 +530,51 @@ class Haier(object):
 
     @staticmethod
     def _parse_device_list(data: dict) -> list[dict]:
-        """Devices of the app's home screen: type, MAC, serial and title of each."""
-        listed = []
-        need_container_id = "72a6d224-cb66-4e6d-b427-2e4609252684"
-        presentation = data.setdefault("presentation", {})
-        layout = presentation.setdefault("layout", {})
-        containers = layout.setdefault("scrollContainer", [])
-        for item in containers[:]:
-            tracking_data = item.setdefault("trackingData", {})
-            component = tracking_data.setdefault("component", {})
-            component_id = component.setdefault("componentId", "")
-            # _LOGGER.debug(component_id)
-            component_name = component.setdefault("componentName", "")
-            if not (
-                component_name == "deviceList"
-                and component_id == need_container_id
-            ):
-                containers.remove(item)
+        """Devices of the app's home screen: type, MAC, serial and title of each.
+
+        The list is found by its component name ("deviceList"), not by the
+        layout UUID the app happens to use today; every such block counts, a
+        device listed twice is taken once, a block that cannot be read is
+        skipped. The cloud's answer is not changed.
+        """
+        listed, seen = [], set()
+        presentation = data.get("presentation") if isinstance(data, dict) else None
+        layout = presentation.get("layout") if isinstance(presentation, dict) else None
+        containers = layout.get("scrollContainer") if isinstance(layout, dict) else None
+        for item in containers if isinstance(containers, list) else []:
+            if not isinstance(item, dict):
                 continue
-            state_data = item.setdefault("state", "{}")
-            state_json = item['state'] = (
-                json.loads(state_data)
-                if isinstance(state_data, str)
-                else state_data
-            )
-            devices = state_json.setdefault("items", [])
-            for d in devices:
-                device_title = d.get('title', '')
-                device_link = d.get('action', {}).get('link', '')
-                parsed_link = urlparse(device_link)
-                query_params = parse_qs(parsed_link.query)
-                device_type = query_params.setdefault('type', ['UNKNOWN'])[0]
-                device_mac = query_params.get('deviceId', [''])[0]
-                device_mac = device_mac.replace('%3A', ':')
+            tracking = item.get("trackingData")
+            component = tracking.get("component") if isinstance(tracking, dict) else None
+            if not isinstance(component, dict) or component.get("componentName") != "deviceList":
+                continue
+            state = item.get("state") or {}
+            if isinstance(state, str):
+                try:
+                    state = json.loads(state)
+                except ValueError:
+                    _LOGGER.warning("Haier Evo: the device list block cannot be read, skipping it")
+                    continue
+            devices = state.get("items") if isinstance(state, dict) else None
+            for d in devices if isinstance(devices, list) else []:
+                if not isinstance(d, dict):
+                    continue
+                device_link = (d.get('action') or {}).get('link', '')
+                query_params = parse_qs(urlparse(str(device_link)).query)
+                device_type = query_params.get('type', ['UNKNOWN'])[0]
+                device_mac = query_params.get('deviceId', [''])[0].replace('%3A', ':')
                 device_serial = query_params.get('serialNum', [''])[0]
                 if not MAC_RE.match(device_mac):
                     _LOGGER.warning(f"Skipping a device with an unexpected id: {device_mac!r}")
                     continue
+                if device_mac.lower() in seen:
+                    continue
+                seen.add(device_mac.lower())
                 listed.append({
                     "device_type": device_type,
                     "device_mac": device_mac,
                     "device_serial": device_serial,
-                    "device_title": device_title,
+                    "device_title": d.get('title', ''),
                 })
         return listed
 
@@ -601,13 +606,21 @@ class Haier(object):
             on_message=self._on_message,
             on_open=self._on_open,
             on_close=self._on_close,
+            on_error=self._on_error,
             socket=self._open_socket(),
         )
 
     # noinspection PyUnusedLocal
     def _on_message(self, ws: WebSocket, message: str) -> None:
         _LOGGER.debug(f"Received WSS message: {message}")
-        message_dict: dict = json.loads(message)
+        try:
+            message_dict = json.loads(message)
+        except (TypeError, ValueError):
+            _LOGGER.warning(f"Haier Evo: an unreadable websocket message ({len(message or '')} bytes) was ignored")
+            return
+        if not isinstance(message_dict, dict):
+            _LOGGER.debug("Haier Evo: a websocket message that is not an object was ignored")
+            return
         if message_dict.get("event") == "command_response":
             self._handle_ack(message_dict)
         if not message_dict.get("macAddress"):
@@ -629,11 +642,35 @@ class Haier(object):
         self.socket_status = SocketStatus.INITIALIZED
         self._connected.set()
         _LOGGER.debug("Websocket opened")
+        down_since, self._down_since = self._down_since, None
+        self._ever_connected = True
+        if down_since is not None and time.monotonic() - down_since >= C.WS_RESYNC_AFTER:
+            _LOGGER.info(f"Haier Evo: the connection was down for {int(time.monotonic() - down_since)} s, "
+                         f"reading the state of the devices again")
+            threading.Thread(target=self._resync_all, name="haier_evo resync", daemon=True).start()
         for device in self.devices:
             try:
                 device.init_if_needed()
             except Exception as e:
                 _LOGGER.warning(f"{device.device_name}: init after connect failed: {e!r}")
+
+    # noinspection PyUnusedLocal
+    def _on_error(self, ws: WebSocketApp, error: Exception) -> None:
+        """websocket-client reports here what ends run_forever, the handshake included."""
+        status = getattr(error, "status_code", None)
+        if status in (401, 403):
+            # the cloud dropped the token before it expired: refresh it for the next try
+            _LOGGER.info(f"Haier Evo: the websocket refused the token (HTTP {status}), refreshing it")
+            with self._lock:
+                self.tokenexpire = None
+        else:
+            _LOGGER.debug(f"Websocket error: {error!r}")
+
+    def _resync_all(self) -> None:
+        for device in list(self.devices):
+            if self.disconnect_requested:
+                return
+            device.resync()
 
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def _on_close(self, ws: WebSocketApp, close_code: int, close_message: str) -> None:
@@ -702,6 +739,8 @@ class Haier(object):
         finally:
             self._connected.clear()
             self.socket_status = SocketStatus.NOT_INITIALIZED
+            if self._ever_connected and self._down_since is None:
+                self._down_since = time.monotonic()
 
     def send_message(self, payload: str) -> None:
         """Send a raw message as is, without waiting (debug HTTP endpoint)."""
@@ -2042,7 +2081,7 @@ class HaierWH(HaierDevice):
             elif attr.name == "heating_mode":
                 # "none" is reported while sterilization runs, afterwards the
                 # device returns to the previous mode: keep showing that one
-                if (mode := attr.get_item_name(value)) not in ("none", "None"):
+                if (mode := attr.get_item_name(value)) not in (None, "none", "None"):
                     self.heating_mode = mode
             elif attr.name == "heating_status":
                 self.heating = attr.get_item_name(value) == "heating"

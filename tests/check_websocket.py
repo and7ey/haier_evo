@@ -1,5 +1,6 @@
 """Websocket/ack/reconnect logic of api.Haier against a local fake Haier server."""
 import sys, json, threading, time, asyncio, socket, logging
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 root = sys.argv[1] if len(sys.argv) > 1 else str(_HERE.parent)
@@ -17,15 +18,24 @@ C.WS_CONNECT_TIMEOUT = 2
 
 PORT = 18765
 MAC = "5c:01:3b:00:00:01"
-S = {"mode": "normal", "connections": 0, "commands": [], "ping_reply": True, "active": 0}
+S = {"mode": "normal", "connections": 0, "commands": [], "ping_reply": True, "active": 0,
+     "tokens": [], "reject_handshake": 0, "open_ws": [], "junk": False}
 
 
 async def ws_handler(request):
+    S["tokens"].append(request.match_info["token"])
+    if S["reject_handshake"] > 0:
+        S["reject_handshake"] -= 1
+        return web.Response(status=401)  # the cloud dropped the token
     S["connections"] += 1
     conn = S["connections"]
     ws = web.WebSocketResponse(autoping=S["ping_reply"])
     await ws.prepare(request)
     S["active"] += 1
+    S["open_ws"].append(ws)
+    if S["junk"]:
+        for junk in ("not json at all", "[1, 2]", '"text"', ""):
+            await ws.send_str(junk)
     try:
         await serve(ws, conn)
     finally:
@@ -51,6 +61,7 @@ async def serve(ws, conn):
 def run_server():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    S["loop"] = loop
     app = web.Application()
     app.router.add_get("/ws/{token}", ws_handler)
     runner = web.AppRunner(app)
@@ -103,7 +114,7 @@ def check(name, cond, info=""):
 
 
 def scenario(mode, ping_reply=True, port=PORT, send_on_open=False):
-    S.update(mode=mode, connections=0, commands=[], ping_reply=ping_reply)
+    S.update(mode=mode, connections=0, commands=[], ping_reply=ping_reply, tokens=[], open_ws=[])
     C.API_WS_PATH = f"ws://127.0.0.1:{port}/ws/"
     h = TestHaier(None, "e", "p", "ru")
     h.port = port
@@ -272,6 +283,61 @@ for delay in (0, 0.01, 0.05, 1):
     h.stop()
     time.sleep(2.5)
     check(f"stop() after {delay}s leaves no open connection", S["active"] == 0, f"active={S['active']} connections={S['connections']}")
+
+# ---- 1.5.1
+def drop_all():
+    """The server closes every websocket (like the cloud dropping us)."""
+    async def close():
+        for ws in list(S["open_ws"]):
+            await ws.close()
+    asyncio.run_coroutine_threadsafe(close(), S["loop"]).result(5)
+
+def wait(cond, timeout):
+    end = time.time() + timeout
+    while time.time() < end and not cond():
+        time.sleep(0.1)
+    return cond()
+
+# 14. HTTP 401 on the websocket handshake: the token is refreshed for the next try
+class TokenHaier(TestHaier):
+    auths = 0
+    def auth(self):
+        TokenHaier.auths += 1
+        if self.tokenexpire is None:  # what auth() does: refresh an expired token
+            self.token = f"fresh{TokenHaier.auths}"
+            self.tokenexpire = datetime.now(timezone.utc) + timedelta(minutes=10)
+S.update(mode="normal", connections=0, commands=[], ping_reply=True, tokens=[], open_ws=[], reject_handshake=1)
+C.API_WS_PATH = f"ws://127.0.0.1:{PORT}/ws/"
+h = TokenHaier(None, "e", "p", "ru")
+h.devices = [Dev(h)]
+h.token, h.tokenexpire = "old", datetime.now(timezone.utc) + timedelta(minutes=10)
+api.Haier.connect_limits.reset()
+h.connect_in_thread()
+connected = wait(lambda: h._connected.is_set(), 15)
+check("handshake 401: next try connects with a refreshed token",
+      connected and S["tokens"][0] == "old" and S["tokens"][-1].startswith("fresh"), f"tokens={S['tokens']}")
+h.stop(); time.sleep(0.3)
+
+# 15. state read again after the connection was down for long, not after a short drop
+for threshold, want, label in ((1, 1, "long outage: state read again"), (600, 0, "short drop: no extra reads")):
+    C.WS_RESYNC_AFTER = threshold
+    h = scenario("normal")
+    wait(lambda: h._connected.is_set(), 5); time.sleep(0.3)
+    first = h.devices[0].resyncs
+    drop_all()
+    wait(lambda: S["connections"] >= 2 and h._connected.is_set(), 15); time.sleep(1)
+    check(f"{label} (first connection: none)", (first, h.devices[0].resyncs), (0, want))
+    h.stop(); time.sleep(0.3)
+C.WS_RESYNC_AFTER = 30
+
+# 16. unreadable messages are ignored, the socket stays and commands work
+S["junk"] = True
+h = scenario("normal")
+wait(lambda: h._connected.is_set(), 5); time.sleep(0.5)
+err, dt = timed(lambda: h.send_command(cmd("1", "71")))
+check("unreadable messages ignored: same socket, command confirmed", err is None and S["connections"] == 1, f"{err!r} conns={S['connections']}")
+S["junk"] = False
+h.stop(); time.sleep(0.3)
 
 print("FAILS:", fails)
 sys.exit(1 if fails else 0)

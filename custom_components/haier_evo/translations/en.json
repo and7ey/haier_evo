@@ -7,6 +7,7 @@
         "error": {
             "cannot_connect": "Cannot reach the Haier Evo cloud, try again later",
             "invalid_auth": "Wrong e-mail or password",
+            "too_many_requests": "The Haier Evo cloud limits sign-ins after too many attempts, try again in a few minutes",
             "unknown": "Unexpected error, see the log"
         },
         "step": {
