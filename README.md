@@ -1,9 +1,13 @@
 # Haier Evo integration
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs) [![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#stable)
+[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz) [![Release](https://img.shields.io/github/v/release/AGrigorii/haier_evo)](https://github.com/AGrigorii/haier_evo/releases/latest) [![Validate](https://github.com/AGrigorii/haier_evo/actions/workflows/validate.yaml/badge.svg)](https://github.com/AGrigorii/haier_evo/actions/workflows/validate.yaml) [![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#stable)
 
 Неофициальная интеграция для работы [Haier Evo](https://haieronline.ru/evo-iot/) (RU, KZ, BY).
 
-Форк [and7ey/haier_evo](https://github.com/and7ey/haier_evo) с поддержкой водонагревателей (бойлеров).
+Форк [and7ey/haier_evo](https://github.com/and7ey/haier_evo): поддержка водонагревателей (бойлеров), устойчивая работа при сбоях облака Haier, названия функций как в приложении Evo.
+
+[![Открыть репозиторий в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=AGrigorii&repository=haier_evo&category=integration)
+
+> **English.** Unofficial Home Assistant integration for the Haier Evo cloud (Russia, Kazakhstan, Belarus): air conditioners, refrigerators and F7 water heaters (tested on ES80V-F7). Install it through HACS as a custom repository (the button above adds it in one click), restart Home Assistant, then add **Haier Evo** in *Settings → Devices & services* and sign in with your Evo account. The rest of this page is in Russian.
 
 ## Поддерживаемые устройства
 Ниже приведен список типов устройств, работа с которыми была **проверена пользователями**:
@@ -97,7 +101,11 @@ Haier предлагает разные мобильные приложения 
 
 ### 2. Добавление репозитория Haier Evo
 
-Так как интеграция является кастомной, её необходимо добавить в HACS как пользовательский репозиторий:
+Так как интеграция является кастомной, её необходимо добавить в HACS как пользовательский репозиторий. Быстрее всего — кнопкой: она откроет HACS в вашем Home Assistant с уже подставленным репозиторием, останется нажать **Download**.
+
+[![Открыть репозиторий в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=AGrigorii&repository=haier_evo&category=integration)
+
+Или вручную:
 
 1. Откройте **HACS** в боковой панели Home Assistant.
 2. Нажмите на три точки (⋮) в верхнем правом углу и выберите **Custom repositories** (Пользовательские репозитории).
@@ -109,8 +117,10 @@ Haier предлагает разные мобильные приложения 
 ### 3. Настройка
 
 1. Перезапустите Home Assistant.
-2. Перейдите в **Настройки** > **Устройства и службы** > **Добавить интеграцию**.
+2. Перейдите в **Настройки** > **Устройства и службы** > **Добавить интеграцию** (или нажмите кнопку ниже).
 3. Найдите в списке **Haier Evo** и введите данные вашего аккаунта от приложения Evo.
+
+[![Добавить интеграцию Haier Evo в Home Assistant](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=haier_evo)
 
 ## Лицензия
 [MIT](LICENSE).
