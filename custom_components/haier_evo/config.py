@@ -8,6 +8,78 @@ from . import devices as config_dir
 
 SAFE_MODEL = re.compile(r"[A-Za-z0-9()_.-]{1,32}")
 
+# The Haier app draws its louver screens from modes.itemsV2 of the device
+# config: groups (auto / direction / comfort flow) with the angle or the side
+# of every position. The flat attribute list only has firmware names such as
+# "Второе положение поворота", so the positions are named from these screens.
+LOUVER_SCREENS = {
+    "windDirectionVertical": "swing_mode",
+    "windDirectionHorizontal": "swing_horizontal_mode",
+}
+LOUVER_SIDES = {
+    "вверх": "up",
+    "вниз": "down",
+    "крайнее левое": "far_left",
+    "левое": "left",
+    "центральная": "center",
+    "центральное": "center",
+    "по центру": "center",
+    "правое": "right",
+    "крайнее правое": "far_right",
+}
+LOUVER_ANGLE = re.compile(r"\d{1,3}")
+
+
+def _louver_group(kind: str, body) -> list[tuple[str, str | None]]:
+    """(value code, key) of one group of a louver screen; key None = no name for it."""
+    if not isinstance(body, dict):
+        return []
+    if body.get("value") not in (None, ""):
+        return [(str(body["value"]), "auto" if kind == "auto" else None)]
+    angles, others = [], []
+    for mode in body.get("modes") or []:
+        if not isinstance(mode, dict) or mode.get("value") in (None, ""):
+            continue
+        code = str(mode["value"])
+        name = str(mode.get("name") or "").strip().lower()
+        if LOUVER_ANGLE.fullmatch(name):
+            angles.append((int(name), code))
+        elif side := LOUVER_SIDES.get(name):
+            others.append((code, f"comfort_{side}" if kind == "comfort" else side))
+        else:
+            others.append((code, None))
+    return [(code, f"angle_{angle}") for angle, code in sorted(angles)] + others
+
+
+def louver_layout(modes) -> dict[str, list[tuple[str, str | None]]]:
+    """Louver positions the app offers: {attribute code: [(value code, key)]} in app order."""
+    layout = {}
+    if not isinstance(modes, dict):
+        return layout
+    for item in modes.get("itemsV2") or modes.get("items") or []:
+        try:
+            screen = item["value"]["description"]
+            attr_code = str(item["value"]["name"])
+            groups = item["description"][screen]["types"]
+        except (KeyError, TypeError):
+            continue
+        if screen not in LOUVER_SCREENS or not isinstance(groups, list):
+            continue
+        positions, codes, keys = [], set(), set()
+        for group in groups:
+            for kind, body in (group.items() if isinstance(group, dict) else ()):
+                for code, key in _louver_group(kind, body):
+                    if code in codes:
+                        continue
+                    if key in keys:
+                        key = None
+                    codes.add(code)
+                    keys.add(key)
+                    positions.append((code, key))
+        if positions:
+            layout[attr_code] = positions
+    return layout
+
 
 class HaierDeviceConfig(object):
 
@@ -89,7 +161,7 @@ class HaierDeviceConfig(object):
 
     def get_values(self, name: str) -> list[str]:
         attr = self.get_attr_by_name(name)
-        return [i.name for i in attr.list if i.name != "unknown"] if attr else []
+        return [i.name for i in attr.list if i.name != "unknown" and not i.hidden] if attr else []
 
     def get_code_by_name(self, name: str) -> str | None:
         attr = self.get_attr_by_name(name)
@@ -196,6 +268,32 @@ class HaierACConfig(HaierDeviceConfig):
             attr_copy = attr.copy()
             attr_copy.update(attrname="preset_mode_boost")
             self.attrs.append(Attribute(attr_copy))
+
+    def apply_louver_layout(self, modes) -> None:
+        """Name louver positions as the app does and hide the ones it does not offer.
+
+        Positions of a model profile with its own mappings stay as the profile
+        sets them. A hidden position still decodes, so a unit left there (say,
+        by the IR remote) shows it.
+        """
+        profile = {a.name for a in self.get_config_attributes() if a.list}
+        for code, positions in louver_layout(modes).items():
+            attr = self.get_attr_by_code(code)
+            if attr is None or attr.name not in LOUVER_SCREENS.values() or attr.name in profile:
+                continue
+            raw = {str(i.get("data")): i for i in (attr.get("list") or {}).get("data") or []}
+            shown = []
+            for value, key in positions:
+                if (item := raw.pop(value, None)) is None:
+                    continue
+                if key:
+                    item["key"] = key
+                shown.append(item)
+            if not shown:
+                continue
+            for item in raw.values():
+                item["hidden"] = True
+            attr.list = shown + list(raw.values())
 
 
 class HaierREFConfig(HaierDeviceConfig):
@@ -424,16 +522,20 @@ class Item(dict):
 
     def __init__(self, data: dict) -> None:
         super().__init__(data)
-        self.name = self.mappings.get(
+        # "key" comes from the app's own screens (see louver_layout)
+        self.name = data.get("key") or self.mappings.get(
             self.description,
             data.get("attrname")
         ) or self.mappings.get("_") or "unknown"
+        # a value the app does not offer: decoded, but not listed as an option
+        self.hidden = bool(data.get("hidden"))
 
     def __repr__(self) -> str:
         return (
             f"{self.name}("
             f"{self.value},"
             f"desc={self.description!r}"
+            f"{',hidden' if self.hidden else ''}"
             f")"
         )
 
@@ -442,6 +544,7 @@ class Item(dict):
             "name": self.name,
             "description": self.description,
             "value": self.value,
+            "hidden": self.hidden,
         }
 
     @property

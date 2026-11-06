@@ -1255,6 +1255,7 @@ class HaierAC(HaierDevice):
                 continue
             self.config.attrs.append(attr)
         self.config.merge_attributes()
+        self.config.apply_louver_layout(data.get("modes"))
         for attr in self.config.attrs:
             self._set_attribute_value(str(attr.code), attr.current)
             if attr.name == "target_temperature":
