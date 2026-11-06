@@ -60,6 +60,11 @@ class FakeHaier:
             raise r
         return r
     def list_device_ids(self): return FakeHaier.listed
+    denied = set()
+    def denied_devices(self, macs):
+        if isinstance(FakeHaier.denied, Exception):
+            raise FakeHaier.denied
+        return set(macs) & FakeHaier.denied
     def stop(self):
         self.stopped = True
         self.disconnect_requested = True
@@ -283,6 +288,18 @@ async def main():
     check("periodic refresh: one try, no waiting", x.sleeps == [] and x.saved is not None)
     x = await refresh([api.ReauthRequired("no tokens")])
     check("refresh: rejected sign-in -> stop and ask for the password", x.reauth == [1] and x.haier.stopped and x.saved is None)
+
+    # a device skipped at the start because the cloud refuses it (1.5.3)
+    FakeHaier.denied = {"c"}
+    x = await refresh([OK], listed={"a", "b", "c"})
+    check("refresh: a listed device the cloud refuses is not new -> no rebuild",
+          x.saved is not None and x.reloads == [] and x.removed == [])
+    x = await refresh([OK], listed={"a", "b", "c", "d"})
+    check("refresh: a refused one and a really new one -> rebuild", x.removed == ["haier_evo.E1.devices"] and x.reloads == ["E1"])
+    FakeHaier.denied = api.ReauthRequired("no tokens")
+    x = await refresh([OK], listed={"a", "b", "c"})
+    check("refresh: rejected sign-in while probing new devices -> reauth", x.reauth == [1] and x.haier.stopped and x.reloads == [])
+    FakeHaier.denied = set()
 
 asyncio.run(main())
 print("FAILS:", fails)

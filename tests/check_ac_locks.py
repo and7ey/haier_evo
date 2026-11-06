@@ -78,7 +78,9 @@ check("fan_only: preset none passes", locked(lambda: ac.set_preset_mode("none"))
 
 ac.switch_on("cool")
 cmds = sent()
-check("cool while on: mode only (nothing deferred)", (("2", "1") in cmds[0], any(c[0] == "0" for c in cmds[0]), cmds[0][0][0] != "21"), (True, False, True))
+check("cool while on: power on and mode, no setpoint (nothing deferred), no cleaning extras",
+      (("2", "1") in cmds[0], any(c[0] == "0" for c in cmds[0]), cmds[0][0], any(c[0] in ("6", "31") for c in cmds[0])),
+      (True, False, ("21", "1"), False))
 check("cool: cleaning allowed", (locked(lambda: ac.set_cleaning_on(True)), sent()[0][0]), (None, ("6", "1")))
 check("cleaning on: setpoint locked by cleaning", locked(lambda: ac.set_temperature(22)),
       ("locked_by", {"device": D, "attribute": "Целевая температура", "cause": "Стерильная очистка"}))

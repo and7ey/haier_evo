@@ -939,7 +939,7 @@
     "max_temperature": 30.0,
     "min_temperature": 16.0,
     "mode": "cool",
-    "preset_mode": "none",
+    "preset_mode": "boost",
     "quiet_on": false,
     "sound_on": false,
     "status": 0,
@@ -948,7 +948,7 @@
     "swing_mode": "angle_45",
     "synced": true,
     "target_temperature": 23,
-    "turbo_on": false
+    "turbo_on": true
    }
   }
  },
@@ -1270,6 +1270,10 @@
      "action": "operation",
      "commandName": "4",
      "commands": [
+      {
+       "commandName": "21",
+       "value": "1"
+      },
       {
        "commandName": "2",
        "value": "1"
@@ -1880,7 +1884,7 @@
     "max_temperature": 30.0,
     "min_temperature": 16.0,
     "mode": "cool",
-    "preset_mode": "none",
+    "preset_mode": "boost",
     "quiet_on": false,
     "sound_on": false,
     "status": 0,
@@ -1889,7 +1893,7 @@
     "swing_mode": "angle_0",
     "synced": true,
     "target_temperature": 23,
-    "turbo_on": false
+    "turbo_on": true
    }
   }
  },
@@ -2833,7 +2837,7 @@
     "max_temperature": 30.0,
     "min_temperature": 16.0,
     "mode": "cool",
-    "preset_mode": "none",
+    "preset_mode": "boost",
     "quiet_on": false,
     "sound_on": false,
     "status": 0,
@@ -2842,7 +2846,7 @@
     "swing_mode": "comfort_up",
     "synced": true,
     "target_temperature": 23,
-    "turbo_on": false
+    "turbo_on": true
    }
   }
  }

@@ -445,8 +445,8 @@ class Haier(object):
                 if response is not None and response.status_code == 401:
                     with self._lock:
                         self.tokenexpire = None  # the cloud dropped the token: refresh it
-                if attempt == 2:
-                    raise
+                if attempt == 2 or self.is_denied(e):
+                    raise  # a refused device stays refused, no second try
             except Exception as e:
                 _LOGGER.error(f"Failed to get status: {e!r}, response was: {response}")
                 raise
@@ -456,11 +456,45 @@ class Haier(object):
         if not self._pull_data:
             raise InvalidDevicesList()
         for listed in self._parse_device_list(data):
-            device = HaierDevice.create(haier=self, **listed)
+            try:
+                device = HaierDevice.create(haier=self, **listed)
+            except HTTPError as e:
+                if not self.is_denied(e):
+                    raise
+                # listed by the app, but the cloud will not describe it (a
+                # stale or no longer shared entry): start with the others
+                _LOGGER.warning(
+                    f"Haier Evo: skipping {listed['device_title'] or listed['device_mac']}, "
+                    f"the cloud answers HTTP {e.response.status_code} for it"
+                )
+                continue
             self.devices.append(device)
             _LOGGER.info(f"Added device: {device}")
         if len(self.devices) > 0:
             self.connect_in_thread()
+
+    @staticmethod
+    def is_denied(error: Exception) -> bool:
+        """HTTP 403/404 for a device status: the cloud refuses that device."""
+        response = getattr(error, "response", None)
+        return isinstance(error, HTTPError) and response is not None and response.status_code in (403, 404)
+
+    def denied_devices(self, macs) -> set[str]:
+        """Of these MACs, the ones the cloud refuses to describe (blocking).
+
+        Such a device is skipped at the start; it is not a reason to rebuild
+        until the cloud describes it again.
+        """
+        denied = set()
+        for mac in macs:
+            try:
+                self.pull_device_data(mac)
+            except (ReauthRequired, AuthUserError):
+                raise
+            except Exception as e:
+                if self.is_denied(e):
+                    denied.add(mac)
+        return denied
 
     def load_cached(self, cached: list[dict]) -> None:
         """Build the devices from the descriptions saved by the last good start.
@@ -1417,10 +1451,16 @@ class HaierAC(HaierDevice):
         return data
 
     def _set_attribute_value(self, code: str, value: str) -> None:
-        attr = self.config.get_attr_by_code(code)
-        if not (attr and value is not None):
+        # one code may stand behind several attributes ("Тихий" is both the
+        # sleep preset and the quiet switch): all of them follow the unit,
+        # not only the first one (up to 1.5.2 the switches never did)
+        if value is None:
             return
-        elif attr.name == "current_temperature":
+        for attr in self.config.get_attrs_by_code(code):
+            self._apply_attribute(attr, value)
+
+    def _apply_attribute(self, attr: CFG.Attribute, value: str) -> None:
+        if attr.name == "current_temperature":
             self.current_temperature = float(value)
         elif attr.name == "status":
             self.status = int(value)
@@ -1440,9 +1480,9 @@ class HaierAC(HaierDevice):
             self.light_on = parsebool(attr.get_item_name(value))
         elif attr.name == "sound":
             self.sound_on = parsebool(attr.get_item_name(value))
-        elif attr.name == "quiet":
+        elif attr.name in ("quiet", "preset_mode_sleep"):
             self.quiet_on = parsebool(attr.get_item_name(value))
-        elif attr.name == "turbo":
+        elif attr.name in ("turbo", "preset_mode_boost"):
             self.turbo_on = parsebool(attr.get_item_name(value))
         elif attr.name == "health":
             self.health_on = parsebool(attr.get_item_name(value))
@@ -1598,10 +1638,16 @@ class HaierAC(HaierDevice):
         if mode_attr := self.config.get_attr_by_name("mode"):
             assume[str(mode_attr.code)] = mode_attr.get_item_code(value, value)
         self._check_writable("mode", value, assume=assume)
-        commands = [
-            *(HaierDevice.get_commands(self, "status", "on") if not self.status else []),
-            *HaierDevice.get_commands(self, "mode", value),
-        ]
+        # "power on" goes out even when the unit is believed to run: that
+        # belief may be stale (an event lost while the cloud was away), and a
+        # mode alone does not start a unit that is off
+        power_on = HaierDevice.get_commands(self, "status", "on")
+        believed_on = bool(self.status)
+        if believed_on:
+            # only the power command itself: the cloud's power-on extras stop
+            # the cleaning cycles, which a mode change must not do
+            power_on = [c for c in power_on if str(c.get("commandName")) == str(status_code)]
+        commands = HaierDevice.get_commands(self, "mode", value)
         if self._deferred_target is not None and self.config["target_temperature"]:
             try:
                 self._check_writable("target_temperature", assume=assume)
@@ -1621,7 +1667,15 @@ class HaierAC(HaierDevice):
                 })
                 self.target_temperature = self._deferred_target
                 self._deferred_target = None
-        self._send_commands(commands)
+        try:
+            self._send_commands([*power_on, *commands])
+        except HaierCommandRejected:
+            if not (believed_on and power_on and commands):
+                raise
+            # the cloud may refuse "power on" for a unit that already runs
+            # (errNo 22) and the rest of the group with it: once more without it
+            _LOGGER.debug(f"{self.device_name}: power on refused for a running unit, sending the mode alone")
+            self._send_commands(commands)
         self.status = 1
         self.mode = value
 
@@ -1650,6 +1704,11 @@ class HaierAC(HaierDevice):
         if commands := self.get_commands("preset_mode", value):
             self._send_commands(commands)
             self.preset_mode = value
+            if value in (PRESET_NONE, "sleep", "boost"):
+                # these presets are read from the two switches, which the
+                # unit's echo confirms; until then show what was asked
+                self.quiet_on = value == "sleep"
+                self.turbo_on = value == "boost"
 
     def set_light_on(self, value: bool) -> None:
         if commands := self.get_commands("light", value):
