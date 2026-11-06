@@ -42,6 +42,13 @@ def _known_device_ids(hass: HomeAssistant, entry: ConfigEntry) -> set[str]:
     }
 
 
+def _find_device(registry: dr.DeviceRegistry, identifier: tuple[str, str], entry_id: str):
+    """Device of this entry by identifier; async_get_device is deprecated from HA 2026.x."""
+    if (by_identifier := getattr(registry, "async_get_device_by_identifier", None)) is not None:
+        return by_identifier(identifier, entry_id)
+    return registry.async_get_device(identifiers={identifier})
+
+
 def _token_store(hass: HomeAssistant, entry_id: str) -> Store:
     # private: 0600, atomic: a crash never leaves a half-written token file
     return Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}", private=True, atomic_writes=True)
@@ -160,7 +167,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.async_add_executor_job(_remove_legacy_tokens, legacy_path)
 
     registry = dr.async_get(hass)
-    if http_device := registry.async_get_device(identifiers={_HTTP_DEVICE}):
+    if http_device := _find_device(registry, _HTTP_DEVICE, entry.entry_id):
         registry.async_remove_device(http_device.id)
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = haier_object

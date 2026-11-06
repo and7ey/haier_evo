@@ -1,0 +1,39 @@
+{
+    "entity": {
+        "climate": {
+            "conditioner": {
+                "default": "mdi:air-conditioner",
+                "state_attributes": {
+                    "swing_mode": {
+                        "default": "mdi:arrow-oscillating",
+                        "state": {
+                            "auto": "mdi:arrow-up-down",
+                            "angle_0": "mdi:arrow-right",
+                            "angle_15": "mdi:arrow-right-thin",
+                            "angle_30": "mdi:arrow-bottom-right-thin",
+                            "angle_45": "mdi:arrow-bottom-right",
+                            "angle_60": "mdi:arrow-bottom-right-bold-outline",
+                            "angle_75": "mdi:arrow-down-thin",
+                            "angle_90": "mdi:arrow-down",
+                            "up": "mdi:arrow-up",
+                            "down": "mdi:arrow-down",
+                            "comfort_up": "mdi:arrow-up-bold-box-outline",
+                            "comfort_down": "mdi:arrow-down-bold-box-outline"
+                        }
+                    },
+                    "swing_horizontal_mode": {
+                        "default": "mdi:arrow-oscillating",
+                        "state": {
+                            "auto": "mdi:arrow-left-right",
+                            "far_left": "mdi:arrow-collapse-left",
+                            "left": "mdi:arrow-top-left",
+                            "center": "mdi:arrow-up",
+                            "right": "mdi:arrow-top-right",
+                            "far_right": "mdi:arrow-collapse-right"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

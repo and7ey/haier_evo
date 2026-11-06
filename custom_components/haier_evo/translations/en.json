@@ -50,7 +50,12 @@
                             "position_5": "Fifth position",
                             "position_6": "Sixth position",
                             "position_7": "Seventh position",
-                            "auto": "Auto mode"
+                            "auto": "Auto mode",
+                            "far_left": "Far left",
+                            "left": "Left",
+                            "center": "Center",
+                            "right": "Right",
+                            "far_right": "Far right"
                         }
                     },
                     "swing_mode": {
@@ -65,7 +70,18 @@
                             "position_4": "Fourth position",
                             "position_5": "Fifth position",
                             "auto": "Auto mode",
-                            "special": "Raise/Lower"
+                            "special": "Raise/Lower",
+                            "angle_0": "0° (straight)",
+                            "angle_15": "15°",
+                            "angle_30": "30°",
+                            "angle_45": "45°",
+                            "angle_60": "60°",
+                            "angle_75": "75°",
+                            "angle_90": "90° (down)",
+                            "up": "Up",
+                            "down": "Down",
+                            "comfort_up": "Comfort flow up",
+                            "comfort_down": "Comfort flow down"
                         }
                     }
                 }
