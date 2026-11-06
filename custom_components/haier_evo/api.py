@@ -453,6 +453,83 @@ class Haier(object):
         self._pull_data = data = self.pull_data_from_api()
         if not self._pull_data:
             raise InvalidDevicesList()
+        for listed in self._parse_device_list(data):
+            device = HaierDevice.create(haier=self, **listed)
+            self.devices.append(device)
+            _LOGGER.info(f"Added device: {device}")
+        if len(self.devices) > 0:
+            self.connect_in_thread()
+
+    def load_cached(self, cached: list[dict]) -> None:
+        """Build the devices from the descriptions saved by the last good start.
+
+        No network: the values in them are old, so every device stays
+        unavailable until refresh_devices() reads its real state.
+        """
+        devices = []
+        for item in cached:
+            mac = str(item.get("mac") or "")
+            if not MAC_RE.match(mac) or not isinstance(item.get("config"), dict):
+                raise ValueError(f"Bad cached device: {mac!r}")
+            device = HaierDevice.create(
+                haier=self,
+                device_type=str(item.get("type") or "UNKNOWN"),
+                device_mac=mac,
+                device_serial=item.get("serial"),
+                device_title=item.get("title"),
+                backend_data=item["config"],
+            )
+            device.synced = False
+            devices.append(device)
+        if not devices:
+            raise ValueError("No cached devices")
+        self.devices.extend(devices)
+        _LOGGER.info(f"Started {len(devices)} device(s) from the saved descriptions")
+
+    def refresh_devices(self) -> dict:
+        """Read the real state of every device (blocking).
+
+        Returns {"failed": [macs], "changed": bool}: changed means the cloud now
+        describes a device differently (attributes, firmware) and the entities
+        have to be rebuilt.
+        """
+        failed, changed = [], False
+        for device in list(self.devices):
+            if self.disconnect_requested:
+                break
+            try:
+                data = self.pull_device_data(device.device_id)
+            except (ReauthRequired, AuthUserError):
+                raise
+            except Exception as e:
+                _LOGGER.debug(f"{device.device_name}: refresh failed: {e!r}")
+                failed.append(device.device_id)
+                continue
+            changed = device.apply_fresh(data) or changed
+        return {"failed": failed, "changed": changed}
+
+    def list_device_ids(self) -> set[str] | None:
+        """MACs the app lists now, None when the cloud gave nothing usable."""
+        try:
+            data = self.pull_data_from_api()
+        except (ReauthRequired, AuthUserError):
+            raise
+        except Exception as e:
+            _LOGGER.debug(f"Device list: {e!r}")
+            return None
+        ids = {d["device_mac"].lower() for d in self._parse_device_list(data)} if data else set()
+        return ids or None  # an empty list is a known cloud glitch, not "no devices"
+
+    def cache_dict(self) -> dict:
+        return {
+            "version": C.CACHE_VERSION,
+            "devices": [device.cache_dict() for device in self.devices],
+        }
+
+    @staticmethod
+    def _parse_device_list(data: dict) -> list[dict]:
+        """Devices of the app's home screen: type, MAC, serial and title of each."""
+        listed = []
         need_container_id = "72a6d224-cb66-4e6d-b427-2e4609252684"
         presentation = data.setdefault("presentation", {})
         layout = presentation.setdefault("layout", {})
@@ -488,17 +565,13 @@ class Haier(object):
                 if not MAC_RE.match(device_mac):
                     _LOGGER.warning(f"Skipping a device with an unexpected id: {device_mac!r}")
                     continue
-                device = HaierDevice.create(
-                    haier=self,
-                    device_type=device_type,
-                    device_mac=device_mac,
-                    device_serial=device_serial,
-                    device_title=device_title,
-                )
-                self.devices.append(device)
-                _LOGGER.info(f"Added device: {device}")
-        if len(self.devices) > 0:
-            self.connect_in_thread()
+                listed.append({
+                    "device_type": device_type,
+                    "device_mac": device_mac,
+                    "device_serial": device_serial,
+                    "device_title": device_title,
+                })
+        return listed
 
     def get_device_by_id(self, id_: str) -> HaierDevice | None:
         return next(filter(
@@ -765,6 +838,11 @@ class HaierDevice(object):
         self.alarms: list[str] = []
         self._values: dict[str, str] = {}  # raw attribute values by code (for modifiers)
         self._modifiers = CFG.Modifiers([])
+        self.device_type = "UNKNOWN"
+        self.link_status: str | None = None  # deviceConnectionStatusEvent
+        # False while the values come from the saved description, not the cloud
+        self.synced = True
+        self._fresh_description: dict | None = None  # a newer description that needs a reload
 
     def __repr__(self) -> str:
         return (
@@ -793,9 +871,9 @@ class HaierDevice(object):
 
     @property
     def available(self) -> bool:
-        # return self._available
-        # this works very bad
-        return True
+        # the cloud's ONLINE/OFFLINE flaps (see the connectivity sensor), so
+        # only "has the real state been read since the start" counts here
+        return self.synced
 
     @available.setter
     def available(self, value: bool | str):
@@ -820,6 +898,22 @@ class HaierDevice(object):
     @property
     def filter_cleaning(self) -> bool:
         return FILTER_ALARM in self.alarms
+
+    @property
+    def _firmware(self) -> dict:
+        firmware = ((self.status_data or {}).get("settings") or {}).get("firmware")
+        return firmware if isinstance(firmware, dict) else {}
+
+    @property
+    def firmware_update(self) -> bool | None:
+        """The cloud says a newer firmware is waiting (the app installs it)."""
+        value = self._firmware.get("updateRequired")
+        return value if isinstance(value, bool) else None
+
+    @property
+    def firmware_auto_update(self) -> bool | None:
+        value = (self._firmware.get("autoUpdate") or {}).get("enabled")
+        return value if isinstance(value, bool) else None
 
     @property
     def alarm_texts(self) -> list[str]:
@@ -924,6 +1018,7 @@ class HaierDevice(object):
     def to_dict(self) -> dict:
         return {
             "available": self.available,
+            "synced": self.synced,
             "device_id": self.device_id,
             "device_mac": self.device_mac,
             "device_name": self.device_name,
@@ -992,7 +1087,60 @@ class HaierDevice(object):
             if isinstance(attr, dict) and attr.get("currentValue") is not None:
                 self._store_value(attr.get("name"), attr.get("currentValue"))
                 self._set_attribute_value(str(attr.get("name")), attr.get("currentValue"))
+        self.synced = True
         self.write_ha_state()
+
+    @staticmethod
+    def description_signature(data: dict | None) -> tuple:
+        """What the entities are built from: attributes and their values, louver
+        screens, model and firmware. Values and alarms are not part of it."""
+        data = data if isinstance(data, dict) else {}
+        attrs = []
+        for attr in data.get("attributes") or []:
+            if not isinstance(attr, dict):
+                continue
+            items = ((attr.get("list") or {}).get("data") or []) if isinstance(attr.get("list"), dict) else []
+            attrs.append((
+                str(attr.get("name")),
+                str(attr.get("description")),
+                bool(attr.get("writable")),
+                tuple(sorted(str(i.get("data")) for i in items if isinstance(i, dict))),
+            ))
+        firmware = ((data.get("settings") or {}).get("firmware") or {})
+        return (
+            str((data.get("info") or {}).get("model")),
+            str(firmware.get("value") if isinstance(firmware, dict) else None),
+            tuple(sorted(attrs)),
+            tuple(sorted((k, tuple(v)) for k, v in CFG.louver_layout(data.get("modes")).items())),
+        )
+
+    def apply_fresh(self, data: dict) -> bool:
+        """Apply a description just read from the cloud.
+
+        Returns True when the cloud describes the device differently than the
+        one it was built from: the entities then have to be rebuilt (reload).
+        """
+        if not isinstance(data, dict):
+            return False
+        if self.description_signature(data) != self.description_signature(self.status_data):
+            _LOGGER.info(f"{self.device_name}: the cloud describes the device differently now, reloading")
+            self._fresh_description = data
+            self.update_from_backend(data)
+            return True
+        # same structure: keep the fresh texts, firmware flags and rules
+        self._status_data = data
+        self._modifiers = CFG.Modifiers(data.get("modifiers"))
+        self.update_from_backend(data)
+        return False
+
+    def cache_dict(self) -> dict:
+        return {
+            "type": self.device_type,
+            "mac": self.device_id,
+            "serial": self.device_serial,
+            "title": self.device_name,
+            "config": cacheable_description(self._fresh_description or self.status_data),
+        }
 
     def resync(self) -> dict | None:
         """Read the real state back from the cloud (after a lost or rejected command)."""
@@ -1055,6 +1203,10 @@ class HaierDevice(object):
             self._handle_info(message_dict)
         elif message_type == "deviceStatusEvent":
             self._handle_device_status_update(message_dict)
+        elif message_type == "deviceConnectionStatusEvent":
+            # the module's link to the cloud ("GOOD" seen so far), sent on connect
+            self.link_status = (message_dict.get("payload") or {}).get("status")
+            self.write_ha_state()
         else:
             _LOGGER.warning(f"Got unknown message: {message_dict}")
 
@@ -1098,7 +1250,9 @@ class HaierDevice(object):
         device_mac: str,
         device_serial: str = None,
         device_title: str = None,
+        backend_data: dict | None = None,
     ) -> HaierDevice:
+        """backend_data: a saved description; without it the cloud is asked."""
         device_cls = {
             "AC": HaierAC,
             "REF": HaierREF,
@@ -1107,13 +1261,15 @@ class HaierDevice(object):
         }.get(device_type, cls)
         if device_cls is cls:
             _LOGGER.warning(f"Unknown device type: {device_type}")
-        return device_cls(
+        device = device_cls(
             haier=haier,
             device_mac=device_mac,
             device_serial=device_serial,
             device_title=device_title,
-            backend_data=haier.pull_device_data(device_mac),
+            backend_data=backend_data if backend_data is not None else haier.pull_device_data(device_mac),
         )
+        device.device_type = device_type
+        return device
 
 
 class HaierAC(HaierDevice):
@@ -1531,6 +1687,7 @@ class HaierAC(HaierDevice):
             binary_sensor.HaierProblemSensor(self),
             binary_sensor.HaierFilterSensor(self),
             binary_sensor.HaierConnectivitySensor(self),
+            binary_sensor.HaierFirmwareUpdateSensor(self),
         ]
 
 
@@ -1953,6 +2110,7 @@ class HaierWH(HaierDevice):
         entities = [
             binary_sensor.HaierProblemSensor(self),
             binary_sensor.HaierConnectivitySensor(self),
+            binary_sensor.HaierFirmwareUpdateSensor(self),
         ]
         if self.config['heating_status'] is not None:
             entities.append(binary_sensor.HaierWHHeatingSensor(self))
@@ -1990,3 +2148,20 @@ def parsebool(value) -> bool:
     if value in ("on", 1, True, "true", "enable", "1"):
         return True
     return False
+
+# Parts of a device description the integration never reads: app analytics,
+# pairing details, scenario links. Links (signed for a week) are dropped too.
+_UNCACHED_KEYS = {"analyticsEvents", "analyticsEvent", "trackingData", "pairingInfo", "scenarios"}
+
+
+def cacheable_description(data: dict | None) -> dict:
+    """A copy of a device description that is worth saving between starts."""
+    def clean(value):
+        if isinstance(value, dict):
+            return {k: clean(v) for k, v in value.items() if k not in _UNCACHED_KEYS}
+        if isinstance(value, list):
+            return [clean(v) for v in value]
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            return ""
+        return value
+    return clean(data if isinstance(data, dict) else {})

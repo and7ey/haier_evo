@@ -138,3 +138,34 @@ class HaierConnectivitySensor(HaierBinarySensor):
     @property
     def available(self) -> bool:
         return True
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"link": self._device.link_status}
+
+
+class HaierFirmwareUpdateSensor(HaierBinarySensor):
+    """The cloud's "a newer firmware is waiting" flag; the app installs it.
+
+    The cloud does not say which version is waiting, so this is a binary
+    sensor and not an update entity.
+    """
+    _attr_device_class = BinarySensorDeviceClass.UPDATE
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, device: api.HaierDevice) -> None:
+        super().__init__(device)
+        self._device_attr_name = "firmware_update"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_firmware_update"
+        self._attr_name = f"{device.device_name} Обновление прошивки"
+
+    @property
+    def is_on(self) -> bool | None:
+        return self._device.firmware_update
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            "installed_version": self._device.sw_version,
+            "auto_update": self._device.firmware_auto_update,
+        }

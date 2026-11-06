@@ -281,7 +281,8 @@ class HaierACConfig(HaierDeviceConfig):
             attr = self.get_attr_by_code(code)
             if attr is None or attr.name not in LOUVER_SCREENS.values() or attr.name in profile:
                 continue
-            raw = {str(i.get("data")): i for i in (attr.get("list") or {}).get("data") or []}
+            # copies: the cloud's description is kept (and saved) as it came
+            raw = {str(i.get("data")): dict(i) for i in (attr.get("list") or {}).get("data") or []}
             shown = []
             for value, key in positions:
                 if (item := raw.pop(value, None)) is None:
@@ -293,7 +294,7 @@ class HaierACConfig(HaierDeviceConfig):
                 continue
             for item in raw.values():
                 item["hidden"] = True
-            attr.list = shown + list(raw.values())
+            attr["list"] = dict(attr.get("list") or {}, data=shown + list(raw.values()))
 
 
 class HaierREFConfig(HaierDeviceConfig):

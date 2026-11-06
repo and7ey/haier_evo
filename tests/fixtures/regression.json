@@ -1,0 +1,2849 @@
+{
+ "30:c9:22:00:00:03": {
+  "louvers": {
+   "swing_horizontal_mode:0": [
+    "center",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "0"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:1": [
+    "position_2",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "1"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:2": [
+    "position_3",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "2"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:3": [
+    "far_left",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "3"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:4": [
+    "left",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "4"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:5": [
+    "right",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "5"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:6": [
+    "far_right",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "6"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:7": [
+    "auto",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "7"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_mode:0": [
+    "off",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "0"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_mode:1": [
+    "comfort_up",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "1"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_mode:2": [
+    "angle_0",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "2"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_mode:3": [
+    "comfort_down",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "3"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_mode:4": [
+    "angle_30",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "4"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_mode:5": [
+    "angle_45",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "5"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_mode:6": [
+    "angle_60",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "6"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_mode:7": [
+    "angle_90",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "7"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_mode:8": [
+    "auto",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "8"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ],
+   "swing_mode:9": [
+    "special",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "9"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:03"
+     }
+    ]
+   ]
+  },
+  "sequence": {
+   "modes": [
+    [
+     "auto",
+     "cool",
+     "dry",
+     "heat",
+     "fan_only",
+     "off"
+    ],
+    [
+     "high",
+     "medium",
+     "low",
+     "auto"
+    ],
+    [
+     "none",
+     "sleep",
+     "boost"
+    ]
+   ],
+   "sent": [
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "21",
+       "value": "1"
+      },
+      {
+       "commandName": "6",
+       "value": "0"
+      },
+      {
+       "commandName": "31",
+       "value": "0"
+      },
+      {
+       "commandName": "2",
+       "value": "1"
+      },
+      {
+       "commandName": "13",
+       "value": "0"
+      }
+     ],
+     "macAddress": "30:c9:22:00:00:03"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "0",
+       "value": "23"
+      }
+     ],
+     "macAddress": "30:c9:22:00:00:03"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "17",
+       "value": "0"
+      },
+      {
+       "commandName": "18",
+       "value": "0"
+      },
+      {
+       "commandName": "4",
+       "value": "3"
+      }
+     ],
+     "macAddress": "30:c9:22:00:00:03"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "18",
+       "value": "1"
+      },
+      {
+       "commandName": "17",
+       "value": "0"
+      }
+     ],
+     "macAddress": "30:c9:22:00:00:03"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "21",
+       "value": "0"
+      },
+      {
+       "commandName": "6",
+       "value": "0"
+      },
+      {
+       "commandName": "16",
+       "value": "0"
+      },
+      {
+       "commandName": "31",
+       "value": "0"
+      }
+     ],
+     "macAddress": "30:c9:22:00:00:03"
+    }
+   ],
+   "state": {
+    "antifreeze_on": false,
+    "autohumidity_on": false,
+    "available": true,
+    "cleaning_on": false,
+    "comfort_on": false,
+    "config": {
+     "attributes": [
+      {
+       "code": 0,
+       "current": "18",
+       "description": "Целевая температура",
+       "list": [],
+       "name": "target_temperature",
+       "range": {
+        "max": "30",
+        "min": "16",
+        "step": "1"
+       }
+      },
+      {
+       "code": 1,
+       "current": "5",
+       "description": "Вертикальные жалюзи",
+       "list": [
+        {
+         "description": "Авто режим",
+         "hidden": false,
+         "name": "auto",
+         "value": "8"
+        },
+        {
+         "description": "Первое положение поворота",
+         "hidden": false,
+         "name": "angle_0",
+         "value": "2"
+        },
+        {
+         "description": "Второе положение поворота",
+         "hidden": false,
+         "name": "angle_30",
+         "value": "4"
+        },
+        {
+         "description": "Третье положение поворота",
+         "hidden": false,
+         "name": "angle_45",
+         "value": "5"
+        },
+        {
+         "description": "Вверх и вниз четвертая позиция",
+         "hidden": false,
+         "name": "angle_60",
+         "value": "6"
+        },
+        {
+         "description": "Пятая позиция поворота",
+         "hidden": false,
+         "name": "angle_90",
+         "value": "7"
+        },
+        {
+         "description": "Верхнее положение",
+         "hidden": false,
+         "name": "comfort_up",
+         "value": "1"
+        },
+        {
+         "description": "Нижнее положение",
+         "hidden": false,
+         "name": "comfort_down",
+         "value": "3"
+        },
+        {
+         "description": "Фиксированное верхнее и нижнее положение",
+         "hidden": true,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Автоматический подъем и опускание (только для специальной модели)",
+         "hidden": true,
+         "name": "special",
+         "value": "9"
+        }
+       ],
+       "name": "swing_mode",
+       "range": null
+      },
+      {
+       "code": 2,
+       "current": "0",
+       "description": "Режимы",
+       "list": [
+        {
+         "description": "auto",
+         "hidden": false,
+         "name": "auto",
+         "value": "0"
+        },
+        {
+         "description": "cool",
+         "hidden": false,
+         "name": "cool",
+         "value": "1"
+        },
+        {
+         "description": "dry",
+         "hidden": false,
+         "name": "dry",
+         "value": "2"
+        },
+        {
+         "description": "heat",
+         "hidden": false,
+         "name": "heat",
+         "value": "4"
+        },
+        {
+         "description": "fan_only",
+         "hidden": false,
+         "name": "fan_only",
+         "value": "6"
+        }
+       ],
+       "name": "mode",
+       "range": null
+      },
+      {
+       "code": 4,
+       "current": "5",
+       "description": "Скорость вентилятора",
+       "list": [
+        {
+         "description": "high",
+         "hidden": false,
+         "name": "high",
+         "value": "1"
+        },
+        {
+         "description": "medium",
+         "hidden": false,
+         "name": "medium",
+         "value": "2"
+        },
+        {
+         "description": "low",
+         "hidden": false,
+         "name": "low",
+         "value": "3"
+        },
+        {
+         "description": "auto",
+         "hidden": false,
+         "name": "auto",
+         "value": "5"
+        }
+       ],
+       "name": "fan_mode",
+       "range": null
+      },
+      {
+       "code": 6,
+       "current": "0",
+       "description": "Стерильная очистка",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "cleaning",
+       "range": null
+      },
+      {
+       "code": 12,
+       "current": "1",
+       "description": "Подсветка блока",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "light",
+       "range": null
+      },
+      {
+       "code": 13,
+       "current": "0",
+       "description": "10 градусов",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "antifreeze",
+       "range": null
+      },
+      {
+       "code": 14,
+       "current": "0",
+       "description": "Звуковой сигнал",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "sound",
+       "range": null
+      },
+      {
+       "code": 16,
+       "current": "0",
+       "description": "Комфортный сон",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "comfort",
+       "range": null
+      },
+      {
+       "code": 17,
+       "current": "0",
+       "description": "Тихий",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "preset_mode_sleep",
+       "range": null
+      },
+      {
+       "code": 17,
+       "current": "0",
+       "description": "Тихий",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "quiet",
+       "range": null
+      },
+      {
+       "code": 18,
+       "current": "0",
+       "description": "Турбо",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "preset_mode_boost",
+       "range": null
+      },
+      {
+       "code": 18,
+       "current": "0",
+       "description": "Турбо",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "turbo",
+       "range": null
+      },
+      {
+       "code": 20,
+       "current": "0",
+       "description": "Здоровый режим",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "health",
+       "range": null
+      },
+      {
+       "code": 21,
+       "current": "0",
+       "description": "Включение/выключение",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "status",
+       "range": null
+      },
+      {
+       "code": 23,
+       "current": "0",
+       "description": "Эко-датчик",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Обводящий",
+         "hidden": false,
+         "name": "outlining",
+         "value": "1"
+        },
+        {
+         "description": "Сопутствующий",
+         "hidden": false,
+         "name": "related",
+         "value": "2"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "3"
+        }
+       ],
+       "name": "eco_sensor",
+       "range": null
+      },
+      {
+       "code": 24,
+       "current": "0",
+       "description": "Горизонтальные жалюзи",
+       "list": [
+        {
+         "description": "Авто режим",
+         "hidden": false,
+         "name": "auto",
+         "value": "7"
+        },
+        {
+         "description": "Четвертая позиция поворота",
+         "hidden": false,
+         "name": "far_left",
+         "value": "3"
+        },
+        {
+         "description": "Пятая позиция поворота",
+         "hidden": false,
+         "name": "left",
+         "value": "4"
+        },
+        {
+         "description": "Исходная позиция",
+         "hidden": false,
+         "name": "center",
+         "value": "0"
+        },
+        {
+         "description": "Шестое положение поворота",
+         "hidden": false,
+         "name": "right",
+         "value": "5"
+        },
+        {
+         "description": "Седьмая позиция поворота",
+         "hidden": false,
+         "name": "far_right",
+         "value": "6"
+        },
+        {
+         "description": "Второе положение поворота",
+         "hidden": true,
+         "name": "position_2",
+         "value": "1"
+        },
+        {
+         "description": "Третье положение поворота",
+         "hidden": true,
+         "name": "position_3",
+         "value": "2"
+        }
+       ],
+       "name": "swing_horizontal_mode",
+       "range": null
+      },
+      {
+       "code": 31,
+       "current": "0",
+       "description": "Авто влажность",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "autohumidity",
+       "range": null
+      },
+      {
+       "code": 36,
+       "current": "26.50",
+       "description": "Температура в комнате",
+       "list": [],
+       "name": "current_temperature",
+       "range": {
+        "max": "55.0",
+        "min": "0.0",
+        "step": "0.5"
+       }
+      }
+     ],
+     "command_name": "4"
+    },
+    "current_temperature": 26.5,
+    "device_id": "30:c9:22:00:00:03",
+    "device_mac": "30:c9:22:00:00:03",
+    "device_name": "Кондиционер 3",
+    "device_serial": "SNAC0000000000000003",
+    "eco_sensor": "off",
+    "fan_mode": "low",
+    "health_on": false,
+    "light_on": true,
+    "max_temperature": 30.0,
+    "min_temperature": 16.0,
+    "mode": "cool",
+    "preset_mode": "none",
+    "quiet_on": false,
+    "sound_on": false,
+    "status": 0,
+    "sw_version": "1.6.0",
+    "swing_horizontal_mode": "center",
+    "swing_mode": "angle_45",
+    "synced": true,
+    "target_temperature": 23,
+    "turbo_on": false
+   }
+  }
+ },
+ "30:c9:22:00:00:04": {
+  "louvers": {
+   "swing_horizontal_mode:0": [
+    "center",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "0"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:1": [
+    "position_2",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "1"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:2": [
+    "position_3",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "2"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:3": [
+    "far_left",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "3"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:4": [
+    "left",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "4"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:5": [
+    "right",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "5"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:6": [
+    "far_right",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "6"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:7": [
+    "auto",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "7"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_mode:0": [
+    "off",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "0"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_mode:1": [
+    "comfort_up",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "1"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_mode:2": [
+    "angle_0",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "2"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_mode:3": [
+    "comfort_down",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "3"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_mode:4": [
+    "angle_30",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "4"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_mode:5": [
+    "angle_45",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "5"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_mode:6": [
+    "angle_60",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "6"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_mode:7": [
+    "angle_90",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "7"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_mode:8": [
+    "auto",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "8"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ],
+   "swing_mode:9": [
+    "special",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "9"
+       }
+      ],
+      "macAddress": "30:c9:22:00:00:04"
+     }
+    ]
+   ]
+  },
+  "sequence": {
+   "modes": [
+    [
+     "auto",
+     "cool",
+     "dry",
+     "heat",
+     "fan_only",
+     "off"
+    ],
+    [
+     "high",
+     "medium",
+     "low",
+     "auto"
+    ],
+    [
+     "none",
+     "sleep",
+     "boost"
+    ]
+   ],
+   "sent": [
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "2",
+       "value": "1"
+      },
+      {
+       "commandName": "13",
+       "value": "0"
+      }
+     ],
+     "macAddress": "30:c9:22:00:00:04"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "0",
+       "value": "23"
+      }
+     ],
+     "macAddress": "30:c9:22:00:00:04"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "17",
+       "value": "0"
+      },
+      {
+       "commandName": "18",
+       "value": "0"
+      },
+      {
+       "commandName": "4",
+       "value": "3"
+      }
+     ],
+     "macAddress": "30:c9:22:00:00:04"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "18",
+       "value": "1"
+      },
+      {
+       "commandName": "17",
+       "value": "0"
+      }
+     ],
+     "macAddress": "30:c9:22:00:00:04"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "21",
+       "value": "0"
+      },
+      {
+       "commandName": "6",
+       "value": "0"
+      },
+      {
+       "commandName": "16",
+       "value": "0"
+      },
+      {
+       "commandName": "31",
+       "value": "0"
+      }
+     ],
+     "macAddress": "30:c9:22:00:00:04"
+    }
+   ],
+   "state": {
+    "antifreeze_on": false,
+    "autohumidity_on": false,
+    "available": true,
+    "cleaning_on": false,
+    "comfort_on": false,
+    "config": {
+     "attributes": [
+      {
+       "code": 0,
+       "current": "20",
+       "description": "Целевая температура",
+       "list": [],
+       "name": "target_temperature",
+       "range": {
+        "max": "30",
+        "min": "16",
+        "step": "1"
+       }
+      },
+      {
+       "code": 1,
+       "current": "2",
+       "description": "Вертикальные жалюзи",
+       "list": [
+        {
+         "description": "Авто режим",
+         "hidden": false,
+         "name": "auto",
+         "value": "8"
+        },
+        {
+         "description": "Первое положение поворота",
+         "hidden": false,
+         "name": "angle_0",
+         "value": "2"
+        },
+        {
+         "description": "Второе положение поворота",
+         "hidden": false,
+         "name": "angle_30",
+         "value": "4"
+        },
+        {
+         "description": "Третье положение поворота",
+         "hidden": false,
+         "name": "angle_45",
+         "value": "5"
+        },
+        {
+         "description": "Вверх и вниз четвертая позиция",
+         "hidden": false,
+         "name": "angle_60",
+         "value": "6"
+        },
+        {
+         "description": "Пятая позиция поворота",
+         "hidden": false,
+         "name": "angle_90",
+         "value": "7"
+        },
+        {
+         "description": "Верхнее положение",
+         "hidden": false,
+         "name": "comfort_up",
+         "value": "1"
+        },
+        {
+         "description": "Нижнее положение",
+         "hidden": false,
+         "name": "comfort_down",
+         "value": "3"
+        },
+        {
+         "description": "Фиксированное верхнее и нижнее положение",
+         "hidden": true,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Автоматический подъем и опускание (только для специальной модели)",
+         "hidden": true,
+         "name": "special",
+         "value": "9"
+        }
+       ],
+       "name": "swing_mode",
+       "range": null
+      },
+      {
+       "code": 2,
+       "current": "6",
+       "description": "Режимы",
+       "list": [
+        {
+         "description": "auto",
+         "hidden": false,
+         "name": "auto",
+         "value": "0"
+        },
+        {
+         "description": "cool",
+         "hidden": false,
+         "name": "cool",
+         "value": "1"
+        },
+        {
+         "description": "dry",
+         "hidden": false,
+         "name": "dry",
+         "value": "2"
+        },
+        {
+         "description": "heat",
+         "hidden": false,
+         "name": "heat",
+         "value": "4"
+        },
+        {
+         "description": "fan_only",
+         "hidden": false,
+         "name": "fan_only",
+         "value": "6"
+        }
+       ],
+       "name": "mode",
+       "range": null
+      },
+      {
+       "code": 4,
+       "current": "3",
+       "description": "Скорость вентилятора",
+       "list": [
+        {
+         "description": "high",
+         "hidden": false,
+         "name": "high",
+         "value": "1"
+        },
+        {
+         "description": "medium",
+         "hidden": false,
+         "name": "medium",
+         "value": "2"
+        },
+        {
+         "description": "low",
+         "hidden": false,
+         "name": "low",
+         "value": "3"
+        },
+        {
+         "description": "auto",
+         "hidden": false,
+         "name": "auto",
+         "value": "5"
+        }
+       ],
+       "name": "fan_mode",
+       "range": null
+      },
+      {
+       "code": 6,
+       "current": "0",
+       "description": "Стерильная очистка",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "cleaning",
+       "range": null
+      },
+      {
+       "code": 12,
+       "current": "0",
+       "description": "Подсветка блока",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "light",
+       "range": null
+      },
+      {
+       "code": 13,
+       "current": "0",
+       "description": "10 градусов",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "antifreeze",
+       "range": null
+      },
+      {
+       "code": 14,
+       "current": "0",
+       "description": "Звуковой сигнал",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "sound",
+       "range": null
+      },
+      {
+       "code": 16,
+       "current": "0",
+       "description": "Комфортный сон",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "comfort",
+       "range": null
+      },
+      {
+       "code": 17,
+       "current": "0",
+       "description": "Тихий",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "preset_mode_sleep",
+       "range": null
+      },
+      {
+       "code": 17,
+       "current": "0",
+       "description": "Тихий",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "quiet",
+       "range": null
+      },
+      {
+       "code": 18,
+       "current": "0",
+       "description": "Турбо",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "preset_mode_boost",
+       "range": null
+      },
+      {
+       "code": 18,
+       "current": "0",
+       "description": "Турбо",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "turbo",
+       "range": null
+      },
+      {
+       "code": 20,
+       "current": "0",
+       "description": "Здоровый режим",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "health",
+       "range": null
+      },
+      {
+       "code": 21,
+       "current": "1",
+       "description": "Включение/выключение",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "status",
+       "range": null
+      },
+      {
+       "code": 23,
+       "current": "0",
+       "description": "Эко-датчик",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Обводящий",
+         "hidden": false,
+         "name": "outlining",
+         "value": "1"
+        },
+        {
+         "description": "Сопутствующий",
+         "hidden": false,
+         "name": "related",
+         "value": "2"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "3"
+        }
+       ],
+       "name": "eco_sensor",
+       "range": null
+      },
+      {
+       "code": 24,
+       "current": "0",
+       "description": "Горизонтальные жалюзи",
+       "list": [
+        {
+         "description": "Авто режим",
+         "hidden": false,
+         "name": "auto",
+         "value": "7"
+        },
+        {
+         "description": "Четвертая позиция поворота",
+         "hidden": false,
+         "name": "far_left",
+         "value": "3"
+        },
+        {
+         "description": "Пятая позиция поворота",
+         "hidden": false,
+         "name": "left",
+         "value": "4"
+        },
+        {
+         "description": "Исходная позиция",
+         "hidden": false,
+         "name": "center",
+         "value": "0"
+        },
+        {
+         "description": "Шестое положение поворота",
+         "hidden": false,
+         "name": "right",
+         "value": "5"
+        },
+        {
+         "description": "Седьмая позиция поворота",
+         "hidden": false,
+         "name": "far_right",
+         "value": "6"
+        },
+        {
+         "description": "Второе положение поворота",
+         "hidden": true,
+         "name": "position_2",
+         "value": "1"
+        },
+        {
+         "description": "Третье положение поворота",
+         "hidden": true,
+         "name": "position_3",
+         "value": "2"
+        }
+       ],
+       "name": "swing_horizontal_mode",
+       "range": null
+      },
+      {
+       "code": 31,
+       "current": "0",
+       "description": "Авто влажность",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "autohumidity",
+       "range": null
+      },
+      {
+       "code": 36,
+       "current": "24.50",
+       "description": "Температура в комнате",
+       "list": [],
+       "name": "current_temperature",
+       "range": {
+        "max": "55.0",
+        "min": "0.0",
+        "step": "0.5"
+       }
+      }
+     ],
+     "command_name": "4"
+    },
+    "current_temperature": 24.5,
+    "device_id": "30:c9:22:00:00:04",
+    "device_mac": "30:c9:22:00:00:04",
+    "device_name": "Кондиционер 4",
+    "device_serial": "SNAC0000000000000004",
+    "eco_sensor": "off",
+    "fan_mode": "low",
+    "health_on": false,
+    "light_on": false,
+    "max_temperature": 30.0,
+    "min_temperature": 16.0,
+    "mode": "cool",
+    "preset_mode": "none",
+    "quiet_on": false,
+    "sound_on": false,
+    "status": 0,
+    "sw_version": "1.6.0",
+    "swing_horizontal_mode": "center",
+    "swing_mode": "angle_0",
+    "synced": true,
+    "target_temperature": 23,
+    "turbo_on": false
+   }
+  }
+ },
+ "a0:a3:b3:00:00:02": {
+  "louvers": {
+   "swing_horizontal_mode:0": [
+    "center",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "0"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:1": [
+    "position_2",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "1"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:2": [
+    "position_3",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "2"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:3": [
+    "far_left",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "3"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:4": [
+    "left",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "4"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:5": [
+    "right",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "5"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:6": [
+    "far_right",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "6"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_horizontal_mode:7": [
+    "auto",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "24",
+        "value": "7"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_mode:0": [
+    "off",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "0"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_mode:1": [
+    "comfort_up",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "1"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_mode:2": [
+    "angle_0",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "2"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_mode:3": [
+    "comfort_down",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "3"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_mode:4": [
+    "angle_30",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "4"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_mode:5": [
+    "angle_45",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "5"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_mode:6": [
+    "angle_60",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "6"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_mode:7": [
+    "angle_90",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "7"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_mode:8": [
+    "auto",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "8"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ],
+   "swing_mode:9": [
+    "special",
+    [
+     {
+      "action": "operation",
+      "commandName": "4",
+      "commands": [
+       {
+        "commandName": "1",
+        "value": "9"
+       }
+      ],
+      "macAddress": "a0:a3:b3:00:00:02"
+     }
+    ]
+   ]
+  },
+  "sequence": {
+   "modes": [
+    [
+     "auto",
+     "cool",
+     "dry",
+     "heat",
+     "fan_only",
+     "off"
+    ],
+    [
+     "high",
+     "medium",
+     "low",
+     "auto"
+    ],
+    [
+     "none",
+     "sleep",
+     "boost"
+    ]
+   ],
+   "sent": [
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "21",
+       "value": "1"
+      },
+      {
+       "commandName": "6",
+       "value": "0"
+      },
+      {
+       "commandName": "31",
+       "value": "0"
+      },
+      {
+       "commandName": "2",
+       "value": "1"
+      },
+      {
+       "commandName": "13",
+       "value": "0"
+      }
+     ],
+     "macAddress": "a0:a3:b3:00:00:02"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "0",
+       "value": "23"
+      }
+     ],
+     "macAddress": "a0:a3:b3:00:00:02"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "17",
+       "value": "0"
+      },
+      {
+       "commandName": "18",
+       "value": "0"
+      },
+      {
+       "commandName": "4",
+       "value": "3"
+      }
+     ],
+     "macAddress": "a0:a3:b3:00:00:02"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "18",
+       "value": "1"
+      },
+      {
+       "commandName": "17",
+       "value": "0"
+      }
+     ],
+     "macAddress": "a0:a3:b3:00:00:02"
+    },
+    {
+     "action": "operation",
+     "commandName": "4",
+     "commands": [
+      {
+       "commandName": "21",
+       "value": "0"
+      },
+      {
+       "commandName": "6",
+       "value": "0"
+      },
+      {
+       "commandName": "16",
+       "value": "0"
+      },
+      {
+       "commandName": "31",
+       "value": "0"
+      }
+     ],
+     "macAddress": "a0:a3:b3:00:00:02"
+    }
+   ],
+   "state": {
+    "antifreeze_on": false,
+    "autohumidity_on": false,
+    "available": true,
+    "cleaning_on": false,
+    "comfort_on": false,
+    "config": {
+     "attributes": [
+      {
+       "code": 0,
+       "current": "24",
+       "description": "Целевая температура",
+       "list": [],
+       "name": "target_temperature",
+       "range": {
+        "max": "30",
+        "min": "16",
+        "step": "1"
+       }
+      },
+      {
+       "code": 1,
+       "current": "1",
+       "description": "Вертикальные жалюзи",
+       "list": [
+        {
+         "description": "Авто режим",
+         "hidden": false,
+         "name": "auto",
+         "value": "8"
+        },
+        {
+         "description": "Первое положение поворота",
+         "hidden": false,
+         "name": "angle_0",
+         "value": "2"
+        },
+        {
+         "description": "Второе положение поворота",
+         "hidden": false,
+         "name": "angle_30",
+         "value": "4"
+        },
+        {
+         "description": "Третье положение поворота",
+         "hidden": false,
+         "name": "angle_45",
+         "value": "5"
+        },
+        {
+         "description": "Вверх и вниз четвертая позиция",
+         "hidden": false,
+         "name": "angle_60",
+         "value": "6"
+        },
+        {
+         "description": "Пятая позиция поворота",
+         "hidden": false,
+         "name": "angle_90",
+         "value": "7"
+        },
+        {
+         "description": "Верхнее положение",
+         "hidden": false,
+         "name": "comfort_up",
+         "value": "1"
+        },
+        {
+         "description": "Нижнее положение",
+         "hidden": false,
+         "name": "comfort_down",
+         "value": "3"
+        },
+        {
+         "description": "Фиксированное верхнее и нижнее положение",
+         "hidden": true,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Автоматический подъем и опускание (только для специальной модели)",
+         "hidden": true,
+         "name": "special",
+         "value": "9"
+        }
+       ],
+       "name": "swing_mode",
+       "range": null
+      },
+      {
+       "code": 2,
+       "current": "0",
+       "description": "Режимы",
+       "list": [
+        {
+         "description": "auto",
+         "hidden": false,
+         "name": "auto",
+         "value": "0"
+        },
+        {
+         "description": "cool",
+         "hidden": false,
+         "name": "cool",
+         "value": "1"
+        },
+        {
+         "description": "dry",
+         "hidden": false,
+         "name": "dry",
+         "value": "2"
+        },
+        {
+         "description": "heat",
+         "hidden": false,
+         "name": "heat",
+         "value": "4"
+        },
+        {
+         "description": "fan_only",
+         "hidden": false,
+         "name": "fan_only",
+         "value": "6"
+        }
+       ],
+       "name": "mode",
+       "range": null
+      },
+      {
+       "code": 4,
+       "current": "5",
+       "description": "Скорость вентилятора",
+       "list": [
+        {
+         "description": "high",
+         "hidden": false,
+         "name": "high",
+         "value": "1"
+        },
+        {
+         "description": "medium",
+         "hidden": false,
+         "name": "medium",
+         "value": "2"
+        },
+        {
+         "description": "low",
+         "hidden": false,
+         "name": "low",
+         "value": "3"
+        },
+        {
+         "description": "auto",
+         "hidden": false,
+         "name": "auto",
+         "value": "5"
+        }
+       ],
+       "name": "fan_mode",
+       "range": null
+      },
+      {
+       "code": 6,
+       "current": "0",
+       "description": "Стерильная очистка",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "cleaning",
+       "range": null
+      },
+      {
+       "code": 12,
+       "current": "1",
+       "description": "Подсветка блока",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "light",
+       "range": null
+      },
+      {
+       "code": 13,
+       "current": "0",
+       "description": "10 градусов",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "antifreeze",
+       "range": null
+      },
+      {
+       "code": 14,
+       "current": "0",
+       "description": "Звуковой сигнал",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "sound",
+       "range": null
+      },
+      {
+       "code": 16,
+       "current": "0",
+       "description": "Комфортный сон",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "comfort",
+       "range": null
+      },
+      {
+       "code": 17,
+       "current": "0",
+       "description": "Тихий",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "preset_mode_sleep",
+       "range": null
+      },
+      {
+       "code": 17,
+       "current": "0",
+       "description": "Тихий",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "quiet",
+       "range": null
+      },
+      {
+       "code": 18,
+       "current": "0",
+       "description": "Турбо",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "preset_mode_boost",
+       "range": null
+      },
+      {
+       "code": 18,
+       "current": "0",
+       "description": "Турбо",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "turbo",
+       "range": null
+      },
+      {
+       "code": 20,
+       "current": "0",
+       "description": "Здоровый режим",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "health",
+       "range": null
+      },
+      {
+       "code": 21,
+       "current": "0",
+       "description": "Включение/выключение",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "status",
+       "range": null
+      },
+      {
+       "code": 23,
+       "current": "0",
+       "description": "Эко-датчик",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Обводящий",
+         "hidden": false,
+         "name": "outlining",
+         "value": "1"
+        },
+        {
+         "description": "Сопутствующий",
+         "hidden": false,
+         "name": "related",
+         "value": "2"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "3"
+        }
+       ],
+       "name": "eco_sensor",
+       "range": null
+      },
+      {
+       "code": 24,
+       "current": "7",
+       "description": "Горизонтальные жалюзи",
+       "list": [
+        {
+         "description": "Авто режим",
+         "hidden": false,
+         "name": "auto",
+         "value": "7"
+        },
+        {
+         "description": "Четвертая позиция поворота",
+         "hidden": false,
+         "name": "far_left",
+         "value": "3"
+        },
+        {
+         "description": "Пятая позиция поворота",
+         "hidden": false,
+         "name": "left",
+         "value": "4"
+        },
+        {
+         "description": "Исходная позиция",
+         "hidden": false,
+         "name": "center",
+         "value": "0"
+        },
+        {
+         "description": "Шестое положение поворота",
+         "hidden": false,
+         "name": "right",
+         "value": "5"
+        },
+        {
+         "description": "Седьмая позиция поворота",
+         "hidden": false,
+         "name": "far_right",
+         "value": "6"
+        },
+        {
+         "description": "Второе положение поворота",
+         "hidden": true,
+         "name": "position_2",
+         "value": "1"
+        },
+        {
+         "description": "Третье положение поворота",
+         "hidden": true,
+         "name": "position_3",
+         "value": "2"
+        }
+       ],
+       "name": "swing_horizontal_mode",
+       "range": null
+      },
+      {
+       "code": 31,
+       "current": "0",
+       "description": "Авто влажность",
+       "list": [
+        {
+         "description": "Выключен",
+         "hidden": false,
+         "name": "off",
+         "value": "0"
+        },
+        {
+         "description": "Активен",
+         "hidden": false,
+         "name": "on",
+         "value": "1"
+        }
+       ],
+       "name": "autohumidity",
+       "range": null
+      },
+      {
+       "code": 36,
+       "current": "24.50",
+       "description": "Температура в комнате",
+       "list": [],
+       "name": "current_temperature",
+       "range": {
+        "max": "55.0",
+        "min": "0.0",
+        "step": "0.5"
+       }
+      }
+     ],
+     "command_name": "4"
+    },
+    "current_temperature": 24.5,
+    "device_id": "a0:a3:b3:00:00:02",
+    "device_mac": "a0:a3:b3:00:00:02",
+    "device_name": "Кондиционер 2",
+    "device_serial": "SNAC0000000000000002",
+    "eco_sensor": "off",
+    "fan_mode": "low",
+    "health_on": false,
+    "light_on": true,
+    "max_temperature": 30.0,
+    "min_temperature": 16.0,
+    "mode": "cool",
+    "preset_mode": "none",
+    "quiet_on": false,
+    "sound_on": false,
+    "status": 0,
+    "sw_version": "1.6.0",
+    "swing_horizontal_mode": "auto",
+    "swing_mode": "comfort_up",
+    "synced": true,
+    "target_temperature": 23,
+    "turbo_on": false
+   }
+  }
+ }
+}
