@@ -43,4 +43,13 @@ WS_SLOT_WAIT = 1
 SETUP_INCOMPLETE_RETRIES = 3
 # Tokens live in .storage/haier_evo.<entry_id> (0600, atomic writes).
 STORAGE_VERSION = 1
+# Device descriptions from the last good start live in
+# .storage/haier_evo.<entry_id>.devices: the next start builds the devices from
+# them at once and reads the fresh state in the background, retrying with a
+# growing pause up to CACHE_RETRY_MAX s; every CACHE_REFRESH_HOURS h they are
+# read again (state, firmware flag, changes made in the app).
+CACHE_VERSION = 1
+CACHE_RETRY_FIRST = 5
+CACHE_RETRY_MAX = 300
+CACHE_REFRESH_HOURS = 6
 LEGACY_TOKENS_FILE = DOMAIN  # /config/haier_evo up to 1.1.x
