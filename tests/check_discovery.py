@@ -82,6 +82,32 @@ st["items"].append(dict(st["items"][0], action={"link": "haierevo://x?type=AC&de
 dl["state"] = json.dumps(st)
 check("non-MAC device id skipped", macs(parse(p)), MACS)
 
+# 7b. appliances registered without Wi-Fi: a block of their own, left out quietly (1.5.2)
+import logging
+class Catch(logging.Handler):
+    records = []
+    def emit(self, record): Catch.records.append(record)
+logging.getLogger().addHandler(Catch(level=logging.WARNING))
+p = copy.deepcopy(page)
+non_iot = copy.deepcopy(device_list(p))
+non_iot["trackingData"]["component"]["componentId"] = "9e6668e3-0000-4000-8000-000000000000"
+non_iot["state"] = json.dumps({"items": [
+    {"title": t, "action": {"type": "ACTION_TYPE_REDIRECT", "link": f"haierevo://non-iot/device?deviceId={u}"}}
+    for t, u in (("Посудомоечная машина", "9637893d-4170-48fa-9418-87e0aca98119"),
+                 ("Вытяжка", "761c180e-c6db-4ae3-afb4-3d4df4c66ffa"),
+                 ("Холодильник", "7b2d1428-7192-4bb8-a746-0b8565a6546a"))]})
+containers(p).insert(1, non_iot)
+Catch.records.clear()
+check("a block of appliances without Wi-Fi: only the Wi-Fi devices", macs(parse(p)), MACS)
+check("...and no warnings for them", [r.getMessage() for r in Catch.records], [])
+p2 = copy.deepcopy(page)
+dl = device_list(p2); st = json.loads(dl["state"]) if isinstance(dl["state"], str) else dl["state"]
+st["items"].append({"title": "x", "action": {"link": "haierevo://device?deviceId=not-a-mac"}})
+dl["state"] = json.dumps(st)
+Catch.records.clear()
+parse(p2)
+check("an odd id in the Wi-Fi block is skipped without a warning", [r.getMessage() for r in Catch.records], [])
+
 # 8. the background refresh sees the same list
 h = api.Haier.__new__(api.Haier)
 p = copy.deepcopy(page)

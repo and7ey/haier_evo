@@ -19,6 +19,7 @@ C.WS_CONNECT_TIMEOUT = 2
 PORT = 18765
 MAC = "5c:01:3b:00:00:01"
 S = {"mode": "normal", "connections": 0, "commands": [], "ping_reply": True, "active": 0,
+     "seq": 0, "open": {}, "label": "",  # open: server-side connection id -> scenario that opened it
      "tokens": [], "reject_handshake": 0, "open_ws": [], "junk": False}
 
 
@@ -32,6 +33,9 @@ async def ws_handler(request):
     ws = web.WebSocketResponse(autoping=S["ping_reply"])
     await ws.prepare(request)
     S["active"] += 1
+    S["seq"] += 1
+    cid = S["seq"]
+    S["open"][cid] = S["label"]
     S["open_ws"].append(ws)
     if S["junk"]:
         for junk in ("not json at all", "[1, 2]", '"text"', ""):
@@ -40,6 +44,7 @@ async def ws_handler(request):
         await serve(ws, conn)
     finally:
         S["active"] -= 1
+        S["open"].pop(cid, None)
     return ws
 
 
@@ -113,8 +118,8 @@ def check(name, cond, info=""):
     print(("OK  " if cond else "FAIL"), name, info)
 
 
-def scenario(mode, ping_reply=True, port=PORT, send_on_open=False):
-    S.update(mode=mode, connections=0, commands=[], ping_reply=ping_reply, tokens=[], open_ws=[])
+def scenario(mode, ping_reply=True, port=PORT, send_on_open=False, label=None):
+    S.update(mode=mode, connections=0, commands=[], ping_reply=ping_reply, tokens=[], open_ws=[], label=label or mode)
     C.API_WS_PATH = f"ws://127.0.0.1:{port}/ws/"
     h = TestHaier(None, "e", "p", "ru")
     h.port = port
@@ -277,12 +282,20 @@ h.stop(); time.sleep(0.3)
 C.WS_MAX_PENDING_COMMANDS = 4
 
 # 11. stop() while the connection is being opened / after it is open: nothing stays connected
+# (only the connections this iteration opened count: on a slow CI runner the
+# server may still be closing one from an earlier scenario)
 for delay in (0, 0.01, 0.05, 1):
-    h = scenario("normal")
+    label = f"stop after {delay}s"
+    h = scenario("normal", label=label)
     time.sleep(delay)
     h.stop()
-    time.sleep(2.5)
-    check(f"stop() after {delay}s leaves no open connection", S["active"] == 0, f"active={S['active']} connections={S['connections']}")
+    mine = lambda: [cid for cid, lab in list(S["open"].items()) if lab == label]
+    end = time.time() + 5
+    while time.time() < end and mine():
+        time.sleep(0.1)
+    others = sorted(set(lab for lab in S["open"].values() if lab != label))
+    check(f"stop() after {delay}s leaves no open connection", not mine(),
+          f"still open: {mine()} connections={S['connections']}" + (f" (open from earlier scenarios: {others})" if others else ""))
 
 # ---- 1.5.1
 def drop_all():
