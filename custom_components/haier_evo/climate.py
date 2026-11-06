@@ -48,10 +48,14 @@ class HaierACEntity(ClimateEntity):
         device.add_write_ha_state_callback(self.async_write_ha_state)
 
     @property
-    def hvac_mode(self) -> str:
-        """Return hvac operation ie. heat, cool mode."""
+    def hvac_mode(self) -> str | None:
+        """Return hvac operation ie. heat, cool mode.
+
+        A running unit in a mode the description does not list is unknown
+        (None), not "off".
+        """
         if self._device.status == 1:
-            return self._device.mode or HVACMode.OFF
+            return self._device.mode
         return HVACMode.OFF
 
     @property

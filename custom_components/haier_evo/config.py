@@ -496,11 +496,14 @@ class Attribute(dict):
             self.list
         ), None), "value", default))
 
-    def get_item_name(self, code: str, default=None) -> str:
-        return str(getattr(next(filter(
-            lambda i: str(i.value) == code,
-            self.list
-        ), None), "name", default))
+    def get_item_name(self, code: str, default=None) -> str | None:
+        """Name of a value; default (None) for a code the description does not list.
+
+        Up to 1.5.0 an unknown code became the string "None", which reached
+        Home Assistant as a mode or option name.
+        """
+        item = next(filter(lambda i: str(i.value) == str(code), self.list), None)
+        return default if item is None else str(item.name)
 
 
 class Range(dict):

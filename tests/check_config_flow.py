@@ -1,5 +1,5 @@
 """Config flow steps (user, reauth) with a mocked sign-in."""
-import sys, asyncio
+import sys, asyncio, json
 from types import SimpleNamespace
 from unittest import mock
 from pathlib import Path
@@ -62,8 +62,9 @@ async def main():
     check("user step signs in with the given password", si.await_args.args[1:] == ("User@Example.com", "pw", "ru"))
     check("unique_id is e-mail + region", flow.unique_id == "user@example.com_ru", str(flow.unique_id))
 
-    # wrong password / no connection
-    for exc, code in ((cf.InvalidCredentials(), "invalid_auth"), (cf.CannotConnect(), "cannot_connect")):
+    # wrong password / no connection / the cloud limits sign-ins
+    for exc, code in ((cf.InvalidCredentials(), "invalid_auth"), (cf.CannotConnect(), "cannot_connect"),
+                      (cf.TooManyRequests(), "too_many_requests")):
         flow = make_flow(Entries())
         with mock.patch.object(cf, "sign_in", mock.AsyncMock(side_effect=exc)):
             res = await flow.async_step_user({"email": "a@b.c", "password": "pw", "region": "ru"})
@@ -129,6 +130,33 @@ async def main():
         except Exception as e:
             got = e
     check("sign_in maps a network error -> CannotConnect", isinstance(got, cf.CannotConnect), repr(got))
+
+    # HTTP 429 at sign-in is not a wrong password (1.5.1)
+    class Limited(C):
+        def login(self):
+            try:
+                raise api.ManyRequestsError("429 Too Many Requests")
+            except Exception as e:
+                raise api.InvalidAuth() from e
+    class LimitedRaw(C):
+        def login(self): raise api.ManyRequestsError("429 Too Many Requests")
+    for cls in (Limited, LimitedRaw):
+        with mock.patch.object(cf.api, "Haier", cls):
+            try:
+                await cf.sign_in(hass, "a", "b", "ru"); got = None
+            except Exception as e:
+                got = e
+        check(f"sign_in maps 429 ({cls.__name__}) -> TooManyRequests", isinstance(got, cf.TooManyRequests), repr(got))
+    entries = Entries([existing])
+    flow = make_flow(entries, source="reauth", entry_id="E1")
+    with mock.patch.object(cf.ConfigFlow, "_get_reauth_entry", lambda self: existing), \
+         mock.patch.object(cf, "sign_in", mock.AsyncMock(side_effect=cf.TooManyRequests())):
+        res = await flow.async_step_reauth_confirm({"password": "x"})
+    check("reauth: 429 -> too_many_requests", res.get("errors"), {"base": "too_many_requests"})
+    import os
+    for lang in ("ru", "en"):
+        t = json.load(open(os.path.join(root, "custom_components/haier_evo/translations", f"{lang}.json")))
+        check(f"{lang}: too_many_requests translated", bool(t["config"]["error"].get("too_many_requests")))
 
 asyncio.run(main())
 print("FAILS:", fails)
