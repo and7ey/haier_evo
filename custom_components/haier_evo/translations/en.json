@@ -1,26 +1,29 @@
 {
     "config": {
         "abort": {
-            "already_configured": "already configured"
+            "already_configured": "This Haier Evo account is already added",
+            "reauth_successful": "Signed in again, the integration is reloading"
         },
         "error": {
-            "cannot_connect": "cannot connect",
-            "invalid_auth": "invalid_auth",
-            "unknown": "unknown"
+            "cannot_connect": "Cannot reach the Haier Evo cloud, try again later",
+            "invalid_auth": "Wrong e-mail or password",
+            "unknown": "Unexpected error, see the log"
         },
         "step": {
             "user": {
+                "title": "Haier Evo account",
+                "description": "The password is used once to sign in and is not stored: Home Assistant keeps only the cloud tokens.",
                 "data": {
+                    "email": "E-mail (login)",
                     "password": "Password",
-                    "email": "Login (email)",
                     "region": "Region"
                 }
             },
-            "init": {
+            "reauth_confirm": {
+                "title": "Sign in to Haier Evo again",
+                "description": "The Haier Evo cloud no longer accepts the saved sign-in for {email}. Enter the password once more; it is not stored.",
                 "data": {
-                    "password": "Password",
-                    "email": "Login (email)",
-                    "region": "Region"
+                    "password": "Password"
                 }
             }
         }
@@ -109,6 +112,9 @@
         },
         "value_not_allowed": {
             "message": "{device}: «{attribute}» allows only {allowed} now"
+        },
+        "too_many_commands": {
+            "message": "{device}: too many commands are waiting for the Haier Evo cloud, try again later"
         }
     }
 }

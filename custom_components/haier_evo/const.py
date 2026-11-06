@@ -11,7 +11,6 @@ REFRESH_LIMIT_PERIOD = 15
 REFRESH_LIMIT_MAX = 900
 REFRESH_LIMIT_429 = 60
 REFRESH_LIMIT_500 = 60
-API_HTTP_ROUTE = True
 API_TIMEOUT = 15
 # HTTP: a part of new TCP connections to iot-platform gets no SYN-ACK, so the
 # connect timeout is short and connection errors are retried (reads only for GET).
@@ -34,6 +33,14 @@ WS_PING_TIMEOUT = 10
 # WS_ACK_TIMEOUT s for command_response, then it is re-sent once on a new socket.
 WS_SEND_WAIT = 20
 WS_ACK_TIMEOUT = 6
+# One command never holds an executor thread longer than WS_COMMAND_BUDGET s,
+# and at most WS_MAX_PENDING_COMMANDS wait at once (others fail after WS_SLOT_WAIT s).
+WS_COMMAND_BUDGET = 30
+WS_MAX_PENDING_COMMANDS = 4
+WS_SLOT_WAIT = 1
 # How many setups in a row may retry because the cloud returned fewer devices
 # than the device registry knows before the integration starts with what it got.
 SETUP_INCOMPLETE_RETRIES = 3
+# Tokens live in .storage/haier_evo.<entry_id> (0600, atomic writes).
+STORAGE_VERSION = 1
+LEGACY_TOKENS_FILE = DOMAIN  # /config/haier_evo up to 1.1.x

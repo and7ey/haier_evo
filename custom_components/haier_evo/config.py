@@ -1,9 +1,12 @@
 from __future__ import annotations
+import re
 import shutil
 from os.path import dirname, exists, join
 from homeassistant.util.yaml import load_yaml
 from .logger import _LOGGER
 from . import devices as config_dir
+
+SAFE_MODEL = re.compile(r"[A-Za-z0-9()_.-]{1,32}")
 
 
 class HaierDeviceConfig(object):
@@ -31,6 +34,10 @@ class HaierDeviceConfig(object):
 
     def _find_config_file(self) -> str:
         _CONFIG_DIR = dirname(config_dir.__file__)
+        # the model name comes from the cloud and becomes part of file names
+        if not SAFE_MODEL.fullmatch(self._model or "") or ".." in self._model:
+            _LOGGER.warning("Unexpected device model %r, using the default profile", self._model)
+            return join(_CONFIG_DIR, 'default') + '.yaml'
         fname = join(_CONFIG_DIR, self._model) + '.yaml'
         if not exists(fname):
             fname = join(_CONFIG_DIR, 'default') + '.yaml'

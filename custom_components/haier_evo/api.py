@@ -1,15 +1,16 @@
 from __future__ import annotations
 import requests
 import json
+import re
 import threading
+import time
 import uuid
 import socket
 import ssl
 import weakref
-from aiohttp import web
 from enum import Enum
+from typing import Callable
 from datetime import datetime, timezone, timedelta
-from tenacity import retry, stop_after_attempt, retry_if_exception_type
 from websocket import WebSocketApp, WebSocket
 from requests.adapters import HTTPAdapter
 from requests.exceptions import ConnectionError, Timeout, HTTPError
@@ -20,7 +21,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.components.climate.const import ClimateEntityFeature, HVACMode, SWING_OFF, PRESET_NONE
-from homeassistant.components.http import HomeAssistantView
 from homeassistant.util.ssl import get_default_context
 from .logger import _LOGGER
 from .limits import ResettableLimits
@@ -29,7 +29,10 @@ from . import const as C # noqa
 
 
 class InvalidAuth(HomeAssistantError):
-    """Error to indicate we cannot connect."""
+    """Signing in or refreshing the tokens failed (cloud or network error)."""
+
+class ReauthRequired(HomeAssistantError):
+    """No usable tokens and no password: the user has to sign in again."""
 
 class InvalidDevicesList(HomeAssistantError):
     """Error to indicate we cannot connect."""
@@ -59,33 +62,14 @@ class HaierCommandRejected(HomeAssistantError):
     """The cloud answered command_response with a non-zero errNo."""
 
 
+MAC_RE = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+
+
 class SocketStatus(Enum):
     PRE_INITIALIZATION = 0
     INITIALIZING = 1
     INITIALIZED = 2
     NOT_INITIALIZED = 3
-
-
-class HaierAPI(HomeAssistantView):
-    url = "/api/haier_evo"
-    name = "/api:haier_evo"
-    requires_auth = True
-
-    def __init__(self) -> None:
-        self.haier = None
-
-    # noinspection PyUnusedLocal
-    async def get(self, request):
-        if not getattr(self.haier, "allow_http", False):
-            return web.Response(text="404: Not found", status=404, content_type="text/plain")
-        return self.json(self.haier.to_dict())
-
-    async def post(self, request):
-        if not getattr(self.haier, "allow_http_post", False):
-            return web.Response(text="404: Not found", status=404, content_type="text/plain")
-        data = await request.json()
-        self.haier.send_message(json.dumps(data))
-        return self.json({"result": "success"})
 
 
 class AuthResponse(object):
@@ -153,7 +137,6 @@ class AuthResponse(object):
 
 class Haier(object):
 
-    http = HaierAPI()
     connect_limits = ResettableLimits(calls=1, period=5)
     common_limits = ResettableLimits(
         calls=C.COMMON_LIMIT_CALLS,
@@ -174,10 +157,14 @@ class Haier(object):
         self,
         hass: HomeAssistant,
         email: str,
-        password: str,
+        password: str | None,
         region: str,
-        http: bool = C.API_HTTP_ROUTE
+        tokens: dict | None = None,
+        token_saver: Callable[[dict], None] | None = None,
+        on_auth_failed: Callable[[], None] | None = None,
     ) -> None:
+        """password may be None: the tokens are enough until the cloud rejects
+        the refresh token, then on_auth_failed asks the user to sign in again."""
         self._lock = threading.Lock()
         self._pull_data = None
         self._device_id = str(uuid.uuid4())
@@ -186,8 +173,8 @@ class Haier(object):
         self.email: str = email
         self.password: str = password
         self.region: str = region
-        self.allow_http: bool = http
-        self.allow_http_post: bool = False
+        self._token_saver = token_saver
+        self._on_auth_failed = on_auth_failed
         self.token: str | None = None
         self.tokenexpire: datetime | None = None
         self.refreshtoken: str | None = None
@@ -201,8 +188,10 @@ class Haier(object):
         # trace -> {"event": Event, "mac": str, "err": errNo} for commands awaiting command_response
         self._pending: dict[str, dict] = {}
         self._pending_lock = threading.Lock()
+        # commands waiting for the socket / an answer hold executor threads
+        self._command_slots = threading.BoundedSemaphore(C.WS_MAX_PENDING_COMMANDS)
         self.reset_limits()
-        self.register_view()
+        self.set_tokens(tokens)
 
     @staticmethod
     def _build_session() -> requests.Session:
@@ -240,38 +229,35 @@ class Haier(object):
             "devices": [device.to_dict() for device in self.devices]
         }
 
-    def load_tokens(self) -> None:
-        filename = self.hass.config.path(C.DOMAIN)
-        try:
-            with open(filename, "r") as f:
-                data = json.load(f)
-            assert isinstance(data, dict), "Bad saved tokens file"
-            self.token = data.get("token", None)
-            tokenexpire = data.get("tokenexpire")
-            self.tokenexpire = datetime.fromisoformat(tokenexpire) if tokenexpire else None
-            self.refreshtoken = data.get("refreshtoken", None)
-            refreshexpire = data.get("refreshexpire")
-            self.refreshexpire = datetime.fromisoformat(refreshexpire) if refreshexpire else None
-            _LOGGER.info(f"Loaded tokens file: {filename}")
-        except FileNotFoundError:
-            _LOGGER.warning(f"No tokens file: {filename}")
-        except Exception as e:
-            _LOGGER.error(f"Failed to load tokens file: {e}")
+    def set_tokens(self, data: dict | None) -> None:
+        data = data if isinstance(data, dict) else {}
+
+        def parse(value):
+            try:
+                return datetime.fromisoformat(value) if value else None
+            except (TypeError, ValueError):
+                return None
+
+        self.token = data.get("token") or None
+        self.tokenexpire = parse(data.get("tokenexpire"))
+        self.refreshtoken = data.get("refreshtoken") or None
+        self.refreshexpire = parse(data.get("refreshexpire"))
+
+    def tokens_dict(self) -> dict:
+        return {
+            "token": self.token,
+            "tokenexpire": self.tokenexpire.isoformat() if self.tokenexpire else None,
+            "refreshtoken": self.refreshtoken,
+            "refreshexpire": self.refreshexpire.isoformat() if self.refreshexpire else None,
+        }
 
     def save_tokens(self) -> None:
+        if self._token_saver is None:
+            return
         try:
-            filename = self.hass.config.path(C.DOMAIN)
-            with open(filename, "w") as f:
-                json.dump({
-                    "token": self.token,
-                    "tokenexpire": str(self.tokenexpire) if self.tokenexpire else None,
-                    "refreshtoken": self.refreshtoken,
-                    "refreshexpire": str(self.refreshexpire) if self.refreshexpire else None,
-                }, f)
+            self._token_saver(self.tokens_dict())
         except Exception as e:
-            _LOGGER.error(f"Failed to save tokens file: {e}")
-        else:
-            _LOGGER.debug(f"Saved tokens file: {filename}")
+            _LOGGER.error(f"Failed to save tokens: {e!r}")
 
     def clear_tokens(self) -> None:
         self.token = None
@@ -286,21 +272,6 @@ class Haier(object):
         self.auth_login_limits.reset()
         self.auth_refresh_limits.reset()
 
-    def get_http_resources(self) -> list:
-        http = getattr(self.hass, "http", None)
-        app = getattr(http, "app", None)
-        router = getattr(app, "router", None)
-        resources = getattr(router, "resources", None)
-        return resources() if resources else []
-
-    def register_view(self) -> None:
-        if self.http.url not in (r.canonical for r in self.get_http_resources()):
-            self.hass.http.register_view(self.http)
-        self.http.haier = weakref.proxy(self)
-
-    def unregister_view(self) -> None:
-        self.http.haier = None
-
     def stop(self) -> None:
         self.disconnect_requested = True
         self._connected.clear()
@@ -308,7 +279,6 @@ class Haier(object):
         if self.socket_app is not None:
             self.socket_app.close()
         self._session.close()  # idle keep-alive connections
-        self.unregister_view()
 
     @common_limits.sleep_and_retry
     @common_limits
@@ -391,51 +361,47 @@ class Haier(object):
             self.auth_login_limits.reset()
         return response
 
-    @retry(
-        retry=retry_if_exception_type(AuthValidationError),
-        stop=stop_after_attempt(2),
-    )
     def login(self, refresh: bool = False) -> None:
-        resp = None
-        try:
-            if refresh and self.refreshtoken:  # token refresh
-                resp = self.auth_refresh()
-            else:  # initial login
-                resp = self.auth_login()
-            assert resp, "No response from login"
-            self.token = resp.access_token
-            self.tokenexpire = resp.access_expire
-            self.refreshtoken = resp.refresh_token
-            self.refreshexpire = resp.refresh_expire
-            self.save_tokens()
-        except AuthValidationError as e:
-            raise e
-        except AssertionError as e:
-            _LOGGER.error(f"Assertion error: {e}")
-        except Exception as e:
-            _LOGGER.error(
-                f"Failed to login/refresh token, "
-                f"response was: {resp}, "
-                f"err: {e}"
-            )
-            raise InvalidAuth()
-        else:
-            _LOGGER.debug(f"Successful update tokens")
+        """Get new tokens: refresh them, or sign in with the password.
+
+        A rejected refresh token falls back to the password. The password is
+        not kept after setup, so without it ReauthRequired is raised.
+        """
+        for attempt in (1, 2):
+            resp = None
+            try:
+                if refresh and self.refreshtoken:
+                    resp = self.auth_refresh()
+                else:
+                    if not self.password:
+                        raise ReauthRequired("Haier Evo: no valid tokens, sign in again")
+                    resp = self.auth_login()
+                assert resp, "No response from login"
+                self.token = resp.access_token
+                self.tokenexpire = resp.access_expire
+                self.refreshtoken = resp.refresh_token
+                self.refreshexpire = resp.refresh_expire
+                self.save_tokens()
+                _LOGGER.debug("Successful update tokens")
+                return
+            except AuthValidationError as e:
+                # refresh token rejected (tokens are cleared): try the password
+                if attempt == 2:
+                    raise ReauthRequired(str(e)) from e
+                refresh = False
+            except (ReauthRequired, AuthUserError):
+                raise
+            except Exception as e:
+                _LOGGER.error(f"Failed to login/refresh token, response was: {resp}, err: {e!r}")
+                raise InvalidAuth() from e
 
     def auth(self) -> None:
         with self._lock:
-            tzinfo = timezone(timedelta(hours=+3.0))
-            # tzinfo = datetime.now(timezone.utc).astimezone().tzinfo
-            now = datetime.now(tzinfo)
-            tokenexpire = self.tokenexpire or now
-            refreshexpire = self.refreshexpire or now
-            if self.token:
-                if tokenexpire > now:
-                    return None
-                elif self.refreshtoken and refreshexpire > now:
-                    # _LOGGER.debug(f"Token to be refreshed")
-                    return self.login(refresh=True)
-            # _LOGGER.debug(f"Token expired or empty")
+            now = datetime.now(timezone.utc)
+            if self.token and self.tokenexpire and self.tokenexpire > now:
+                return None
+            if self.refreshtoken and (self.refreshexpire is None or self.refreshexpire > now):
+                return self.login(refresh=True)
             return self.login()
 
     def pull_data_from_api(self) -> dict:
@@ -458,29 +424,30 @@ class Haier(object):
             _LOGGER.error(f"Failed to get devices {e}, response was: {response}")
             return {}
 
-    @retry(
-        retry=retry_if_exception_type(HTTPError),
-        stop=stop_after_attempt(2),
-    )
     def pull_device_data(self, device_mac: str) -> dict:
-        self.auth()
-        response = None
-        try:
-            status_url = C.API_STATUS.format(mac=device_mac)
-            _LOGGER.debug(f"Getting initial status of device {device_mac}, url: {status_url}")
-            response = self._session.get(status_url, headers={
-                'X-Auth-Token': self.token,
-                'Device-Id': self._device_id,
-                'Content-Type': 'application/json'
-            }, timeout=self._timeout())
-            # _LOGGER.debug(f"Update device {device_mac} status code: {response.status_code}")
-            # _LOGGER.debug(response.text)s
-            response.raise_for_status()
-            data = response.json()
-            return data
-        except Exception as e:
-            _LOGGER.error(f"Failed to get status: {e}, response was: {response}")
-            raise
+        for attempt in (1, 2):
+            self.auth()
+            response = None
+            try:
+                status_url = C.API_STATUS.format(mac=device_mac)
+                _LOGGER.debug(f"Getting initial status of device {device_mac}, url: {status_url}")
+                response = self._session.get(status_url, headers={
+                    'X-Auth-Token': self.token,
+                    'Device-Id': self._device_id,
+                    'Content-Type': 'application/json'
+                }, timeout=self._timeout())
+                response.raise_for_status()
+                return response.json()
+            except HTTPError as e:
+                _LOGGER.error(f"Failed to get status: {e}, response was: {response}")
+                if response is not None and response.status_code == 401:
+                    with self._lock:
+                        self.tokenexpire = None  # the cloud dropped the token: refresh it
+                if attempt == 2:
+                    raise
+            except Exception as e:
+                _LOGGER.error(f"Failed to get status: {e!r}, response was: {response}")
+                raise
 
     def pull_data(self) -> None:
         self._pull_data = data = self.pull_data_from_api()
@@ -518,6 +485,9 @@ class Haier(object):
                 device_mac = query_params.get('deviceId', [''])[0]
                 device_mac = device_mac.replace('%3A', ':')
                 device_serial = query_params.get('serialNum', [''])[0]
+                if not MAC_RE.match(device_mac):
+                    _LOGGER.warning(f"Skipping a device with an unexpected id: {device_mac!r}")
+                    continue
                 device = HaierDevice.create(
                     haier=self,
                     device_type=device_type,
@@ -648,6 +618,12 @@ class Haier(object):
                 ping_interval=C.WS_PING_INTERVAL,
                 ping_timeout=C.WS_PING_TIMEOUT,
             )
+        except (ReauthRequired, AuthUserError) as e:
+            # retrying cannot help: stop and let Home Assistant ask for the password
+            _LOGGER.error(f"Haier Evo rejected the saved sign-in, re-authentication is needed: {e!r}")
+            self.disconnect_requested = True
+            if self._on_auth_failed is not None:
+                self._on_auth_failed()
         except Exception as e:
             _LOGGER.warning(f"Error connecting to websocket: {e!r}")
         finally:
@@ -691,9 +667,27 @@ class Haier(object):
             # called from a websocket callback: an ack could not arrive while we wait
             self.send_message(json.dumps({**message, "trace": str(uuid.uuid4())}))
             return
+        if not self._command_slots.acquire(timeout=C.WS_SLOT_WAIT):
+            # too many commands already wait for the cloud: fail fast instead
+            # of tying up more of Home Assistant's executor threads
+            raise HaierNotConnected(
+                translation_domain=C.DOMAIN,
+                translation_key="too_many_commands",
+                translation_placeholders={"device": name},
+            )
+        try:
+            self._send_command_attempts(message, mac, device, name)
+        finally:
+            self._command_slots.release()
+
+    def _send_command_attempts(self, message: dict, mac: str, device, name: str) -> None:
+        deadline = time.monotonic() + C.WS_COMMAND_BUDGET
         sent = False
         for attempt in (1, 2):
-            app = self._wait_connected(C.WS_SEND_WAIT)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            app = self._wait_connected(min(C.WS_SEND_WAIT, remaining))
             if app is None:
                 break
             trace = str(uuid.uuid4())
@@ -705,7 +699,8 @@ class Haier(object):
                 _LOGGER.debug(f"Sending message: {payload}")
                 app.send(payload)
                 sent = True
-                acked = pending["event"].wait(C.WS_ACK_TIMEOUT)
+                ack_wait = max(0.5, min(C.WS_ACK_TIMEOUT, deadline - time.monotonic()))
+                acked = pending["event"].wait(ack_wait)
             except Exception as e:
                 _LOGGER.warning(f"{name}: failed to send a command: {e!r}")
                 acked = False
@@ -731,8 +726,7 @@ class Haier(object):
                     _LOGGER.info(f"{name}: command confirmed after re-sending")
                 return
             _LOGGER.warning(
-                f"{name}: no confirmation in {C.WS_ACK_TIMEOUT} s (attempt {attempt}), "
-                f"reconnecting the websocket"
+                f"{name}: no confirmation (attempt {attempt}), reconnecting the websocket"
             )
             self._drop_socket(app)
         if not sent:
@@ -741,10 +735,11 @@ class Haier(object):
                 translation_key="not_connected",
                 translation_placeholders={"device": name},
             )
-        # sent but never confirmed: show the real state instead of the expected one
+        # sent but never confirmed: show the real state instead of the expected
+        # one, in the background (the cloud may be slow right now)
         _LOGGER.error(f"{name}: command was not confirmed by the cloud, reading the state back")
         if device is not None:
-            device.resync()
+            threading.Thread(target=device.resync, daemon=True).start()
 
 
 class HaierDevice(object):

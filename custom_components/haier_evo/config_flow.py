@@ -1,104 +1,119 @@
+"""Config flow: sign in once, keep only the tokens (no password in the config).
+
+The password is used to get tokens and is not stored. When the cloud rejects
+the saved refresh token, Home Assistant asks for the password again (reauth).
+"""
 from __future__ import annotations
 import voluptuous as vol
 from typing import Any
+from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout
 from homeassistant import config_entries, exceptions
 from homeassistant.core import HomeAssistant
-from homeassistant.core import callback
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 from .const import DOMAIN
 from .logger import _LOGGER
+from . import api
 
 
 REGIONS = ["ru", "kz", "by"]
-DATA_SCHEMA = vol.Schema({
-    vol.Required("email"): str,
-    vol.Required("password"): str,
-    vol.Required("region", default="ru"): vol.In(REGIONS),
+EMAIL = TextSelector(TextSelectorConfig(type=TextSelectorType.EMAIL, autocomplete="username"))
+PASSWORD = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD, autocomplete="current-password"))
+REGION = SelectSelector(SelectSelectorConfig(options=REGIONS))
+
+USER_SCHEMA = vol.Schema({
+    vol.Required("email"): EMAIL,
+    vol.Required("password"): PASSWORD,
+    vol.Required("region", default="ru"): REGION,
 })
+REAUTH_SCHEMA = vol.Schema({vol.Required("password"): PASSWORD})
 
 
-async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
-    if len(data["email"]) < 3:
-        raise InvalidEmail
-    if len(data["password"]) < 3:
-        raise InvalidPassword
-    if data["region"] not in REGIONS:
-        raise InvalidRegion
-    return {"title": f'{data["email"]} ({data["region"]})'}
+class InvalidCredentials(exceptions.HomeAssistantError):
+    """The cloud rejected the e-mail or the password."""
+
+
+class CannotConnect(exceptions.HomeAssistantError):
+    """The cloud could not be reached."""
+
+
+async def sign_in(hass: HomeAssistant, email: str, password: str, region: str) -> dict:
+    """Sign in once and return the tokens; the password is not kept anywhere."""
+    def run() -> dict:
+        client = api.Haier(hass, email, password, region)
+        try:
+            client.login()
+            return client.tokens_dict()
+        finally:
+            client.stop()
+    try:
+        return await hass.async_add_executor_job(run)
+    except api.AuthUserError as e:
+        raise InvalidCredentials from e
+    except api.InvalidAuth as e:
+        if isinstance(e.__cause__, (RequestsConnectionError, Timeout)):
+            raise CannotConnect from e
+        raise InvalidCredentials from e
+    except (RequestsConnectionError, Timeout) as e:
+        raise CannotConnect from e
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
 
-    async def async_step_user(self, user_input=None):
-        errors = {}
+    async def _try_sign_in(self, email: str, password: str, region: str, errors: dict) -> dict | None:
+        try:
+            return await sign_in(self.hass, email, password, region)
+        except InvalidCredentials:
+            errors["base"] = "invalid_auth"
+        except CannotConnect:
+            errors["base"] = "cannot_connect"
+        except Exception:  # pylint: disable=broad-except
+            _LOGGER.exception("Unexpected exception")
+            errors["base"] = "unknown"
+        return None
+
+    async def async_step_user(self, user_input: dict[str, Any] | None = None):
+        errors: dict[str, str] = {}
         if user_input is not None:
-            try:
-                info = await validate_input(self.hass, user_input)
-                return self.async_create_entry(title=info["title"], data=user_input)
-            except InvalidEmail:
-                errors["email"] = "invalid_email"
-            except InvalidPassword:
-                errors["password"] = "invalid_password"
-            except InvalidRegion:
-                errors["region"] = "invalid_region"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
+            email = user_input["email"].strip()
+            region = user_input["region"]
+            await self.async_set_unique_id(f"{email.lower()}_{region}")
+            self._abort_if_unique_id_configured()
+            tokens = await self._try_sign_in(email, user_input["password"], region, errors)
+            if tokens is not None:
+                return self.async_create_entry(
+                    title=f"{email} ({region})",
+                    data={"email": email, "region": region, "tokens": tokens},
+                )
+        suggested = {k: v for k, v in (user_input or {}).items() if k != "password"}
         return self.async_show_form(
             step_id="user",
-            data_schema=DATA_SCHEMA,
-            errors=errors
+            data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, suggested),
+            errors=errors,
         )
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry):
-        return OptionsFlowHandler(config_entry)
+    async def async_step_reauth(self, entry_data: dict[str, Any]):
+        return await self.async_step_reauth_confirm()
 
-
-class OptionsFlowHandler(config_entries.OptionsFlow):
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
-
-    async def async_step_init(self, user_input=None):
-        errors = {}
+    async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None):
+        entry = self._get_reauth_entry()
+        email = entry.data.get("email", "")
+        errors: dict[str, str] = {}
         if user_input is not None:
-            try:
-                info = await validate_input(self.hass, user_input)
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry,
-                    title=info["title"],
-                    data={**self.config_entry.data, **user_input},
-                )
-                return self.async_create_entry(title="", data={})
-            except InvalidEmail:
-                errors["email"] = "invalid_email"
-            except InvalidPassword:
-                errors["password"] = "invalid_password"
-            except InvalidRegion:
-                errors["region"] = "invalid_region"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
-        current = self.config_entry.data
+            tokens = await self._try_sign_in(
+                email, user_input["password"], entry.data.get("region", "ru"), errors
+            )
+            if tokens is not None:
+                return self.async_update_reload_and_abort(entry, data_updates={"tokens": tokens})
         return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema({
-                vol.Required("email", default=current.get("email", "")): str,
-                vol.Required("password", default=current.get("password", "")): str,
-                vol.Required("region", default=current.get("region", "ru")): vol.In(REGIONS),
-            }),
-            errors=errors
+            step_id="reauth_confirm",
+            data_schema=REAUTH_SCHEMA,
+            description_placeholders={"email": email},
+            errors=errors,
         )
-
-
-class InvalidEmail(exceptions.HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-class InvalidPassword(exceptions.HomeAssistantError):
-    """Error to indicate there is an invalid hostname."""
-
-class InvalidRegion(exceptions.HomeAssistantError):
-    """Error to indicate there is an invalid region."""
