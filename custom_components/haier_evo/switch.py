@@ -10,8 +10,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     entities = []
     for device in haier_object.devices:
         entities.extend(device.create_entities_switch())
-    entities.append(HttpSwitch(haier_object))
-    entities.append(HttpSwitchPOST(haier_object))
     async_add_entities(entities)
     haier_object.write_ha_state()
     return True
@@ -163,55 +161,6 @@ class HaierREFVacationSwitch(HaierSwitch):
         self._device_attr_name = "vacation_mode"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_vacation_mode_switch"
         self._attr_name = f"{device.device_name} Режим Отпуск"
-
-
-class HttpSwitch(SwitchEntity):
-    _attr_icon = "mdi:toggle-switch"
-
-    def __init__(self, haier):
-        self._haier = weakref.proxy(haier)
-        self._attr_unique_id = f"{DOMAIN}_http_switch_get"
-        self._attr_name = "Haier Evo HTTP GET"
-
-    @property
-    def is_on(self) -> bool:
-        return self._haier.allow_http
-
-    @property
-    def device_info(self) -> dict:
-        return {
-            "identifiers": {(DOMAIN, f"{DOMAIN}_http_switch")},
-            "name": "Haier Evo HTTP",
-            "manufacturer": "Haier"
-        }
-
-    async def async_turn_on(self, **kwargs):
-        self._haier.allow_http = True
-        self.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs):
-        self._haier.allow_http = False
-        self.async_write_ha_state()
-
-
-class HttpSwitchPOST(HttpSwitch):
-
-    def __init__(self, haier):
-        super().__init__(haier)
-        self._attr_unique_id = f"{DOMAIN}_http_switch_post"
-        self._attr_name = "Haier Evo HTTP POST"
-
-    @property
-    def is_on(self) -> bool:
-        return self._haier.allow_http_post
-
-    async def async_turn_on(self, **kwargs):
-        self._haier.allow_http_post = True
-        self.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs):
-        self._haier.allow_http_post = False
-        self.async_write_ha_state()
 
 
 class HaierWHSterilizationSwitch(HaierSwitch):

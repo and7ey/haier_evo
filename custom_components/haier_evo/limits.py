@@ -1,70 +1,75 @@
+"""Call-rate limiter without third-party dependencies.
 
+Replaces the unmaintained ``ratelimit`` package: at most ``calls`` calls per
+``period`` seconds; the period can be stretched after 429/5xx answers
+(``add_period``, capped by ``max``) and reset from another thread, which also
+wakes up a caller sleeping in ``sleep_and_retry``.
+"""
+import threading
 import time
 from functools import wraps
-from ratelimit.decorators import RateLimitDecorator
-from ratelimit.exception import RateLimitException
 
 
-class ResettableLimits(RateLimitDecorator):
+class RateLimitException(Exception):
 
-    def __init__(self, **kwargs) -> None:
-        self._multiplier = kwargs.pop("multiplier", 1)
-        self._max = kwargs.pop("max", kwargs.get("period"))
-        self._exp_base = kwargs.pop("exp_base", 2)
-        super().__init__(**kwargs)
-        self._init_period = self.period
-        self._min = self.period
-        self._counter = 0
-        self._RateLimitDecorator__period_remaining = self.__period_remaining
-        self._reset = False
+    def __init__(self, message: str, period_remaining: float) -> None:
+        super().__init__(message)
+        self.period_remaining = period_remaining
 
-    def set_period(self, period: int | float = None):
-        self.period = period or self._init_period
 
-    def add_period(self, period: int | float = None) -> float | int:
-        period = self.period + period
-        self.period = min(period, self._max)
-        return self.period
+class ResettableLimits:
 
-    def expand_period(self) -> float | int:
-        try:
-            exp = self._exp_base ** (self._counter - 1)
-            result = self._multiplier * exp
-        except OverflowError:
-            result = self._max
-        else:
-            result = max(max(0, self._min), min(result, self._max))
-        self.period = result
-        return self.period
-
-    def reset(self) -> None:
-        self.period = self._init_period
+    def __init__(self, calls: int = 1, period: float = 1, max: float | None = None) -> None:  # noqa: A002
+        self.calls = int(calls) if calls >= 1 else 1
+        self.period = period
+        self._init_period = period
+        self._max = period if max is None else max
         self.num_calls = 0
-        self.last_reset = self.clock()
-        self._counter = 0
-        self._reset = True
+        self.last_reset = time.monotonic()
+        self._lock = threading.RLock()
+        self._wakeup = threading.Event()
 
-    def __period_remaining(self) -> float:
-        self._counter += 1
-        self._reset = False
-        elapsed = self.clock() - self.last_reset
-        return self.period - elapsed
+    def _period_remaining(self) -> float:
+        return self.period - (time.monotonic() - self.last_reset)
+
+    def __call__(self, func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with self._lock:
+                remaining = self._period_remaining()
+                if remaining <= 0:
+                    self.num_calls = 0
+                    self.last_reset = time.monotonic()
+                self.num_calls += 1
+                if self.num_calls > self.calls:
+                    raise RateLimitException("too many calls", remaining)
+            return func(*args, **kwargs)
+        return wrapper
 
     def sleep_and_retry(self, func):
         @wraps(func)
-        def wrapper(*args, **kargs):
+        def wrapper(*args, **kwargs):
             while True:
                 try:
-                    return func(*args, **kargs)
+                    return func(*args, **kwargs)
                 except RateLimitException as exception:
                     self._sleep(exception.period_remaining)
         return wrapper
 
-    def _sleep(self, period_remaining) -> None:
-        now = self.clock()
-        while not self._reset:
-            elapsed = self.clock() - now
-            if elapsed >= period_remaining:
-                break
-            time.sleep(0.01)
-        self._reset = False
+    def _sleep(self, period_remaining: float) -> None:
+        self._wakeup.clear()
+        self._wakeup.wait(max(0.0, period_remaining))
+
+    def set_period(self, period: float | None = None) -> None:
+        self.period = period or self._init_period
+
+    def add_period(self, period: float) -> float:
+        self.period = min(self.period + period, self._max)
+        return self.period
+
+    def reset(self) -> None:
+        with self._lock:
+            self.period = self._init_period
+            self.num_calls = 0
+            self.last_reset = time.monotonic()
+        self._wakeup.set()
