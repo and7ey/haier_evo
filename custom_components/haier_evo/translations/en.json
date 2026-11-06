@@ -91,9 +91,9 @@
             "conditioner_eco_sensor": {
                 "state": {
                     "off": "Disabled",
-                    "outlining": "Outlining",
-                    "related": "Related",
-                    "on": "Active"
+                    "outlining": "Airflow avoids people",
+                    "related": "Airflow follows people",
+                    "on": "On"
                 }
             }
         },

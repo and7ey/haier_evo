@@ -840,6 +840,9 @@ class HaierDevice(object):
         self._modifiers = CFG.Modifiers([])
         self.device_type = "UNKNOWN"
         self.link_status: str | None = None  # deviceConnectionStatusEvent
+        # (platform, unique_id) of entities older versions created and this
+        # device no longer offers: removed from the entity registry at setup
+        self.hidden_entities: list[tuple[str, str]] = []
         # False while the values come from the saved description, not the cloud
         self.synced = True
         self._fresh_description: dict | None = None  # a newer description that needs a reload
@@ -946,6 +949,19 @@ class HaierDevice(object):
             if isinstance(a, dict) and str(a.get("name")) == str(code)
         ), {})
 
+    def app_title(self, code, fallback: str | None = None) -> str | None:
+        """What the Haier app calls an attribute, else the cloud's flat-list name."""
+        if code is None:
+            return fallback
+        return (CFG.app_screens(self.status_data).get(str(code))
+                or (self._cloud_attribute(code).get("description") or "").strip()
+                or fallback)
+
+    def offered_by_app(self, code) -> bool:
+        """False when the app has screens for this device but none for the attribute."""
+        screens = CFG.app_screens(self.status_data)
+        return not screens or str(code) in screens
+
     def _cloud_value_name(self, code, value) -> str:
         """The cloud's own (Russian) name of a list value, e.g. 2/"6" -> "Вентилятор"."""
         for item in (self._cloud_attribute(code).get("list") or {}).get("data") or []:
@@ -974,7 +990,7 @@ class HaierDevice(object):
         values = {**self._values, **{str(k): CFG.Constraint.value2code(str(v)) for k, v in (assume or {}).items()}}
         placeholders = {
             "device": str(self.device_name),
-            "attribute": attr.description or name,
+            "attribute": self.app_title(code, attr.description or name),
         }
         reason = self._locked(values).get(code)
         if reason is None:
@@ -995,7 +1011,7 @@ class HaierDevice(object):
         elif reason == self.config["mode"]:
             key, extra = "locked_mode", {"mode": self._cloud_value_name(reason, values.get(reason))}
         else:
-            cause = self._cloud_attribute(reason).get("description") or reason
+            cause = self.app_title(reason, str(reason))
             key, extra = "locked_by", {"cause": str(cause).strip()}
         raise HaierCommandLocked(
             translation_domain=C.DOMAIN,
@@ -1645,26 +1661,18 @@ class HaierAC(HaierDevice):
         return [climate.HaierACEntity(self)]
     
     def create_entities_switch(self) -> list:
+        """Switches for what the app offers; the rest (e.g. "Звуковой сигнал",
+        which AS25S2SF2FA rejects) is listed in hidden_entities for removal."""
         from . import switch
-        entities = []
-        if self.config['light'] is not None:
-            entities.append(switch.HaierACLightSwitch(self))
-        if self.config['sound'] is not None:
-            entities.append(switch.HaierACSoundSwitch(self))
-        if self.config['quiet'] is not None:
-            entities.append(switch.HaierACQuietSwitch(self))
-        if self.config['turbo'] is not None:
-            entities.append(switch.HaierACTurboSwitch(self))
-        if self.config['health'] is not None:
-            entities.append(switch.HaierACHealthSwitch(self))
-        if self.config['comfort'] is not None:
-            entities.append(switch.HaierACComfortSwitch(self))
-        if self.config['cleaning'] is not None:
-            entities.append(switch.HaierACCleaningSwitch(self))
-        if self.config['antifreeze'] is not None:
-            entities.append(switch.HaierACAntiFreezeSwitch(self))
-        if self.config['autohumidity'] is not None:
-            entities.append(switch.HaierACAutoHumiditySwitch(self))
+        entities, self.hidden_entities = [], []
+        for cls in switch.AC_SWITCHES:
+            code = self.config[cls.feature]
+            if code is None:
+                continue
+            if self.offered_by_app(code):
+                entities.append(cls(self))
+            else:
+                self.hidden_entities.append(("switch", f"{self.device_id}_{self.device_model}_{cls.feature}"))
         return entities
 
     def create_entities_select(self) -> list:
