@@ -51,6 +51,33 @@ def _louver_group(kind: str, body) -> list[tuple[str, str | None]]:
     return [(code, f"angle_{angle}") for angle, code in sorted(angles)] + others
 
 
+def app_screens(data) -> dict[str, str]:
+    """Attributes the Haier app has a control for: {attribute code: the app's title}.
+
+    The app builds its screens from modes.itemsV2 (louvers, cleaning, display
+    light...) and top-level blocks such as muteStatus ("Тихий"). Empty when
+    the description has no screens (the integration then shows everything).
+    The flat attribute list sometimes names an attribute differently, e.g.
+    31 "Авто влажность" is "Самоочистка" in the app.
+    """
+    screens = {}
+    if not isinstance(data, dict):
+        return screens
+    modes = data.get("modes") if isinstance(data.get("modes"), dict) else {}
+    blocks = list(modes.get("itemsV2") or modes.get("items") or [])
+    if not blocks:
+        return screens  # no screens described: nothing is known to be missing
+    blocks += [v for k, v in data.items() if k != "modes" and isinstance(v, dict)]
+    for block in blocks:
+        if not isinstance(block, dict) or not isinstance(block.get("value"), dict):
+            continue
+        code = block["value"].get("name")
+        title = block.get("title")
+        if code not in (None, "") and isinstance(title, str) and title.strip():
+            screens.setdefault(str(code), title.strip())
+    return screens
+
+
 def louver_layout(modes) -> dict[str, list[tuple[str, str | None]]]:
     """Louver positions the app offers: {attribute code: [(value code, key)]} in app order."""
     layout = {}
