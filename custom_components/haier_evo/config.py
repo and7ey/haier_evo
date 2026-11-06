@@ -1,6 +1,7 @@
 from __future__ import annotations
+import filecmp
+import os
 import re
-import shutil
 from os.path import dirname, exists, join
 from homeassistant.util.yaml import load_yaml
 from .logger import _LOGGER
@@ -140,13 +141,23 @@ class HaierDeviceConfig(object):
         fname = join(_CONFIG_DIR, self._model) + '.yaml'
         if not exists(fname):
             fname = join(_CONFIG_DIR, 'default') + '.yaml'
+        # /config/haier_evo.<MODEL>.yaml still overrides the bundled profile,
+        # but it is no longer made automatically: up to 1.5.2 every start
+        # copied the bundled one there, and the copy then won over every fix
+        # of the profile in later releases
         userfname = f"{self._userpath}.{self._model}.yaml"
-        if not exists(userfname):
-            try:
-                shutil.copy(fname, userfname)
-            except Exception:
-                pass
-        return userfname if exists(userfname) else fname
+        if not self._userpath or not exists(userfname):
+            return fname
+        try:
+            if filecmp.cmp(userfname, fname, shallow=False):
+                # such an automatic copy: nothing of the user's is lost
+                os.remove(userfname)
+                _LOGGER.info("Removed %s, a copy of the bundled profile", userfname)
+                return fname
+        except OSError as e:
+            _LOGGER.warning("Failed to compare %s with the bundled profile: %s", userfname, e)
+        _LOGGER.info("Using the profile %s instead of the bundled one", userfname)
+        return userfname
 
     def _load_config_file(self) -> None:
         fname = self._find_config_file()
@@ -169,6 +180,11 @@ class HaierDeviceConfig(object):
             lambda a: str(a.code) == str(code),
             self.attrs
         ), None)
+
+    def get_attrs_by_code(self, code: str | int) -> list[Attribute]:
+        """Every attribute with this code: an AC has "Тихий" twice (the
+        preset_mode_sleep preset and the quiet switch), "Турбо" too."""
+        return [a for a in self.attrs if str(a.code) == str(code)]
 
     def get_attr_by_name(self, name: str) -> Attribute | None:
         if name in self._attrs_cache:

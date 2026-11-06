@@ -127,9 +127,19 @@ async def _refresh(hass: HomeAssistant, entry: ConfigEntry, haier_object: api.Ha
         entry.async_start_reauth(hass)
         return
     known = {d.device_id.lower() for d in haier_object.devices}
-    if listed is not None and listed - known:
-        await rebuild(f"the app lists {len(listed - known)} new device(s)")
-        return
+    if listed is not None and (new := listed - known):
+        try:
+            # a device skipped at the start because the cloud refuses it
+            # (HTTP 403/404) is not new: rebuild once the cloud describes it
+            denied = await hass.async_add_executor_job(haier_object.denied_devices, new)
+        except (api.ReauthRequired, api.AuthUserError) as e:
+            _LOGGER.error(f"Haier Evo rejected the saved sign-in, re-authentication is needed: {e!r}")
+            haier_object.stop()
+            entry.async_start_reauth(hass)
+            return
+        if new - denied:
+            await rebuild(f"the app lists {len(new - denied)} new device(s)")
+            return
     await _save_devices(hass, store, haier_object)
     if result["changed"]:
         hass.config_entries.async_schedule_reload(entry.entry_id)
