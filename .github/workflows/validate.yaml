@@ -114,8 +114,7 @@ jobs:
     runs-on: "ubuntu-latest"
     timeout-minutes: 5
     outputs:
-      tests: ${{ steps.badges.outputs.tests }}
-      home_assistant: ${{ steps.badges.outputs.home_assistant }}
+      badges: ${{ steps.badges.outputs.badges }}
     steps:
       - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
         with:
@@ -141,12 +140,13 @@ jobs:
         run: python3 scripts/ci_results.py run --reports "$RUNNER_TEMP/checks" --verdict
 
   # The README badges show main: its results go to the "badges" branch as
-  # shields.io endpoint files, on a push to main, on schedule and by hand,
-  # never from a pull request. The only job with a writable token; it runs
-  # no code of the repository.
+  # shields.io endpoint files (tests.json and one ha-<channel>.json per
+  # version), on a push to main, on schedule and by hand, never from a pull
+  # request. The only job with a writable token; it runs no code of the
+  # repository.
   badges:
     needs: results
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.results.outputs.tests != '' }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.results.outputs.badges != '' }}
     runs-on: "ubuntu-latest"
     timeout-minutes: 5
     permissions:
@@ -157,8 +157,7 @@ jobs:
       - name: Publish to the badges branch
         env:
           GH_TOKEN: ${{ github.token }}
-          TESTS_BADGE: ${{ needs.results.outputs.tests }}
-          HA_BADGE: ${{ needs.results.outputs.home_assistant }}
+          BADGES: ${{ needs.results.outputs.badges }}
         run: |
           set -eu
           remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
@@ -173,13 +172,21 @@ jobs:
           else
             git checkout -q --orphan badges
           fi
-          printf '%s\n' "$TESTS_BADGE" > tests.json
-          printf '%s\n' "$HA_BADGE" > home-assistant.json
-          git add tests.json home-assistant.json
+          # the branch holds exactly the badges of this run: one no longer made goes away
+          rm -f ./*.json
+          python3 - <<'EOF'
+          import json, os, re
+          for name, badge in json.loads(os.environ["BADGES"]).items():
+              if not re.fullmatch(r"[a-z0-9-]+\.json", name):
+                  raise SystemExit(f"unexpected badge file: {name!r}")
+              with open(name, "w", encoding="utf-8") as file:
+                  file.write(json.dumps(badge, ensure_ascii=False) + "\n")
+          EOF
+          git add -A
           if git diff --cached --quiet; then
             echo "The badges did not change"
             exit 0
           fi
           git commit -q -m "Badges for $GITHUB_SHA"
           git -c http.extraheader="$auth" push -q "$remote" HEAD:refs/heads/badges
-          cat tests.json home-assistant.json
+          head -n 20 ./*.json

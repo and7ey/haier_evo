@@ -11,10 +11,12 @@ tests/test_checks.py), one per version: <channel>.jsonl.
       annotations (workflow commands) on stdout.
   ci_results.py run --reports DIR [--summary | --verdict]
       in the results job, with the versions of the run in HA_VERSIONS (the
-      outputs of scripts/ha_versions.py as JSON): prints tests=<badge> and
-      home_assistant=<badge> for $GITHUB_OUTPUT (the shields.io endpoint
-      format); --summary prints the table of the run; --verdict exits 1 when
-      a version that blocks did not pass.
+      outputs of scripts/ha_versions.py as JSON): prints badges=<JSON> for
+      $GITHUB_OUTPUT, the files of the badges branch ({file name: badge in
+      the shields.io endpoint format}): tests.json and one ha-<channel>.json
+      per version, ha-minimum.json with the minimum of hacs.json; --summary
+      prints the table of the run; --verdict exits 1 when a version that
+      blocks did not pass.
 
 Standard library only.
 """
@@ -31,6 +33,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ha_versions import CHANNELS, JOB_NAMES, NON_BLOCKING, TITLES  # noqa: E402
 
 DEV = re.compile(r"^(\d{4}\.\d{1,2})\.\d+\.dev")
+RELEASE = re.compile(r"^(\d{4}\.\d{1,2})\.\d")     # 2026.9.4 -> 2026.9
+MINIMUM = re.compile(r"^\d{4}\.\d{1,2}\.\d+$")
 PASSED, FAILED, ERROR = "passed", "failed", "error"
 MAX_ANNOTATIONS = 10   # GitHub shows 10 errors and 10 warnings per step
 META = ("homeassistant", "python", "pytest", "websocket_client", "image", "digest")
@@ -137,15 +141,59 @@ def tests_badge(entries: list[dict]) -> dict:
     return badge("tests", f"{shown['passed']} passed", "brightgreen")
 
 
-def home_assistant_badge(entries: list[dict]) -> dict:
-    """The versions checked; one that did not pass is marked with a cross."""
-    if not entries:
-        return badge("Home Assistant", "no results", "lightgrey", namedLogo="homeassistant")
-    parts = [version_name(e) + ("" if e["status"] == PASSED else " ✗") for e in entries]
-    blocking_bad = any(e["status"] != PASSED for e in entries if blocking(e))
-    other_bad = any(e["status"] != PASSED for e in entries if not blocking(e))
-    color = "red" if blocking_bad else "yellow" if other_bad else "brightgreen"
-    return badge("Home Assistant", " | ".join(parts), color, namedLogo="homeassistant")
+def _ha_badge(message: str, color: str) -> dict:
+    return badge("Home Assistant", message, color, namedLogo="homeassistant")
+
+
+def _color(e: dict) -> str:
+    if e["status"] == PASSED:
+        return "brightgreen"
+    return "red" if blocking(e) else "yellow"
+
+
+def _mark(e: dict) -> str:
+    return "" if e["status"] == PASSED else " ✗"
+
+
+def version_badge(e: dict) -> dict:
+    """One version: green when its checks passed, else a cross, red (yellow for next)."""
+    return _ha_badge(version_name(e) + _mark(e), _color(e))
+
+
+def release(tag: str) -> str | None:
+    match = RELEASE.match(tag or "")
+    return match.group(1) if match else None
+
+
+def minimum_badge(entries: list[dict], minimum: str) -> dict:
+    """The minimum of hacs.json, coloured by the check of its release: its own job
+    once the window has left it behind, else the job of the window on that release."""
+    checked = next((e for e in entries if e["channel"] == "minimum"), None) or next(
+        (e for e in entries if blocking(e) and release(e["tag"]) == release(minimum)), None)
+    if checked is None:
+        return _ha_badge(f"≥ {minimum}", "blue")
+    return _ha_badge(f"≥ {minimum}" + _mark(checked), _color(checked))
+
+
+def badges(entries: list[dict], minimum: str | None = None) -> dict[str, dict]:
+    """The files of the badges branch: tests.json, ha-minimum.json, one ha-<channel>.json per version."""
+    out = {"tests.json": tests_badge(entries)}
+    if minimum:
+        out["ha-minimum.json"] = minimum_badge(entries, minimum)
+    for e in entries:
+        if e["channel"] != "minimum":
+            out[f"ha-{e['channel']}.json"] = version_badge(e)
+    return out
+
+
+def hacs_minimum(path: str) -> str | None:
+    """The minimum Home Assistant of hacs.json; None without one."""
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8")).get("homeassistant")
+    except (OSError, ValueError, AttributeError):
+        return None
+    value = str(value or "").strip()
+    return value if MINIMUM.match(value) else None
 
 
 # ---------------------------------------------------------------- summaries
@@ -279,6 +327,7 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--reports", required=True, help="directory with <channel>.jsonl")
     run.add_argument("--versions", default=os.environ.get("HA_VERSIONS", ""),
                      help="JSON of the versions (default: $HA_VERSIONS)")
+    run.add_argument("--hacs", default="hacs.json", help="hacs.json with the minimum version")
     what = run.add_mutually_exclusive_group()
     what.add_argument("--summary", action="store_true", help="print the table of the run")
     what.add_argument("--verdict", action="store_true", help="exit 1 when a version that blocks did not pass")
@@ -309,8 +358,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Home Assistant {e['tag']} ({JOB_NAMES[e['channel']]}): {e['status']}")
         return 1 if bad or not entries else 0
     else:
-        sys.stdout.write(f"tests={json.dumps(tests_badge(entries))}\n")
-        sys.stdout.write(f"home_assistant={json.dumps(home_assistant_badge(entries))}\n")
+        sys.stdout.write(f"badges={json.dumps(badges(entries, hacs_minimum(args.hacs)))}\n")
     return 0
 
 
