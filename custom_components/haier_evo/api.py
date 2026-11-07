@@ -149,6 +149,15 @@ def parse_expire(value) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=_CLOUD_TZ)
 
 
+def firmware_text(value) -> str | None:
+    """A firmware version as Home Assistant's device registry takes it: text or None."""
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, int | float) and not isinstance(value, bool) and value == value and abs(value) != float("inf"):
+        return str(value)
+    return None
+
+
 def entry_device_id(entry_id: str) -> str:
     """Device-Id of a config entry: the same on every start (it used to be random)."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"{C.DOMAIN}:{entry_id}"))
@@ -686,7 +695,8 @@ class Haier(object):
             for d in devices if isinstance(devices, list) else []:
                 if not isinstance(d, dict):
                     continue
-                device_link = urlparse(str((d.get('action') or {}).get('link', '')))
+                action = d.get('action')
+                device_link = urlparse(str(action.get('link', '')) if isinstance(action, dict) else '')
                 if device_link.netloc == "non-iot" or device_link.path.startswith("/non-iot"):
                     # an appliance registered in the app without Wi-Fi (dishwasher,
                     # hood...): its own "deviceList" block, UUID ids, nothing to control
@@ -705,7 +715,7 @@ class Haier(object):
                     "device_type": device_type,
                     "device_mac": device_mac,
                     "device_serial": device_serial,
-                    "device_title": d.get('title', ''),
+                    "device_title": d['title'] if isinstance(d.get('title'), str) else '',
                 })
         return listed
 
@@ -1019,7 +1029,7 @@ class HaierDevice(object):
         self.device_serial = device_serial
         self.device_name = device_title
         self.device_model = "UNKNOWN"
-        self.sw_version = None
+        self.sw_version: str | None = None
         self._write_ha_state_callbacks = []
         self._available = True
         self._config = None
@@ -1247,7 +1257,7 @@ class HaierDevice(object):
         self.available = data.setdefault("status", "ONLINE")
         settings = data.setdefault("settings", {})
         self.device_name = settings.setdefault("name", {}).setdefault("name", self.device_name)
-        self.sw_version = settings.setdefault('firmware', {}).setdefault('value', None)
+        self.sw_version = firmware_text(settings.setdefault('firmware', {}).setdefault('value', None))
         for attr in data.get("attributes") or []:
             if isinstance(attr, dict):
                 self._store_value(attr.get("name"), attr.get("currentValue"))
@@ -1291,13 +1301,16 @@ class HaierDevice(object):
             _LOGGER.debug(f"{self.device_name}: value {value!r} of attribute {code} skipped: {e!r}")
 
     def _handle_device_status_update(self, received_message: dict) -> None:
-        status = received_message.get("payload", {}).get("status")
-        self.available = status
+        payload = received_message.get("payload")
+        if not isinstance(payload, dict) or payload.get("status") is None:
+            return  # nothing to tell (up to 1.6.2 a null payload broke the handler)
+        self.available = payload["status"]
         self.write_ha_state()
 
     def _handle_info(self, received_message: dict) -> None:
-        payload = received_message.get("payload", {})
-        self.sw_version = payload.get("swVersion") or self.sw_version
+        payload = received_message.get("payload")
+        if isinstance(payload, dict):
+            self.sw_version = firmware_text(payload.get("swVersion")) or self.sw_version
 
     def _send_message(self, message: dict) -> None:
         self.changed_at = time.monotonic()
@@ -1462,8 +1475,10 @@ class HaierDevice(object):
             self._handle_device_status_update(message_dict)
         elif message_type == "deviceConnectionStatusEvent":
             # the module's link to the cloud ("GOOD" seen so far), sent on connect
-            self.link_status = (message_dict.get("payload") or {}).get("status")
-            self.write_ha_state()
+            payload = message_dict.get("payload")
+            if isinstance(payload, dict):
+                self.link_status = payload.get("status")
+                self.write_ha_state()
         else:
             _LOGGER.warning(f"Got unknown message: {message_dict}")
 

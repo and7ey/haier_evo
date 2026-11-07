@@ -5,3 +5,4 @@
 # the integration's own requirement (manifest.json); requests comes with Home Assistant
 websocket-client>=1.8.0,<2
 pytest>=8.4
+hypothesis>=6.100,<7
