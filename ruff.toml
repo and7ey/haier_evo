@@ -1,0 +1,14 @@
+# ruff check (scripts/run_lint.sh, the lint job of CI): mistakes, not style.
+# E9 and F: syntax errors, undefined and unused names; B: bugbear, likely bugs;
+# PLE: pylint's errors.
+target-version = "py313"
+
+[lint]
+select = ["E9", "F", "B", "PLE"]
+ignore = [
+    "B905",  # zip() without strict=: the lengths are equal by construction here
+]
+
+[lint.per-file-ignores]
+# the checks call their lambdas on the spot, inside the loop
+"tests/*" = ["B023"]

@@ -1,6 +1,5 @@
 """Louver positions named from the app's screens (modes.itemsV2), 1.3.0."""
-import sys, json, os, copy, tempfile, asyncio
-from types import SimpleNamespace
+import sys, json, os, copy, tempfile
 from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 root = sys.argv[1] if len(sys.argv) > 1 else str(_HERE.parent)

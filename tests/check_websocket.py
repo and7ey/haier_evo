@@ -113,8 +113,10 @@ def cmd(code, value):
 
 
 fails = 0
+LAST = [""]  # the last check: names the scenario a leak was found after
 def check(name, cond, info=""):
     global fails
+    LAST[0] = name
     fails += not cond
     print(("OK  " if cond else "FAIL"), name, info)
 
@@ -132,6 +134,23 @@ def scenario(mode, ping_reply=True, port=PORT, send_on_open=False, token=None):
     return h
 
 
+LEAKS = []
+def stopped(h):
+    """stop() and what it must leave: no client thread (it would hold up Home
+    Assistant's shutdown) and no connection the server still sees open."""
+    h.stop()
+    thread = getattr(h, "socket_thread", None)
+    if thread is not None:
+        thread.join(5)
+    end = time.time() + 5
+    while time.time() < end and S["active"]:
+        time.sleep(0.05)
+    alive = thread is not None and thread.is_alive()
+    if alive or S["active"]:
+        LEAKS.append(f"after '{LAST[0]}': thread alive={alive}, open connections={S['active']}")
+    time.sleep(0.3)
+
+
 def timed(fn):
     t = time.time()
     try:
@@ -146,7 +165,7 @@ h = scenario("normal")
 err, dt = timed(lambda: h.send_command(cmd("1", "74")))
 check("normal: confirmed", err is None and len(S["commands"]) == 1 and dt < 2, f"err={err!r} dt={dt:.2f}s cmds={len(S['commands'])}")
 check("normal: trace added", "trace" in S["commands"][0][1])
-h.stop(); time.sleep(0.3)
+stopped(h)
 
 # 2. first socket swallows commands: re-sent over a new connection
 h = scenario("silent_first")
@@ -154,7 +173,7 @@ err, dt = timed(lambda: h.send_command(cmd("1", "74")))
 conns = [c for c, _ in S["commands"]]
 check("silent socket: re-sent on new connection", err is None and conns == [1, 2], f"err={err!r} dt={dt:.1f}s conns={conns}")
 check("silent socket: no resync needed", h.devices[0].resyncs == 0)
-h.stop(); time.sleep(0.3)
+stopped(h)
 
 # 3. rejected
 h = scenario("reject")
@@ -162,7 +181,7 @@ err, dt = timed(lambda: h.send_command(cmd("1", "74")))
 check("reject: HaierCommandRejected", isinstance(err, api.HaierCommandRejected) and err.translation_key == "command_rejected"
       and err.translation_placeholders == {"device": "Бойлер", "code": "5"}, repr(err))
 check("reject: state read back", h.devices[0].resyncs == 1)
-h.stop(); time.sleep(0.3)
+stopped(h)
 
 # 3b. non-zero errNo for a value the device already has: not an error
 h = scenario("reject")
@@ -172,7 +191,7 @@ check("errNo for unchanged value: no error", err is None and h.devices[0].resync
 h.devices[0].resync_data = {"attributes": [{"name": "1", "currentValue": "75"}]}
 err, dt = timed(lambda: h.send_command(cmd("1", "74")))
 check("errNo and value differs: rejected", isinstance(err, api.HaierCommandRejected), repr(err))
-h.stop(); time.sleep(0.3)
+stopped(h)
 
 aa = api.already_applied
 grp = {"action": "operation", "commands": [{"commandName": "0", "value": "24"}, {"commandName": "21", "value": "1"}]}
@@ -187,19 +206,19 @@ h = scenario("silent")
 err, dt = timed(lambda: h.send_command(cmd("1", "74")))
 check("never acked: 2 attempts, resync, no raise", err is None and len(S["commands"]) == 2 and h.devices[0].resyncs == 1,
       f"err={err!r} cmds={len(S['commands'])} dt={dt:.1f}s")
-h.stop(); time.sleep(0.3)
+stopped(h)
 
 # 5. ack without trace is matched by device
 h = scenario("notrace")
 err, dt = timed(lambda: h.send_command(cmd("1", "74")))
 check("ack without trace", err is None and len(S["commands"]) == 1, f"err={err!r}")
-h.stop(); time.sleep(0.3)
+stopped(h)
 
 # 6. dead socket (no pongs) is detected and replaced
 h = scenario("normal", ping_reply=False)
 time.sleep(9)
 check("dead socket detected by ping_timeout", S["connections"] >= 2, f"connections={S['connections']} in 9 s")
-h.stop(); time.sleep(0.3)
+stopped(h)
 
 # 7. nothing listening: command fails loudly instead of being lost
 h = scenario("normal", port=18799)
@@ -211,7 +230,7 @@ try:
 except Exception as e:
     raw = e
 check("raw send without connection raises", isinstance(raw, api.HaierNotConnected), repr(raw))
-h.stop(); time.sleep(0.3)
+stopped(h)
 
 # 8. command sent from a websocket callback must not wait for its own ack
 h = scenario("normal", send_on_open=True)
@@ -219,7 +238,7 @@ time.sleep(2)
 dev = h.devices[0]
 check("send from on_open: no deadlock", getattr(dev, "open_send_time", 99) < 0.5 and S["connections"] == 1 and len(S["commands"]) == 1,
       f"t={getattr(dev, 'open_send_time', None)} conns={S['connections']}")
-h.stop(); time.sleep(0.3)
+stopped(h)
 
 # 9-10 need an address whose SYNs vanish (like a dead Haier backend); TEST-NET-1
 # does that on most networks, but some CI networks refuse it at once
@@ -268,7 +287,7 @@ C.WS_COMMAND_BUDGET = 3
 h = scenario("silent")
 err, dt = timed(lambda: h.send_command(cmd("1", "74")))
 check("budget: silent cloud, command returns within budget", err is None and dt < 4, f"err={err!r} dt={dt:.1f}s")
-h.stop(); time.sleep(0.3)
+stopped(h)
 C.WS_COMMAND_BUDGET = 30
 
 # 13. at most N commands wait at once, the rest fail fast
@@ -281,7 +300,7 @@ time.sleep(0.3)
 err, dt = timed(lambda: h.send_command(cmd("1", "71")))
 check("slots: third concurrent command -> too_many_commands fast",
       isinstance(err, api.HaierNotConnected) and err.translation_key == "too_many_commands" and dt < 2, f"{err!r} dt={dt:.1f}s")
-h.stop(); time.sleep(0.3)
+stopped(h)
 C.WS_MAX_PENDING_COMMANDS = 4
 
 # 11. stop() while the connection is being opened / after it is open: nothing stays connected.
@@ -341,7 +360,7 @@ h.connect_in_thread()
 connected = wait(lambda: h._connected.is_set(), 15)
 check("handshake 401: next try connects with a refreshed token",
       connected and S["tokens"][0] == "old" and S["tokens"][-1].startswith("fresh"), f"tokens={S['tokens']}")
-h.stop(); time.sleep(0.3)
+stopped(h)
 
 # 15. state read again after the connection was down for long, not after a short drop
 for threshold, want, label in ((1, 1, "long outage: state read again"), (600, 0, "short drop: no extra reads")):
@@ -352,7 +371,7 @@ for threshold, want, label in ((1, 1, "long outage: state read again"), (600, 0,
     drop_all()
     wait(lambda: S["connections"] >= 2 and h._connected.is_set(), 15); time.sleep(1)
     check(f"{label} (first connection: none)", (first, h.devices[0].resyncs), (0, want))
-    h.stop(); time.sleep(0.3)
+    stopped(h)
 C.WS_RESYNC_AFTER = 30
 
 # 16. unreadable messages are ignored, the socket stays and commands work
@@ -362,7 +381,12 @@ wait(lambda: h._connected.is_set(), 5); time.sleep(0.5)
 err, dt = timed(lambda: h.send_command(cmd("1", "71")))
 check("unreadable messages ignored: same socket, command confirmed", err is None and S["connections"] == 1, f"{err!r} conns={S['connections']}")
 S["junk"] = False
-h.stop(); time.sleep(0.3)
+stopped(h)
+
+# after every scenario above
+check("every scenario: stop() leaves no client thread and no open connection", not LEAKS, "; ".join(LEAKS))
+held = [t.name for t in threading.enumerate() if not t.daemon and t is not threading.main_thread()]
+check("no thread is left that would hold up Home Assistant's shutdown", not held, f"threads={held}")
 
 print("FAILS:", fails)
 sys.exit(1 if fails else 0)

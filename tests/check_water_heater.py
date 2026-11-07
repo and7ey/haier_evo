@@ -1,11 +1,11 @@
-import sys, json, os, shutil, copy, tempfile
+import sys, json, os, copy, tempfile
 from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 root = sys.argv[1] if len(sys.argv) > 1 else str(_HERE.parent)
 dump_path = sys.argv[2] if len(sys.argv) > 2 else str(_HERE / "fixtures" / "evo_dump.json")
 dump = json.load(open(dump_path))
 sys.path.insert(0, root)
-from custom_components.haier_evo import api, config as CFG
+from custom_components.haier_evo import api
 
 tmp = tempfile.mkdtemp()
 class FakeConfig:
@@ -92,7 +92,7 @@ for model in ("ES80V-F7", "ES50V-F7"):   # with model yaml / description-only ma
     ws(d, {}, ["alarmCancel"]); check("alarmCancel clears", d.problem, False)
     ws(d, {"35": "false"}); check("bool as text", d.status, False)
     check("to_dict json", bool(json.dumps(d.to_dict(), ensure_ascii=False)), True)
-    from custom_components.haier_evo import water_heater, switch, sensor, binary_sensor
+    from custom_components.haier_evo import water_heater, switch, sensor, binary_sensor  # noqa: F401 - the platforms import
     ents = d.create_entities_water_heater() + d.create_entities_switch() + d.create_entities_sensor() + d.create_entities_binary_sensor()
     print("entities:", [(type(e).__name__, e.unique_id, e.name) for e in ents])
     wh = ents[0]
