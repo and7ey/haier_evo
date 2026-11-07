@@ -9,7 +9,6 @@ root = sys.argv[1] if len(sys.argv) > 1 else str(_HERE.parent)
 dump_path = sys.argv[2] if len(sys.argv) > 2 else str(_HERE / "fixtures" / "evo_dump.json")
 sys.path.insert(0, root)
 import requests
-from homeassistant.const import EntityCategory
 from custom_components.haier_evo import api, climate, sensor, water_heater
 from custom_components.haier_evo import const as C
 dump = json.load(open(dump_path))
@@ -152,20 +151,26 @@ check("power without a value list still goes out as 1/0",
       (api.HaierDevice.get_commands(ac, "status", "on")[0]["value"], api.HaierDevice.get_commands(ac, "status", "off")[0]["value"]), ("1", "0"))
 status["list"] = saved
 
-# ---------- outdoor unit ----------
+# ---------- code 38: not used (1.6.1) ----------
 ac, _ = make_ac(**{"38": "7"})
 raw = {a["name"]: a.get("currentValue") for a in ac_src["backend_data"]["attributes"]}
-check("code 38 is the outdoor unit, 36 stays the room", (ac.config["outdoor_temperature"], ac.config["current_temperature"]), ("38", "36"))
-check("values: room from 36, outdoor unit from 38", (ac.current_temperature, ac.outdoor_temperature), (float(raw["36"]), 7.0))
+check("room temperature from 36, code 38 not used", (ac.config["current_temperature"], ac.current_temperature, "outdoor_temperature" in ac.to_dict()),
+      ("36", float(raw["36"]), False))
 push(ac, {"properties": {"38": "-3"}})
-check("outdoor unit follows the push", ac.outdoor_temperature, -3.0)
-ents = [e for e in ac.create_entities_sensor() if isinstance(e, sensor.HaierACOutdoorTemperatureSensor)]
-check("diagnostic sensor 'Температура наружного блока'",
-      [(e.native_value, e.entity_category, e.name.endswith("Температура наружного блока"), e.unique_id.endswith("_outdoor_temperature")) for e in ents],
-      [(-3.0, EntityCategory.DIAGNOSTIC, True, True)])
-data = copy.deepcopy(ac_src["backend_data"]); data["sensors"] = {"items": []}
-no_sensors = api.HaierAC(haier=Hr(), device_mac="02:00:00:00:00:01", device_serial="x", device_title="t", backend_data=data)
-check("no sensors block: the outdoor unit is not guessed", no_sensors.config["outdoor_temperature"], None)
+check("a push of 38 does not touch the room temperature", ac.current_temperature, float(raw["36"]))
+check("no outdoor unit sensor any more", [type(e).__name__ for e in ac.create_entities_sensor()], ["HaierACTemperatureSensor"])
+
+class Registry:
+    def __init__(s, ids): s.ids, s.removed = dict(ids), []
+    def async_get_entity_id(s, platform, domain, unique_id): return s.ids.get((platform, domain, unique_id))
+    def async_remove(s, entity_id): s.removed.append(entity_id)
+uid = f"{ac.device_id}_{ac.device_model}_outdoor_temperature"
+reg = Registry({("sensor", "haier_evo", uid): "sensor.kabinet_temperatura_naruzhnogo_bloka",
+                ("sensor", "haier_evo", f"{ac.device_id}_{ac.device_model}_temperature"): "sensor.kabinet_temperatura_v_komnate"})
+with mock.patch.object(sensor.er, "async_get", lambda hass: reg):
+    sensor._remove_retired(None, [ac])
+check("the 1.6.0 outdoor unit sensor is removed from the registry, the room one stays",
+      reg.removed, ["sensor.kabinet_temperatura_naruzhnogo_bloka"])
 
 # ---------- deferred setpoint ----------
 ac, haier = make_ac(**{POWER: "0", TGT: "22"})

@@ -132,8 +132,8 @@ check("online", ac.connected, True)
 ents = ac.create_entities_sensor() + ac.create_entities_binary_sensor()
 print("new entities:", [(type(e).__name__, e.unique_id, e.name) for e in ents])
 check("new entity classes", [type(e).__name__ for e in ents],
-      ["HaierACTemperatureSensor", "HaierACOutdoorTemperatureSensor", "HaierProblemSensor", "HaierFilterSensor",
-       "HaierConnectivitySensor", "HaierFirmwareUpdateSensor"])
+      ["HaierACTemperatureSensor", "HaierProblemSensor", "HaierFilterSensor", "HaierConnectivitySensor",
+       "HaierFirmwareUpdateSensor"])
 check("temperature sensor value", ents[0].native_value, ac.current_temperature)
 check("to_dict json", bool(json.dumps(ac.to_dict(), ensure_ascii=False, default=str)), True)
 print("FAILS:", fails)

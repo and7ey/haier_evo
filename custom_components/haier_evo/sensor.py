@@ -1,10 +1,16 @@
 import weakref
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
 from homeassistant.core import HomeAssistant
-from homeassistant.const import EntityCategory, UnitOfTemperature
+from homeassistant.helpers import entity_registry as er
+from homeassistant.const import UnitOfTemperature
 from homeassistant.const import TEMPERATURE
 from .const import DOMAIN
 from . import api
+
+
+# sensors of earlier versions that are gone, by unique_id suffix: the outdoor
+# unit of 1.6.0 (code 38 does not change on AS25S2SF2FA)
+RETIRED_SENSORS = ("outdoor_temperature",)
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> bool:
@@ -12,10 +18,21 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     entities = []
     for device in haier_object.devices:
         entities.extend(device.create_entities_sensor())
+    _remove_retired(hass, haier_object.devices)
     if entities:
         async_add_entities(entities)
         haier_object.write_ha_state()
     return True
+
+
+def _remove_retired(hass: HomeAssistant, devices) -> None:
+    """Drop sensors earlier versions created and this one no longer offers."""
+    registry = er.async_get(hass)
+    for device in devices:
+        for suffix in RETIRED_SENSORS:
+            unique_id = f"{device.device_id}_{device.device_model}_{suffix}"
+            if entity_id := registry.async_get_entity_id("sensor", DOMAIN, unique_id):
+                registry.async_remove(entity_id)
 
 
 class HaierSensor(SensorEntity):
@@ -143,26 +160,3 @@ class HaierACTemperatureSensor(HaierSensor):
     @property
     def native_value(self) -> float | None:
         return self._device.current_temperature
-
-
-class HaierACOutdoorTemperatureSensor(HaierSensor):
-    """The outdoor unit's own sensor (code 38, "Температура в комнате" in the cloud).
-
-    Not the outdoor air: off by several degrees, colder after heating and
-    warmer after cooling, hence a diagnostic entity.
-    """
-    _attr_device_class = SensorDeviceClass.TEMPERATURE
-    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:hvac"
-
-    def __init__(self, device: api.HaierAC):
-        super().__init__(device)
-        self._device_attr_name = "outdoor_temperature"
-        self._attr_unique_id = f"{device.device_id}_{device.device_model}_outdoor_temperature"
-        self._attr_name = f"{device.device_name} Температура наружного блока"
-
-    @property
-    def native_value(self) -> float | None:
-        return self._device.outdoor_temperature
