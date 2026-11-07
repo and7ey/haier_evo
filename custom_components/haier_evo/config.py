@@ -506,11 +506,16 @@ class Attribute(dict):
     def range(self, value: dict) -> None:
         self["range"] = value
 
-    def get_item_code(self, name: str, default=None) -> str:
-        return str(getattr(next(filter(
-            lambda i: str(i.name) == name,
-            self.list
-        ), None), "value", default))
+    def get_item_code(self, name: str, default=None) -> str | None:
+        """Code of a value by its name; default for a name the description does not list.
+
+        Up to 1.5.3 an unknown name became the string "None", which then went
+        to the device as a command value.
+        """
+        item = next(filter(lambda i: str(i.name) == str(name), self.list), None)
+        if item is None or item.value is None:
+            return None if default is None else str(default)
+        return str(item.value)
 
     def get_item_name(self, code: str, default=None) -> str | None:
         """Name of a value; default (None) for a code the description does not list.

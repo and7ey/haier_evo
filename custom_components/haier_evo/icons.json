@@ -26,9 +26,9 @@
                         "state": {
                             "auto": "mdi:arrow-left-right",
                             "far_left": "mdi:arrow-collapse-left",
-                            "left": "mdi:arrow-top-left",
-                            "center": "mdi:arrow-up",
-                            "right": "mdi:arrow-top-right",
+                            "left": "mdi:arrow-bottom-left",
+                            "center": "mdi:arrow-down",
+                            "right": "mdi:arrow-bottom-right",
                             "far_right": "mdi:arrow-collapse-right"
                         }
                     }

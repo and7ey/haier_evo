@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 DOMAIN = "haier_evo"
 COMMON_LIMIT_CALLS = 5
 COMMON_LIMIT_PERIOD = 60
@@ -12,6 +14,14 @@ REFRESH_LIMIT_MAX = 900
 REFRESH_LIMIT_429 = 60
 REFRESH_LIMIT_500 = 60
 API_TIMEOUT = 15
+# Tokens: the access token is renewed TOKEN_MARGIN before it expires, an auth
+# answer without a readable expiry counts as valid for TOKEN_FALLBACK_TTL. A
+# token issued less than TOKEN_FRESH s ago and refused anyway is tried once more
+# after TOKEN_RETRY_DELAY s (the IoT backend learns new tokens with a delay).
+TOKEN_MARGIN = timedelta(seconds=60)
+TOKEN_FALLBACK_TTL = timedelta(hours=1)
+TOKEN_FRESH = 30
+TOKEN_RETRY_DELAY = 3
 # HTTP: a part of new TCP connections to iot-platform gets no SYN-ACK, so the
 # connect timeout is short and connection errors are retried (reads only for GET).
 API_CONNECT_TIMEOUT = 5
@@ -39,6 +49,9 @@ WS_COMMAND_BUDGET = 30
 # After the websocket was down this long (s), the state of every device is
 # read again: changes made meanwhile (remote, app) sent no event to us.
 WS_RESYNC_AFTER = 30
+# Without the websocket for this long (s), the entities go unavailable: the
+# state they show may be stale by then.
+WS_UNAVAILABLE_AFTER = 180
 WS_MAX_PENDING_COMMANDS = 4
 WS_SLOT_WAIT = 1
 # How many setups in a row may retry because the cloud returned fewer devices
@@ -55,4 +68,8 @@ CACHE_VERSION = 1
 CACHE_RETRY_FIRST = 5
 CACHE_RETRY_MAX = 300
 CACHE_REFRESH_HOURS = 6
+# Between those, the state of every device is read again every
+# STATE_REFRESH_MINUTES min: a session that stays open but stops delivering
+# events is not noticed by ping/pong.
+STATE_REFRESH_MINUTES = 15
 LEGACY_TOKENS_FILE = DOMAIN  # /config/haier_evo up to 1.1.x

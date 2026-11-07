@@ -59,7 +59,8 @@ async def main():
     check("user step creates entry with tokens and no password",
           res["type"] == "create_entry" and res["data"] == {"email": "User@Example.com", "region": "ru", "tokens": tokens},
           str(res.get("data")))
-    check("user step signs in with the given password", si.await_args.args[1:] == ("User@Example.com", "pw", "ru"))
+    check("user step signs in with the given password", si.await_args.args[1:4] == ("User@Example.com", "pw", "ru"), str(si.await_args))
+    check("a new entry has no Device-Id of its own yet", si.await_args.args[4:] in ((), (None,)), str(si.await_args))
     check("unique_id is e-mail + region", flow.unique_id == "user@example.com_ru", str(flow.unique_id))
 
     # wrong password / no connection / the cloud limits sign-ins
@@ -94,8 +95,9 @@ async def main():
         with mock.patch.object(cf, "sign_in", mock.AsyncMock(side_effect=cf.InvalidCredentials())):
             res = await flow.async_step_reauth_confirm({"password": "bad"})
         check("reauth wrong password -> invalid_auth", res["errors"] == {"base": "invalid_auth"})
-        with mock.patch.object(cf, "sign_in", mock.AsyncMock(return_value=tokens)):
+        with mock.patch.object(cf, "sign_in", mock.AsyncMock(return_value=tokens)) as si:
             res = await flow.async_step_reauth_confirm({"password": "good"})
+        check("reauth signs in with the entry's Device-Id", si.await_args.args[-1] == cf.api.entry_device_id("E1"), str(si.await_args))
     check("reauth success -> tokens into the entry, reload, abort reauth_successful",
           res["type"] == "abort" and res["reason"] == "reauth_successful"
           and existing.data.get("tokens") == tokens and "password" not in existing.data and entries.reloaded == ["E1"],

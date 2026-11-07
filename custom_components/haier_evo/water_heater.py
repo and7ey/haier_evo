@@ -27,7 +27,9 @@ class HaierWHEntity(WaterHeaterEntity):
     _attr_translation_key = "water_heater"
     _attr_should_poll = False
     _attr_icon = "mdi:water-boiler"
+    # HA 2026.11 reads the native_* members (see climate.py): both are provided
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = 1
     _attr_supported_features = (
         WaterHeaterEntityFeature.TARGET_TEMPERATURE |
@@ -62,7 +64,15 @@ class HaierWHEntity(WaterHeaterEntity):
         return self._device.current_temperature
 
     @property
+    def native_current_temperature(self) -> float | None:
+        return self._device.current_temperature
+
+    @property
     def target_temperature(self) -> float | None:
+        return self._device.target_temperature
+
+    @property
+    def native_target_temperature(self) -> float | None:
         return self._device.target_temperature
 
     @property

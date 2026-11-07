@@ -135,6 +135,10 @@ icons = json.load(open(os.path.join(root, "custom_components/haier_evo/icons.jso
 ru = json.load(open(os.path.join(root, "custom_components/haier_evo/translations/ru.json")))["entity"]["climate"]["conditioner"]["state_attributes"]
 for attr in ("swing_mode", "swing_horizontal_mode"):
     check(f"icons for {attr} are translated keys", sorted(set(icons[attr]["state"]) - set(ru[attr]["state"])), [])
+# horizontal louvers seen from above: the air goes from the unit (top) down into the room (1.6.0)
+hz = icons["swing_horizontal_mode"]["state"]
+check("horizontal arrows point down: left down-left, center down, right down-right",
+      (hz["left"], hz["center"], hz["right"]), ("mdi:arrow-bottom-left", "mdi:arrow-down", "mdi:arrow-bottom-right"))
 
 print("FAILS:", fails)
 sys.exit(1 if fails else 0)

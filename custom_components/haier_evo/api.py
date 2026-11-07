@@ -116,23 +116,42 @@ class AuthResponse(object):
         return value
 
     @property
-    def access_expire(self) -> datetime | None:
-        assert "expire" in self.token, f"Bad data: expire not found"
-        value = self.token["expire"]
-        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S%z")
+    def access_expire(self) -> datetime:
+        # without a readable expiry every request would refresh the token
+        return parse_expire(self.token.get("expire")) or datetime.now(timezone.utc) + C.TOKEN_FALLBACK_TTL
 
     @property
     def refresh_token(self) -> str | None:
-        assert "refreshToken" in self.token, f"Bad data: refreshToken not found"
-        value = self.token["refreshToken"]
-        assert isinstance(value, str) and value, f"Bad token: {value!r}"
-        return value
+        value = self.token.get("refreshToken")
+        return value if isinstance(value, str) and value else None
 
     @property
     def refresh_expire(self) -> datetime | None:
-        assert "refreshExpire" in self.token, f"Bad data: refreshExpire not found"
-        value = self.token["refreshExpire"]
-        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S%z")
+        return parse_expire(self.token.get("refreshExpire"))
+
+
+# the cloud answers in Moscow time; an expiry without a zone is taken as such
+_CLOUD_TZ = timezone(timedelta(hours=3))
+
+
+def parse_expire(value) -> datetime | None:
+    """A token expiry of the auth answer, None when it is missing or unreadable."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    value = value.strip()
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        try:
+            parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S%z")
+        except ValueError:
+            return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=_CLOUD_TZ)
+
+
+def entry_device_id(entry_id: str) -> str:
+    """Device-Id of a config entry: the same on every start (it used to be random)."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"{C.DOMAIN}:{entry_id}"))
 
 
 class Haier(object):
@@ -162,12 +181,16 @@ class Haier(object):
         tokens: dict | None = None,
         token_saver: Callable[[dict], None] | None = None,
         on_auth_failed: Callable[[], None] | None = None,
+        device_id: str | None = None,
     ) -> None:
         """password may be None: the tokens are enough until the cloud rejects
-        the refresh token, then on_auth_failed asks the user to sign in again."""
+        the refresh token, then on_auth_failed asks the user to sign in again.
+        device_id: the entry's own (entry_device_id), random without an entry."""
         self._lock = threading.Lock()
         self._pull_data = None
-        self._device_id = str(uuid.uuid4())
+        self._device_id = device_id or str(uuid.uuid4())
+        self._token_issued = 0.0  # time.monotonic() of the last sign-in or refresh
+        self._ws_token: str | None = None  # the token the websocket connected with
         self.hass: HomeAssistant = hass
         self.devices: list[HaierDevice] = []
         self.email: str = email
@@ -184,9 +207,16 @@ class Haier(object):
         self.socket_status: SocketStatus = SocketStatus.PRE_INITIALIZATION
         self.socket_thread = None
         self._session = self._build_session()
+        self._session.headers["Device-Id"] = self._device_id  # the sign-in too, as the app does
         self._connected = threading.Event()
         self._ever_connected = False
         self._down_since: float | None = None  # time.monotonic() when the socket was lost
+        # time.monotonic() since when there is no websocket (from the start
+        # until the first connection too): entities go unavailable after
+        # C.WS_UNAVAILABLE_AFTER s, a timer tells them when
+        self._offline_since: float | None = time.monotonic()
+        self._offline_timer: threading.Timer | None = None
+        self._offline_lock = threading.Lock()
         # trace -> {"event": Event, "mac": str, "err": errNo} for commands awaiting command_response
         self._pending: dict[str, dict] = {}
         self._pending_lock = threading.Lock()
@@ -274,9 +304,47 @@ class Haier(object):
         self.auth_login_limits.reset()
         self.auth_refresh_limits.reset()
 
+    @property
+    def cloud_available(self) -> bool:
+        """False once the websocket has been down for C.WS_UNAVAILABLE_AFTER s."""
+        since = self._offline_since
+        return since is None or time.monotonic() - since < C.WS_UNAVAILABLE_AFTER
+
+    def _went_offline(self) -> None:
+        """The websocket is gone: arm the timer that makes the entities unavailable."""
+        with self._offline_lock:
+            if self._offline_since is None:
+                self._offline_since = time.monotonic()
+            if self._offline_timer is not None or self.disconnect_requested:
+                return
+            delay = max(1.0, self._offline_since + C.WS_UNAVAILABLE_AFTER + 1 - time.monotonic())
+            self._offline_timer = timer = threading.Timer(delay, self._offline_timer_fired)
+            timer.daemon = True
+            timer.start()
+
+    def _offline_timer_fired(self) -> None:
+        with self._offline_lock:
+            self._offline_timer = None
+        if not self.disconnect_requested:
+            self.write_ha_state()  # available is only read when an entity writes its state
+
+    def _came_online(self) -> None:
+        with self._offline_lock:
+            was_offline = not self.cloud_available
+            self._offline_since = None
+            if self._offline_timer is not None:
+                self._offline_timer.cancel()
+                self._offline_timer = None
+        if was_offline:
+            self.write_ha_state()
+
     def stop(self) -> None:
         self.disconnect_requested = True
         self._connected.clear()
+        with self._offline_lock:
+            if self._offline_timer is not None:
+                self._offline_timer.cancel()
+                self._offline_timer = None
         self.reset_limits()
         if self.socket_app is not None:
             self.socket_app.close()
@@ -379,10 +447,13 @@ class Haier(object):
                         raise ReauthRequired("Haier Evo: no valid tokens, sign in again")
                     resp = self.auth_login()
                 assert resp, "No response from login"
+                # called under self._lock (auth) or before any thread runs (config flow)
                 self.token = resp.access_token
                 self.tokenexpire = resp.access_expire
-                self.refreshtoken = resp.refresh_token
-                self.refreshexpire = resp.refresh_expire
+                if refresh_token := resp.refresh_token:
+                    # an answer without a new refresh token keeps the old one
+                    self.refreshtoken, self.refreshexpire = refresh_token, resp.refresh_expire
+                self._token_issued = time.monotonic()
                 self.save_tokens()
                 _LOGGER.debug("Successful update tokens")
                 return
@@ -400,7 +471,8 @@ class Haier(object):
     def auth(self) -> None:
         with self._lock:
             now = datetime.now(timezone.utc)
-            if self.token and self.tokenexpire and self.tokenexpire > now:
+            # renewed a minute early: a token must not expire on its way to the cloud
+            if self.token and self.tokenexpire and self.tokenexpire - C.TOKEN_MARGIN > now:
                 return None
             if self.refreshtoken and (self.refreshexpire is None or self.refreshexpire > now):
                 return self.login(refresh=True)
@@ -426,15 +498,32 @@ class Haier(object):
             _LOGGER.error(f"Failed to get devices {e}, response was: {response}")
             return {}
 
+    def token_rejected(self, token: str | None) -> bool:
+        """The cloud refused this access token: renew it on the next use.
+
+        Not when another request has renewed it already (each renewal rotates
+        the pair, the newer one must not be thrown away), nor right after it was
+        issued: the IoT backend may not know a new token for a few seconds.
+        Returns True when the caller should wait a little and retry as is.
+        """
+        with self._lock:
+            if not token or token != self.token:
+                return False
+            if time.monotonic() - self._token_issued < C.TOKEN_FRESH:
+                return True
+            self.tokenexpire = None
+            return False
+
     def pull_device_data(self, device_mac: str) -> dict:
         for attempt in (1, 2):
             self.auth()
+            token = self.token
             response = None
             try:
                 status_url = C.API_STATUS.format(mac=device_mac)
                 _LOGGER.debug(f"Getting initial status of device {device_mac}, url: {status_url}")
                 response = self._session.get(status_url, headers={
-                    'X-Auth-Token': self.token,
+                    'X-Auth-Token': token,
                     'Device-Id': self._device_id,
                     'Content-Type': 'application/json'
                 }, timeout=self._timeout())
@@ -442,11 +531,12 @@ class Haier(object):
                 return response.json()
             except HTTPError as e:
                 _LOGGER.error(f"Failed to get status: {e}, response was: {response}")
-                if response is not None and response.status_code == 401:
-                    with self._lock:
-                        self.tokenexpire = None  # the cloud dropped the token: refresh it
                 if attempt == 2 or self.is_denied(e):
+                    if response is not None and response.status_code == 401:
+                        self.token_rejected(token)  # renewed for the next request
                     raise  # a refused device stays refused, no second try
+                if response is not None and response.status_code == 401 and self.token_rejected(token):
+                    time.sleep(C.TOKEN_RETRY_DELAY)  # a token just issued: give the cloud a moment
             except Exception as e:
                 _LOGGER.error(f"Failed to get status: {e!r}, response was: {response}")
                 raise
@@ -533,6 +623,7 @@ class Haier(object):
         for device in list(self.devices):
             if self.disconnect_requested:
                 break
+            started = time.monotonic()
             try:
                 data = self.pull_device_data(device.device_id)
             except (ReauthRequired, AuthUserError):
@@ -541,7 +632,7 @@ class Haier(object):
                 _LOGGER.debug(f"{device.device_name}: refresh failed: {e!r}")
                 failed.append(device.device_id)
                 continue
-            changed = device.apply_fresh(data) or changed
+            changed = device.apply_fresh(data, read_at=started) or changed
         return {"failed": failed, "changed": changed}
 
     def list_device_ids(self) -> set[str] | None:
@@ -619,10 +710,9 @@ class Haier(object):
         return listed
 
     def get_device_by_id(self, id_: str) -> HaierDevice | None:
-        return next(filter(
-            lambda d: d.device_id == id_,
-            self.devices
-        ), None)
+        # the device list and the websocket may spell a MAC in different case
+        id_ = str(id_).lower()
+        return next((d for d in self.devices if str(d.device_id).lower() == id_), None)
 
     def _open_socket(self) -> ssl.SSLSocket:
         """TCP + TLS with a timeout (websocket-client only knows a process-wide one).
@@ -639,7 +729,8 @@ class Haier(object):
 
     def _init_ws(self) -> None:
         self.auth()
-        url = urljoin(C.API_WS_PATH, self.token)
+        self._ws_token = token = self.token
+        url = urljoin(C.API_WS_PATH, token)
         # a prepared socket is used once, so every connection gets a new app
         self.socket_app = WebSocketApp(
             url=url,
@@ -682,6 +773,7 @@ class Haier(object):
         self.socket_status = SocketStatus.INITIALIZED
         self._connected.set()
         _LOGGER.debug("Websocket opened")
+        self._came_online()
         down_since, self._down_since = self._down_since, None
         self._ever_connected = True
         if down_since is not None and time.monotonic() - down_since >= C.WS_RESYNC_AFTER:
@@ -699,10 +791,10 @@ class Haier(object):
         """websocket-client reports here what ends run_forever, the handshake included."""
         status = getattr(error, "status_code", None)
         if status in (401, 403):
-            # the cloud dropped the token before it expired: refresh it for the next try
-            _LOGGER.info(f"Haier Evo: the websocket refused the token (HTTP {status}), refreshing it")
-            with self._lock:
-                self.tokenexpire = None
+            # the cloud dropped the token before it expired: refresh it for the
+            # next try (a token issued seconds ago is tried once more as is)
+            _LOGGER.info(f"Haier Evo: the websocket refused the token (HTTP {status})")
+            self.token_rejected(self._ws_token)
         else:
             _LOGGER.debug(f"Websocket error: {error!r}")
 
@@ -710,7 +802,7 @@ class Haier(object):
         for device in list(self.devices):
             if self.disconnect_requested:
                 return
-            device.resync()
+            device.resync(guard=True)
 
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def _on_close(self, ws: WebSocketApp, close_code: int, close_message: str) -> None:
@@ -781,6 +873,7 @@ class Haier(object):
             self.socket_status = SocketStatus.NOT_INITIALIZED
             if self._ever_connected and self._down_since is None:
                 self._down_since = time.monotonic()
+            self._went_offline()
 
     def send_message(self, payload: str) -> None:
         """Send a raw message as is, without waiting (debug HTTP endpoint)."""
@@ -925,6 +1018,9 @@ class HaierDevice(object):
         # False while the values come from the saved description, not the cloud
         self.synced = True
         self._fresh_description: dict | None = None  # a newer description that needs a reload
+        # time.monotonic() of the last event or command: a REST snapshot taken
+        # before it is older than what the entities show
+        self.changed_at = 0.0
 
     def __repr__(self) -> str:
         return (
@@ -954,8 +1050,9 @@ class HaierDevice(object):
     @property
     def available(self) -> bool:
         # the cloud's ONLINE/OFFLINE flaps (see the connectivity sensor), so
-        # only "has the real state been read since the start" counts here
-        return self.synced
+        # it does not count here: the real state has been read since the
+        # start, and the websocket has not been down for minutes
+        return self.synced and getattr(self._haier, "cloud_available", True)
 
     @available.setter
     def available(self, value: bool | str):
@@ -1150,15 +1247,31 @@ class HaierDevice(object):
         pass
 
     def _handle_status_update(self, received_message: dict) -> None:
-        message_statuses = received_message.get("payload", {}).get("statuses") or [{}]
-        for status in message_statuses:
-            if isinstance(status, dict) and "alarms" in status:
+        payload = received_message.get("payload")
+        statuses = payload.get("statuses") if isinstance(payload, dict) else None
+        self.changed_at = time.monotonic()
+        # every entry counts (up to 1.5.3 only the first one's values did)
+        for status in statuses if isinstance(statuses, list) else []:
+            if not isinstance(status, dict):
+                continue
+            if "alarms" in status:
                 self._set_alarms(status["alarms"])
-        for key, value in (message_statuses[0].get("properties") or {}).items():
-            self._store_value(key, value)
-            self._set_attribute_value(key, value)
+            properties = status.get("properties")
+            for key, value in (properties.items() if isinstance(properties, dict) else ()):
+                self._apply_value(key, value)
         self.available = True
         self.write_ha_state()
+
+    def _apply_value(self, code, value) -> None:
+        """Store and apply one raw value; one that cannot be read is skipped,
+        the other values of the same message still apply."""
+        if value is None:
+            return
+        try:
+            self._store_value(code, value)
+            self._set_attribute_value(str(code), value)
+        except (TypeError, ValueError) as e:
+            _LOGGER.debug(f"{self.device_name}: value {value!r} of attribute {code} skipped: {e!r}")
 
     def _handle_device_status_update(self, received_message: dict) -> None:
         status = received_message.get("payload", {}).get("status")
@@ -1170,7 +1283,12 @@ class HaierDevice(object):
         self.sw_version = payload.get("swVersion") or self.sw_version
 
     def _send_message(self, message: dict) -> None:
-        self._haier.send_command(message)
+        self.changed_at = time.monotonic()
+        try:
+            self._haier.send_command(message)
+        finally:
+            # the command waits for its answer: a snapshot read meanwhile is older
+            self.changed_at = time.monotonic()
 
     def update_from_backend(self, data: dict) -> None:
         """Apply a fresh REST status (values only, the config stays)."""
@@ -1179,9 +1297,8 @@ class HaierDevice(object):
         self.available = data.get("status") or "ONLINE"
         self._set_alarms(data.get("alarms"))
         for attr in data.get("attributes") or []:
-            if isinstance(attr, dict) and attr.get("currentValue") is not None:
-                self._store_value(attr.get("name"), attr.get("currentValue"))
-                self._set_attribute_value(str(attr.get("name")), attr.get("currentValue"))
+            if isinstance(attr, dict):
+                self._apply_value(attr.get("name"), attr.get("currentValue"))
         self.synced = True
         self.write_ha_state()
 
@@ -1209,24 +1326,36 @@ class HaierDevice(object):
             tuple(sorted((k, tuple(v)) for k, v in CFG.louver_layout(data.get("modes")).items())),
         )
 
-    def apply_fresh(self, data: dict) -> bool:
+    def apply_fresh(self, data: dict, read_at: float | None = None) -> bool:
         """Apply a description just read from the cloud.
 
         Returns True when the cloud describes the device differently than the
         one it was built from: the entities then have to be rebuilt (reload).
+        read_at: time.monotonic() when the request went out (see is_stale).
         """
         if not isinstance(data, dict):
             return False
         if self.description_signature(data) != self.description_signature(self.status_data):
             _LOGGER.info(f"{self.device_name}: the cloud describes the device differently now, reloading")
             self._fresh_description = data
-            self.update_from_backend(data)
+            if not self.is_stale(read_at):
+                self.update_from_backend(data)
             return True
         # same structure: keep the fresh texts, firmware flags and rules
         self._status_data = data
         self._modifiers = CFG.Modifiers(data.get("modifiers"))
-        self.update_from_backend(data)
+        if not self.is_stale(read_at):
+            self.update_from_backend(data)
         return False
+
+    def is_stale(self, read_at: float | None) -> bool:
+        """A REST snapshot requested before the last event or command is older
+        than what the entities show. A device that has not been read yet takes
+        it anyway: an old snapshot still beats the saved description."""
+        if read_at is None or not self.synced or self.changed_at <= read_at:
+            return False
+        _LOGGER.debug(f"{self.device_name}: newer events came while the state was read, snapshot skipped")
+        return True
 
     def cache_dict(self) -> dict:
         return {
@@ -1237,14 +1366,21 @@ class HaierDevice(object):
             "config": cacheable_description(self._fresh_description or self.status_data),
         }
 
-    def resync(self) -> dict | None:
-        """Read the real state back from the cloud (after a lost or rejected command)."""
+    def resync(self, guard: bool = False) -> dict | None:
+        """Read the real state back from the cloud.
+
+        guard: skip the snapshot if events came meanwhile (after a reconnect).
+        Without it (a lost or rejected command) it always applies: it is there
+        to undo the value shown in advance.
+        """
+        started = time.monotonic()
         try:
             data = self._haier.pull_device_data(self.device_id)
         except Exception as e:
             _LOGGER.warning(f"{self.device_name}: failed to read the state back: {e!r}")
             return None
-        self.update_from_backend(data)
+        if not (guard and self.is_stale(started)):
+            self.update_from_backend(data)
         return data
 
     def _send_commands(self, commands: list[dict]) -> None:
@@ -1283,10 +1419,19 @@ class HaierDevice(object):
         if custom := self.config.get_command_by_name(f"{name}_{value}"):
             return custom
         attr = self.config.get_attr_by_name(name)
+        if attr is None:
+            return []
+        code = attr.get_item_code(value)
+        if code is None and name == "status" and value in ("on", "off"):
+            code = "1" if value == "on" else "0"  # power is 1/0 on every known device
+        if code is None:
+            # nothing the device would understand: send nothing, not "None"
+            _LOGGER.warning(f"{self.device_name}: no command for {name}={value}")
+            return []
         return self.constraint.apply([{
             "commandName": str(attr.code),
-            "value": attr.get_item_code(value),
-        }] if attr else [])
+            "value": code,
+        }])
 
     def on_message(self, message_dict: dict) -> None:
         message_type = message_dict.get("event", "")
@@ -1379,6 +1524,7 @@ class HaierAC(HaierDevice):
     ) -> None:
         super().__init__(**kwargs)
         self.current_temperature = 0
+        self.outdoor_temperature: float | None = None
         self.target_temperature = 0
         self.status = None
         self.mode = None
@@ -1424,6 +1570,7 @@ class HaierAC(HaierDevice):
         data = super().to_dict()
         data.update({
             "current_temperature": self.current_temperature,
+            "outdoor_temperature": self.outdoor_temperature,
             "target_temperature": self.target_temperature,
             "max_temperature": self.max_temperature,
             "min_temperature": self.min_temperature,
@@ -1462,12 +1609,21 @@ class HaierAC(HaierDevice):
     def _apply_attribute(self, attr: CFG.Attribute, value: str) -> None:
         if attr.name == "current_temperature":
             self.current_temperature = float(value)
+        elif attr.name == "outdoor_temperature":
+            self.outdoor_temperature = float(value)
         elif attr.name == "status":
-            self.status = int(value)
-            if self.status:
+            power = CFG.Constraint.value2code(str(value).strip().lower())
+            self.status = 1 if power == "1" else 0 if power == "0" else int(power)
+            if self.status and self._deferred_target is not None:
+                # on now, but not by us (our "power on" takes the kept setpoint
+                # along and drops it): the kept one is stale, show the unit's own
                 self._deferred_target = None
+                self._show_unit_setpoint()
         elif attr.name == "target_temperature":
-            self.target_temperature = float(value)
+            # a setpoint kept for the next "on" stays on the card until then:
+            # the cloud keeps reporting the old one of a unit that is off
+            if self._deferred_target is None:
+                self.target_temperature = float(value)
         elif attr.name == "mode":
             self.mode = attr.get_item_name(value)
         elif attr.name == "fan_mode":
@@ -1509,15 +1665,19 @@ class HaierAC(HaierDevice):
         attrs = list(sorted(map(lambda x: CFG.Attribute(x), attributes), key=lambda x: x.code))
         for attr in attrs:
             if attr.name == "current_temperature" and str(attr.code) != sensor_curr_temp:
-                continue
+                if sensor_curr_temp is None:
+                    continue
+                # the other "Температура в комнате" (code 38 on S2SF) is the
+                # outdoor unit's sensor: several degrees off the outdoor air
+                attr = CFG.Attribute({**attr, "attrname": "outdoor_temperature"})
             self.config.attrs.append(attr)
         self.config.merge_attributes()
         self.config.apply_louver_layout(data.get("modes"))
         for attr in self.config.attrs:
-            self._set_attribute_value(str(attr.code), attr.current)
-            if attr.name == "target_temperature":
-                self.min_temperature = float(attr.range.min_value)
-                self.max_temperature = float(attr.range.max_value)
+            self._apply_value(attr.code, attr.current)
+            if attr.name == "target_temperature" and attr.range:
+                self.min_temperature = parsefloat(attr.range.min_value, self.min_temperature)
+                self.max_temperature = parsefloat(attr.range.max_value, self.max_temperature)
             _LOGGER.debug(f"{self.device_name}: {attr}")
         self.constraint.extend(data.setdefault("constraint", []))
 
@@ -1629,6 +1789,12 @@ class HaierAC(HaierDevice):
         ])
         self.target_temperature = value
 
+    def _show_unit_setpoint(self) -> None:
+        """Show the setpoint the unit itself reported last."""
+        raw = self._values.get(str(self.config["target_temperature"]))
+        if (value := parsefloat(raw)) is not None:
+            self.target_temperature = value
+
     def switch_on(self, value: str = None) -> None:
         value = value or self.mode or HVACMode.AUTO
         # the mode is locked while off, but goes out together with "power on"
@@ -1655,11 +1821,7 @@ class HaierAC(HaierDevice):
                 # the new mode has no setpoint (fan only): drop it and show the
                 # unit's own one again (its echo of "on" would drop it anyway)
                 self._deferred_target = None
-                raw = self._values.get(str(self.config["target_temperature"]))
-                try:
-                    self.target_temperature = float(raw)
-                except (TypeError, ValueError):
-                    pass
+                self._show_unit_setpoint()
             else:
                 commands.append({
                     "commandName": self.config["target_temperature"],
@@ -1791,6 +1953,8 @@ class HaierAC(HaierDevice):
         entities = []
         if self.config['current_temperature'] is not None:
             entities.append(sensor.HaierACTemperatureSensor(self))
+        if self.config['outdoor_temperature'] is not None:
+            entities.append(sensor.HaierACOutdoorTemperatureSensor(self))
         return entities
 
     def create_entities_binary_sensor(self) -> list:
@@ -1851,7 +2015,7 @@ class HaierREF(HaierDevice):
             self.config.attrs.append(attr)
         self.config.merge_attributes()
         for attr in self.config.attrs:
-            self._set_attribute_value(str(attr.code), attr.current)
+            self._apply_value(attr.code, attr.current)
             _LOGGER.debug(f"{self.device_name}: {attr}")
 
     def _set_attribute_value(self, code: str, value: str) -> None:
@@ -2007,7 +2171,7 @@ class HaierWM(HaierDevice):
             self.config.attrs.append(attr)
         self.config.merge_attributes()
         for attr in self.config.attrs:
-            self._set_attribute_value(str(attr.code), attr.current)
+            self._apply_value(attr.code, attr.current)
             _LOGGER.debug(f"{self.device_name}: {attr}")
 
     def _set_attribute_value(self, code: str, value: str) -> None:
@@ -2123,7 +2287,7 @@ class HaierWH(HaierDevice):
             self.config.attrs.append(attr)
         self.config.merge_attributes()
         for attr in self.config.attrs:
-            self._set_attribute_value(str(attr.code), attr.current)
+            self._apply_value(attr.code, attr.current)
             if attr.name == "target_temperature" and attr.range:
                 self.min_temperature = float(attr.range.min_value)
                 self.max_temperature = float(attr.range.max_value)
@@ -2260,6 +2424,13 @@ def parsebool(value) -> bool:
     if value in ("on", 1, True, "true", "enable", "1"):
         return True
     return False
+
+
+def parsefloat(value, default: float | None = None) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 # Parts of a device description the integration never reads: app analytics,
 # pairing details, scenario links. Links (signed for a week) are dropped too.

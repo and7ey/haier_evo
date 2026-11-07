@@ -1,7 +1,7 @@
 import weakref
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
 from homeassistant.core import HomeAssistant
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.const import TEMPERATURE
 from .const import DOMAIN
 from . import api
@@ -143,3 +143,26 @@ class HaierACTemperatureSensor(HaierSensor):
     @property
     def native_value(self) -> float | None:
         return self._device.current_temperature
+
+
+class HaierACOutdoorTemperatureSensor(HaierSensor):
+    """The outdoor unit's own sensor (code 38, "Температура в комнате" in the cloud).
+
+    Not the outdoor air: off by several degrees, colder after heating and
+    warmer after cooling, hence a diagnostic entity.
+    """
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:hvac"
+
+    def __init__(self, device: api.HaierAC):
+        super().__init__(device)
+        self._device_attr_name = "outdoor_temperature"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_outdoor_temperature"
+        self._attr_name = f"{device.device_name} Температура наружного блока"
+
+    @property
+    def native_value(self) -> float | None:
+        return self._device.outdoor_temperature
