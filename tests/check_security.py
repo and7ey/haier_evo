@@ -6,7 +6,7 @@ root = sys.argv[1] if len(sys.argv) > 1 else str(_HERE.parent)
 dump_path = sys.argv[2] if len(sys.argv) > 2 else str(_HERE / "fixtures" / "evo_dump.json")
 dump = json.load(open(dump_path))
 sys.path.insert(0, root)
-from custom_components.haier_evo import api, limits, config as CFG, const as C
+from custom_components.haier_evo import api, limits, config as CFG
 from custom_components.haier_evo import diagnostics
 import requests
 

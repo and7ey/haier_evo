@@ -1,0 +1,155 @@
+# mypy errors the code already has (scripts/check_types.py); a new one fails CI
+custom_components/haier_evo/api.py: [arg-type] Argument "device_serial" to "create" of "HaierDevice" has incompatible type "Any | None"; expected "str"
+custom_components/haier_evo/api.py: [arg-type] Argument "device_title" to "create" of "HaierDevice" has incompatible type "Any | None"; expected "str"
+custom_components/haier_evo/api.py: [arg-type] Argument "key" to "sorted" has incompatible type "Callable[[Attribute], int | None]"; expected "Callable[[Attribute], SupportsDunderLT[Any] | SupportsDunderGT[Any]]"
+custom_components/haier_evo/api.py: [arg-type] Argument "key" to "sorted" has incompatible type "Callable[[Attribute], int | None]"; expected "Callable[[Attribute], SupportsDunderLT[Any] | SupportsDunderGT[Any]]"
+custom_components/haier_evo/api.py: [arg-type] Argument "key" to "sorted" has incompatible type "Callable[[Attribute], int | None]"; expected "Callable[[Attribute], SupportsDunderLT[Any] | SupportsDunderGT[Any]]"
+custom_components/haier_evo/api.py: [arg-type] Argument "key" to "sorted" has incompatible type "Callable[[Attribute], int | None]"; expected "Callable[[Attribute], SupportsDunderLT[Any] | SupportsDunderGT[Any]]"
+custom_components/haier_evo/api.py: [arg-type] Argument "on_message" to "WebSocketApp" has incompatible type "Callable[[WebSocket, str], None]"; expected "Callable[[WebSocketApp, Any], None] | None"
+custom_components/haier_evo/api.py: [arg-type] Argument "response" to "AuthError" has incompatible type "AuthResponse"; expected "Response | None"
+custom_components/haier_evo/api.py: [arg-type] Argument "response" to "AuthInternalError" has incompatible type "AuthResponse"; expected "Response | None"
+custom_components/haier_evo/api.py: [arg-type] Argument "response" to "AuthUserError" has incompatible type "AuthResponse"; expected "Response | None"
+custom_components/haier_evo/api.py: [arg-type] Argument "response" to "AuthUserError" has incompatible type "AuthResponse"; expected "Response | None"
+custom_components/haier_evo/api.py: [arg-type] Argument "response" to "AuthValidationError" has incompatible type "AuthResponse"; expected "Response | None"
+custom_components/haier_evo/api.py: [arg-type] Argument 1 to "get" of "dict" has incompatible type "str | bool"; expected "bool | None"
+custom_components/haier_evo/api.py: [arg-type] Argument 1 to "get_preset_mode_command" of "HaierAC" has incompatible type "str | bool"; expected "str"
+custom_components/haier_evo/api.py: [arg-type] Argument 2 to "_set_attribute_value" of "HaierWH" has incompatible type "Any | None"; expected "str"
+custom_components/haier_evo/api.py: [arg-type] Argument 2 to "get" of "dict" has incompatible type "str | bool"; expected "str"
+custom_components/haier_evo/api.py: [assignment] Incompatible default for parameter "backend_data" (default has type "None", parameter has type "dict[Any, Any]")
+custom_components/haier_evo/api.py: [assignment] Incompatible default for parameter "backend_data" (default has type "None", parameter has type "dict[Any, Any]")
+custom_components/haier_evo/api.py: [assignment] Incompatible default for parameter "backend_data" (default has type "None", parameter has type "dict[Any, Any]")
+custom_components/haier_evo/api.py: [assignment] Incompatible default for parameter "backend_data" (default has type "None", parameter has type "dict[Any, Any]")
+custom_components/haier_evo/api.py: [assignment] Incompatible default for parameter "backend_data" (default has type "None", parameter has type "dict[Any, Any]")
+custom_components/haier_evo/api.py: [assignment] Incompatible default for parameter "device_serial" (default has type "None", parameter has type "str")
+custom_components/haier_evo/api.py: [assignment] Incompatible default for parameter "device_serial" (default has type "None", parameter has type "str")
+custom_components/haier_evo/api.py: [assignment] Incompatible default for parameter "device_title" (default has type "None", parameter has type "str")
+custom_components/haier_evo/api.py: [assignment] Incompatible default for parameter "device_title" (default has type "None", parameter has type "str")
+custom_components/haier_evo/api.py: [assignment] Incompatible default for parameter "value" (default has type "None", parameter has type "str")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "HaierACConfig", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "HaierREFConfig", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "HaierWHConfig", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "HaierWMConfig", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "Response | Any", variable has type "AuthResponse")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "Response | Any", variable has type "AuthResponse")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "Thread", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "dict[Any, Any]", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float | None", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float | None", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "int", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "int", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "int", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | Any", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", target has type "str")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str | None", variable has type "str")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/api.py: [attr-defined] "object" has no attribute "wait"
+custom_components/haier_evo/api.py: [call-overload] No overload variant of "get" of "dict" matches argument types "str", "dict[Never, Never]"
+custom_components/haier_evo/api.py: [func-returns-value] "_send_message" of "HaierDevice" does not return a value (it only ever returns None)
+custom_components/haier_evo/api.py: [func-returns-value] "_send_single_command" of "HaierDevice" does not return a value (it only ever returns None)
+custom_components/haier_evo/api.py: [return-value] Incompatible return value type (got "None", expected "HaierACConfig")
+custom_components/haier_evo/api.py: [return-value] Incompatible return value type (got "None", expected "HaierDeviceConfig")
+custom_components/haier_evo/api.py: [return-value] Incompatible return value type (got "None", expected "HaierREFConfig")
+custom_components/haier_evo/api.py: [return-value] Incompatible return value type (got "None", expected "HaierWHConfig")
+custom_components/haier_evo/api.py: [return-value] Incompatible return value type (got "None", expected "HaierWMConfig")
+custom_components/haier_evo/api.py: [return-value] Incompatible return value type (got "None", expected "str")
+custom_components/haier_evo/api.py: [return-value] Incompatible return value type (got "int | None", expected "SupportsDunderLT[Any] | SupportsDunderGT[Any]")
+custom_components/haier_evo/api.py: [return-value] Incompatible return value type (got "int | None", expected "SupportsDunderLT[Any] | SupportsDunderGT[Any]")
+custom_components/haier_evo/api.py: [return-value] Incompatible return value type (got "int | None", expected "SupportsDunderLT[Any] | SupportsDunderGT[Any]")
+custom_components/haier_evo/api.py: [return-value] Incompatible return value type (got "int | None", expected "SupportsDunderLT[Any] | SupportsDunderGT[Any]")
+custom_components/haier_evo/api.py: [return] Missing return statement
+custom_components/haier_evo/api.py: [union-attr] Item "None" of "WebSocketApp | None" has no attribute "run_forever"
+custom_components/haier_evo/api.py: [var-annotated] Need type annotation for "_write_ha_state_callbacks" (hint: "_write_ha_state_callbacks: list[<type>] = ...")
+custom_components/haier_evo/api.py: [var-annotated] Need type annotation for "extra" (hint: "extra: dict[<type>, <type>] = ...")
+custom_components/haier_evo/binary_sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/binary_sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/binary_sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/binary_sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/binary_sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/binary_sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/binary_sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/binary_sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/binary_sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/binary_sensor.py: [call-overload] No overload variant of "getattr" matches argument types "Any", "None", "bool"
+custom_components/haier_evo/binary_sensor.py: [override] Signature of "is_on" incompatible with supertype "HaierBinarySensor"
+custom_components/haier_evo/config.py: [arg-type] Argument 1 to "append" of "list" has incompatible type "tuple[str, None]"; expected "tuple[str, str]"
+custom_components/haier_evo/config.py: [arg-type] Argument 1 to "get" of "dict" has incompatible type "Any | None"; expected "str"
+custom_components/haier_evo/config.py: [arg-type] Argument 1 to "get" of "dict" has incompatible type "Any | None"; expected "str"
+custom_components/haier_evo/config.py: [arg-type] Argument 1 to "int" has incompatible type "Any | None"; expected "str | Buffer | SupportsInt | SupportsIndex"
+custom_components/haier_evo/config.py: [arg-type] Argument 1 to "value2code" of "Constraint" has incompatible type "Any | None"; expected "str"
+custom_components/haier_evo/config.py: [return-value] Incompatible return value type (got "Any | None", expected "str")
+custom_components/haier_evo/config.py: [return-value] Incompatible return value type (got "list[tuple[str, str]]", expected "list[tuple[str, str | None]]")
+custom_components/haier_evo/config.py: [union-attr] Item "None" of "Any | dict[Any, Any] | None" has no attribute "get"
+custom_components/haier_evo/config.py: [var-annotated] Need type annotation for "_attrs_cache" (hint: "_attrs_cache: dict[<type>, <type>] = ...")
+custom_components/haier_evo/config.py: [var-annotated] Need type annotation for "_config" (hint: "_config: dict[<type>, <type>] = ...")
+custom_components/haier_evo/config.py: [var-annotated] Need type annotation for "attrs" (hint: "attrs: list[<type>] = ...")
+custom_components/haier_evo/config.py: [var-annotated] Need type annotation for "commands"
+custom_components/haier_evo/config.py: [var-annotated] Need type annotation for "layout" (hint: "layout: dict[<type>, <type>] = ...")
+custom_components/haier_evo/config.py: [var-annotated] Need type annotation for "screens" (hint: "screens: dict[<type>, <type>] = ...")
+custom_components/haier_evo/config_flow.py: [call-arg] Unexpected keyword argument "domain" for "__init_subclass__" of "object"
+custom_components/haier_evo/select.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/select.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/select.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/select.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/select.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/select.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/select.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/select.py: [call-overload] No overload variant of "getattr" matches argument types "Any", "None", "None"
+custom_components/haier_evo/select.py: [var-annotated] Need type annotation for "_attr_options" (hint: "_attr_options: list[<type>] = ...")
+custom_components/haier_evo/sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/sensor.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/sensor.py: [call-overload] No overload variant of "getattr" matches argument types "Any", "None", "float"
+custom_components/haier_evo/sensor.py: [call-overload] No overload variant of "getattr" matches argument types "Any", "None", "float"
+custom_components/haier_evo/sensor.py: [call-overload] No overload variant of "getattr" matches argument types "Any", "None", "str"
+custom_components/haier_evo/sensor.py: [override] Signature of "native_value" incompatible with supertype "HaierSensor"
+custom_components/haier_evo/sensor.py: [override] Signature of "native_value" incompatible with supertype "HaierSensor"
+custom_components/haier_evo/sensor.py: [override] Signature of "native_value" incompatible with supertype "HaierSensor"
+custom_components/haier_evo/switch.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/switch.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/switch.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/switch.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/switch.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
+custom_components/haier_evo/switch.py: [call-overload] No overload variant of "getattr" matches argument types "Any", "None", "None"

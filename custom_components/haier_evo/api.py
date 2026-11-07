@@ -110,7 +110,7 @@ class AuthResponse(object):
 
     @property
     def access_token(self) -> str | None:
-        assert "accessToken" in self.token, f"Bad data: refreshToken not found"
+        assert "accessToken" in self.token, "Bad data: accessToken not found"
         value = self.token["accessToken"]
         assert isinstance(value, str) and value, f"Bad token: {value!r}"
         return value
