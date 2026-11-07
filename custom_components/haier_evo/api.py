@@ -834,6 +834,23 @@ class Haier(object):
             except Exception as e:
                 _LOGGER.debug(f"Failed to close websocket: {e}")
 
+    @staticmethod
+    def _close_prepared_socket(app: WebSocketApp | None) -> None:
+        """Close the socket _open_socket gave the app, once its run is over.
+
+        websocket-client closes it itself, except when close() (stop()) comes
+        during the handshake: the app drops its WebSocket while the handshake
+        still runs on it, the handshake completes, and nobody closes that
+        connection. Closing an already closed socket is harmless.
+        """
+        sock = getattr(app, "prepared_socket", None)
+        if sock is None:
+            return
+        try:
+            sock.close()
+        except OSError as e:
+            _LOGGER.debug(f"Failed to close the websocket's socket: {e!r}")
+
     def connect(self) -> None:
         self.socket_status = SocketStatus.NOT_INITIALIZED
         while not self.disconnect_requested:
@@ -854,8 +871,7 @@ class Haier(object):
             self.socket_status = SocketStatus.INITIALIZING
             self._init_ws()
             if self.disconnect_requested:
-                self.socket_app.prepared_socket.close()
-                return
+                return  # stop() came while connecting: finally closes the socket
             self.socket_app.run_forever(
                 ping_interval=C.WS_PING_INTERVAL,
                 ping_timeout=C.WS_PING_TIMEOUT,
@@ -869,6 +885,7 @@ class Haier(object):
         except Exception as e:
             _LOGGER.warning(f"Error connecting to websocket: {e!r}")
         finally:
+            self._close_prepared_socket(self.socket_app)
             self._connected.clear()
             self.socket_status = SocketStatus.NOT_INITIALIZED
             if self._ever_connected and self._down_since is None:

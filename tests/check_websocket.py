@@ -19,7 +19,7 @@ C.WS_CONNECT_TIMEOUT = 2
 PORT = 18765
 MAC = "5c:01:3b:00:00:01"
 S = {"mode": "normal", "connections": 0, "commands": [], "ping_reply": True, "active": 0,
-     "seq": 0, "open": {}, "label": "",  # open: server-side connection id -> scenario that opened it
+     "seq": 0, "open": {},  # open: server-side connection id -> token of the client that opened it
      "tokens": [], "reject_handshake": 0, "open_ws": [], "junk": False}
 
 
@@ -35,7 +35,7 @@ async def ws_handler(request):
     S["active"] += 1
     S["seq"] += 1
     cid = S["seq"]
-    S["open"][cid] = S["label"]
+    S["open"][cid] = request.match_info["token"]
     S["open_ws"].append(ws)
     if S["junk"]:
         for junk in ("not json at all", "[1, 2]", '"text"', ""):
@@ -100,9 +100,10 @@ class Dev:
 
 class TestHaier(api.Haier):
     port = PORT
+    ws_token = "tok"
     def register_view(self): pass
     def unregister_view(self): pass
-    def auth(self): self.token = "tok"
+    def auth(self): self.token = self.ws_token
     def _open_socket(self):
         return socket.create_connection(("127.0.0.1", self.port), timeout=C.WS_CONNECT_TIMEOUT)
 
@@ -118,11 +119,13 @@ def check(name, cond, info=""):
     print(("OK  " if cond else "FAIL"), name, info)
 
 
-def scenario(mode, ping_reply=True, port=PORT, send_on_open=False, label=None):
-    S.update(mode=mode, connections=0, commands=[], ping_reply=ping_reply, tokens=[], open_ws=[], label=label or mode)
+def scenario(mode, ping_reply=True, port=PORT, send_on_open=False, token=None):
+    S.update(mode=mode, connections=0, commands=[], ping_reply=ping_reply, tokens=[], open_ws=[])
     C.API_WS_PATH = f"ws://127.0.0.1:{port}/ws/"
     h = TestHaier(None, "e", "p", "ru")
     h.port = port
+    if token:
+        h.ws_token = token  # tells the server which client a connection is from
     h.devices = [Dev(h, send_on_open)]
     api.Haier.connect_limits.reset()
     h.connect_in_thread()
@@ -281,21 +284,30 @@ check("slots: third concurrent command -> too_many_commands fast",
 h.stop(); time.sleep(0.3)
 C.WS_MAX_PENDING_COMMANDS = 4
 
-# 11. stop() while the connection is being opened / after it is open: nothing stays connected
-# (only the connections this iteration opened count: on a slow CI runner the
-# server may still be closing one from an earlier scenario)
-for delay in (0, 0.01, 0.05, 1):
-    label = f"stop after {delay}s"
-    h = scenario("normal", label=label)
+# 11. stop() while the connection is being opened / after it is open: nothing stays connected.
+# A connection is matched to its client by the token in its URL: a client stopped at
+# once may reach the server only after the next one has started, and on a slow CI
+# runner the server may still be closing a connection of an earlier scenario. The
+# short delays run many times: stop() lands inside the handshake only now and then.
+def stop_leaves_nothing(delay, token):
+    h = scenario("normal", token=token)
     time.sleep(delay)
     h.stop()
-    mine = lambda: [cid for cid, lab in list(S["open"].items()) if lab == label]
+    h.socket_thread.join(5)  # this client makes no more connection attempts
+    mine = lambda: [cid for cid, tok in list(S["open"].items()) if tok == token]
     end = time.time() + 5
     while time.time() < end and mine():
-        time.sleep(0.1)
-    others = sorted(set(lab for lab in S["open"].values() if lab != label))
-    check(f"stop() after {delay}s leaves no open connection", not mine(),
-          f"still open: {mine()} connections={S['connections']}" + (f" (open from earlier scenarios: {others})" if others else ""))
+        time.sleep(0.05)
+    return mine(), h.socket_thread.is_alive()
+
+for delay, runs in ((0, 20), (0.001, 20), (0.005, 10), (0.01, 10), (0.05, 3), (1, 1)):
+    left = []
+    for run in range(runs):
+        token = f"stop{delay}-{run}"
+        still_open, alive = stop_leaves_nothing(delay, token)
+        if still_open or alive:
+            left.append(f"{token}: open={still_open} thread alive={alive}")
+    check(f"stop() after {delay}s leaves no open connection ({runs} runs)", not left, "; ".join(left))
 
 # ---- 1.5.1
 def drop_all():
