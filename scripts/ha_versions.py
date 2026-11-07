@@ -11,7 +11,9 @@ The window moves by itself, nothing in the repository has to be changed:
   no longer covers it, else empty: what HACS promises is always checked.
 
 Every value is a tag of ghcr.io/home-assistant/home-assistant. Prints lines
-for $GITHUB_OUTPUT; --summary prints a Markdown table for $GITHUB_STEP_SUMMARY.
+for $GITHUB_OUTPUT: one per version and "matrix", the jobs to run (a version
+without a tag has no job); --summary prints a Markdown table for
+$GITHUB_STEP_SUMMARY instead.
 Standard library only: runs on the runner's own Python.
 """
 from __future__ import annotations
@@ -26,6 +28,22 @@ import urllib.request
 PYPI_URL = "https://pypi.org/pypi/homeassistant/json"
 VERSION = re.compile(r"^(\d{4})\.(\d{1,2})\.(\d+)(?:b(\d+))?$")
 CHANNELS = ("minimum", "prev2", "prev1", "current", "next")
+TITLES = {
+    "minimum": "минимальная из hacs.json",
+    "prev2": "позапрошлая",
+    "prev1": "прошлая",
+    "current": "текущая",
+    "next": "следующая (не блокирует)",
+}
+# the names of the CI jobs: "Home Assistant 2026.9.4 (previous but one)"
+JOB_NAMES = {
+    "minimum": "minimum of hacs.json",
+    "prev2": "previous but one",
+    "prev1": "previous",
+    "current": "current",
+    "next": "next, does not block",
+}
+NON_BLOCKING = ("next",)
 
 
 def fetch_pypi(url: str = PYPI_URL, attempts: int = 3) -> dict:
@@ -86,16 +104,17 @@ def window(pypi: dict, hacs_minimum: str | None = None) -> dict[str, str]:
 
 
 def summary(versions: dict[str, str]) -> str:
-    rows = [
-        ("minimum", "минимальная из hacs.json", versions["minimum"] or "входит в окно"),
-        ("prev2", "позапрошлая", versions["prev2"]),
-        ("prev1", "прошлая", versions["prev1"]),
-        ("current", "текущая", versions["current"]),
-        ("next", "следующая (не блокирует)", versions["next"]),
-    ]
     lines = ["| Шаг | Версия Home Assistant |", "|---|---|"]
-    lines += [f"| {title} | `{value}` |" for _, title, value in rows]
+    lines += [f"| {TITLES[key]} | `{versions[key] or 'входит в окно'}` |" for key in CHANNELS]
     return "\n".join(lines) + "\n"
+
+
+def matrix(versions: dict[str, str]) -> list[dict]:
+    """The CI jobs, one per version with a tag, in the order of CHANNELS."""
+    return [
+        {"channel": key, "tag": versions[key], "name": JOB_NAMES[key], "blocking": key not in NON_BLOCKING}
+        for key in CHANNELS if versions[key]
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -118,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(summary(versions))
     else:
         sys.stdout.write("".join(f"{key}={versions[key]}\n" for key in CHANNELS))
+        sys.stdout.write(f"matrix={json.dumps(matrix(versions))}\n")
     return 0
 
 

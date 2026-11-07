@@ -61,8 +61,16 @@ json.dump({"name": "Haier Evo", "homeassistant": "2026.9.0"}, open(hacs_file, "w
 out = io.StringIO()
 with redirect_stdout(out):
     hv.main(["--pypi", pypi_file, "--hacs", hacs_file])
+got = out.getvalue().splitlines()
 check("$GITHUB_OUTPUT lines, every key present",
-      out.getvalue().splitlines(), ["minimum=2026.9.4", "prev2=2026.10.4", "prev1=2026.11.0", "current=2026.12.0", "next=dev"])
+      got[:5], ["minimum=2026.9.4", "prev2=2026.10.4", "prev1=2026.11.0", "current=2026.12.0", "next=dev"])
+check("$GITHUB_OUTPUT: the matrix, one job per version, next does not block",
+      [(j["channel"], j["tag"], j["blocking"]) for j in json.loads(got[5].split("=", 1)[1])] if got[5:] and got[5].startswith("matrix=") else got[5:],
+      [("minimum", "2026.9.4", True), ("prev2", "2026.10.4", True), ("prev1", "2026.11.0", True),
+       ("current", "2026.12.0", True), ("next", "dev", False)])
+check("the matrix has no job for a minimum inside the window",
+      [j["channel"] for j in hv.matrix(hv.window(pypi(*TODAY), "2026.9.0"))], ["prev2", "prev1", "current", "next"])
+check("job names as the steps were named", hv.matrix(hv.window(pypi(*TODAY)))[0]["name"], "previous but one")
 out = io.StringIO()
 with redirect_stdout(out):
     hv.main(["--pypi", pypi_file, "--hacs", hacs_file, "--summary"])

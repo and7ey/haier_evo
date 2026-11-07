@@ -1,7 +1,10 @@
 name: Validate
 
 on:
+  # a branch is checked once, by its pull request; a push runs only on main:
+  # what got merged, and the README badges come from it
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
   # Home Assistant releases and betas come out on Wednesdays: on Thursday the
@@ -47,6 +50,7 @@ jobs:
       prev1: ${{ steps.resolve.outputs.prev1 }}
       current: ${{ steps.resolve.outputs.current }}
       next: ${{ steps.resolve.outputs.next }}
+      matrix: ${{ steps.resolve.outputs.matrix }}
     steps:
       - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
         with:
@@ -57,39 +61,125 @@ jobs:
       - name: Summary
         run: python3 scripts/ha_versions.py --summary >> "$GITHUB_STEP_SUMMARY"
 
-  # One step per version, each in the Home Assistant container of that version.
-  # A failing step does not skip the next ones; only "next" may fail.
+  # One job per version, all at the same time, each in the Home Assistant
+  # container of that version. A failing version does not stop the others;
+  # "next" may fail without failing its job. Every job writes its summary
+  # (the image and its digest, Python and the packages inside it, every
+  # script with its counts and time, what failed) and annotations, and
+  # uploads its report for the results job.
   tests:
+    name: "Home Assistant ${{ matrix.tag }} (${{ matrix.name }})"
     needs: ha-versions
     runs-on: "ubuntu-latest"
-    timeout-minutes: 45
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.ha-versions.outputs.matrix) }}
     steps:
       - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
         with:
           persist-credentials: false
-      - name: "Home Assistant ${{ needs.ha-versions.outputs.minimum }} (minimum of hacs.json)"
-        if: ${{ !cancelled() && needs.ha-versions.outputs.minimum != '' }}
+      - name: Checks
+        id: checks
+        continue-on-error: ${{ !matrix.blocking }}
         env:
-          HA_TAG: ${{ needs.ha-versions.outputs.minimum }}
+          HA_TAG: ${{ matrix.tag }}
+          CHECKS_REPORT: ${{ runner.temp }}/checks/${{ matrix.channel }}.jsonl
         run: scripts/run_checks.sh "$HA_TAG"
-      - name: "Home Assistant ${{ needs.ha-versions.outputs.prev2 }} (previous but one)"
+      - name: Report
         if: ${{ !cancelled() }}
         env:
-          HA_TAG: ${{ needs.ha-versions.outputs.prev2 }}
-        run: scripts/run_checks.sh "$HA_TAG"
-      - name: "Home Assistant ${{ needs.ha-versions.outputs.prev1 }} (previous)"
+          CHANNEL: ${{ matrix.channel }}
+          HA_TAG: ${{ matrix.tag }}
+          OUTCOME: ${{ steps.checks.outcome }}
+        run: >-
+          python3 scripts/ci_results.py job --report "$RUNNER_TEMP/checks/$CHANNEL.jsonl"
+          --channel "$CHANNEL" --tag "$HA_TAG" --outcome "$OUTCOME" --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Upload the report
         if: ${{ !cancelled() }}
-        env:
-          HA_TAG: ${{ needs.ha-versions.outputs.prev1 }}
-        run: scripts/run_checks.sh "$HA_TAG"
-      - name: "Home Assistant ${{ needs.ha-versions.outputs.current }} (current)"
-        if: ${{ !cancelled() }}
-        env:
-          HA_TAG: ${{ needs.ha-versions.outputs.current }}
-        run: scripts/run_checks.sh "$HA_TAG"
-      - name: "Home Assistant ${{ needs.ha-versions.outputs.next }} (next, does not block)"
-        if: ${{ !cancelled() }}
+        uses: "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9"  # v7.0.2
+        with:
+          name: checks-${{ matrix.channel }}
+          path: ${{ runner.temp }}/checks/${{ matrix.channel }}.jsonl
+          retention-days: 1
+          overwrite: true
+
+  # All versions together: the table of the run, the README badges and one
+  # verdict (fails when a version that blocks did not pass).
+  results:
+    name: Results
+    needs: [ha-versions, tests]
+    if: ${{ !cancelled() && needs.ha-versions.result == 'success' }}
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 5
+    outputs:
+      tests: ${{ steps.badges.outputs.tests }}
+      home_assistant: ${{ steps.badges.outputs.home_assistant }}
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the reports
+        # a version without a report counts as not run; nothing to download is not an error here
         continue-on-error: true
+        uses: "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333"  # v8.0.2
+        with:
+          pattern: checks-*
+          path: ${{ runner.temp }}/checks
+          merge-multiple: true
+      - name: Badges and summary
+        id: badges
         env:
-          HA_TAG: ${{ needs.ha-versions.outputs.next }}
-        run: scripts/run_checks.sh "$HA_TAG"
+          HA_VERSIONS: ${{ toJSON(needs.ha-versions.outputs) }}
+        run: |
+          python3 scripts/ci_results.py run --reports "$RUNNER_TEMP/checks" >> "$GITHUB_OUTPUT"
+          python3 scripts/ci_results.py run --reports "$RUNNER_TEMP/checks" --summary >> "$GITHUB_STEP_SUMMARY"
+      - name: Verdict
+        env:
+          HA_VERSIONS: ${{ toJSON(needs.ha-versions.outputs) }}
+        run: python3 scripts/ci_results.py run --reports "$RUNNER_TEMP/checks" --verdict
+
+  # The README badges show main: its results go to the "badges" branch as
+  # shields.io endpoint files, on a push to main, on schedule and by hand,
+  # never from a pull request. The only job with a writable token; it runs
+  # no code of the repository.
+  badges:
+    needs: results
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.results.outputs.tests != '' }}
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    concurrency:
+      group: badges
+    steps:
+      - name: Publish to the badges branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTS_BADGE: ${{ needs.results.outputs.tests }}
+          HA_BADGE: ${{ needs.results.outputs.home_assistant }}
+        run: |
+          set -eu
+          remote="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git init -q badges && cd badges
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # a new commit on top of the branch, never a force push
+          if git -c http.extraheader="$auth" ls-remote --exit-code --heads "$remote" badges >/dev/null; then
+            git -c http.extraheader="$auth" fetch -q --depth=1 "$remote" badges
+            git checkout -q -B badges FETCH_HEAD
+          else
+            git checkout -q --orphan badges
+          fi
+          printf '%s\n' "$TESTS_BADGE" > tests.json
+          printf '%s\n' "$HA_BADGE" > home-assistant.json
+          git add tests.json home-assistant.json
+          if git diff --cached --quiet; then
+            echo "The badges did not change"
+            exit 0
+          fi
+          git commit -q -m "Badges for $GITHUB_SHA"
+          git -c http.extraheader="$auth" push -q "$remote" HEAD:refs/heads/badges
+          cat tests.json home-assistant.json
