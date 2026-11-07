@@ -780,7 +780,22 @@ class Modifiers(list):
     ALARM = "alarm"
 
     def __init__(self, data: list | None) -> None:
-        super().__init__(r for r in (data or []) if isinstance(r, dict))
+        # a rule the code cannot read is left out (up to 1.6.2 one such rule
+        # broke the locks, and with them every command, of its device)
+        rules = [r for r in (data if isinstance(data, list) else []) if isinstance(r, dict)]
+        super().__init__(sorted(rules, key=self._priority))
+
+    @staticmethod
+    def _priority(rule: dict) -> int:
+        try:
+            return int(rule.get("priority") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _actions(rule: dict) -> list[dict]:
+        actions = rule.get("actions")
+        return [a for a in actions if isinstance(a, dict)] if isinstance(actions, list) else []
 
     def locked(self, values: dict[str, str], alarms: set[str]) -> dict[str, str]:
         """Return {attribute code: reason} for attributes that are read-only now.
@@ -791,11 +806,11 @@ class Modifiers(list):
         """
         locked = {}
         decided = set()
-        for rule in sorted(self, key=lambda r: int(r.get("priority") or 0)):
-            reason = self._fired(rule.get("trigger") or {}, values, alarms)
+        for rule in self:
+            reason = self._fired(rule.get("trigger"), values, alarms)
             if reason is None:
                 continue
-            for action in rule.get("actions") or []:
+            for action in self._actions(rule):
                 code = str(action.get("name"))
                 if "W" not in str(action.get("rewriteFields") or "") or code in decided:
                     continue
@@ -811,15 +826,17 @@ class Modifiers(list):
         fan-only mode. The first firing rule by priority decides a field.
         """
         allowed = {}
-        for rule in sorted(self, key=lambda r: int(r.get("priority") or 0)):
-            if self._fired(rule.get("trigger") or {}, values, alarms) is None:
+        for rule in self:
+            if self._fired(rule.get("trigger"), values, alarms) is None:
                 continue
-            for action in rule.get("actions") or []:
+            for action in self._actions(rule):
                 code = str(action.get("name"))
                 if "V" not in str(action.get("rewriteFields") or "") or code in allowed:
                     continue
-                items = ((action.get("valueRange") or {}).get("list") or {}).get("data") or []
-                items = [i for i in items if isinstance(i, dict) and i.get("data") is not None]
+                value_range = action.get("valueRange")
+                listed = value_range.get("list") if isinstance(value_range, dict) else None
+                items = listed.get("data") if isinstance(listed, dict) else None
+                items = [i for i in (items if isinstance(items, list) else []) if isinstance(i, dict) and i.get("data") is not None]
                 if items:
                     allowed[code] = (
                         {Constraint.value2code(str(i["data"])) for i in items},
@@ -828,15 +845,23 @@ class Modifiers(list):
         return allowed
 
     @classmethod
-    def _fired(cls, trigger: dict, values: dict[str, str], alarms: set[str]) -> str | None:
+    def _fired(cls, trigger, values: dict[str, str], alarms: set[str]) -> str | None:
+        if not isinstance(trigger, dict):
+            return None
+        conditions = trigger.get("conditions")
+        conditions = conditions.get("condition") if isinstance(conditions, dict) else None
         results = []
-        for cond in (trigger.get("conditions") or {}).get("condition") or []:
+        for cond in conditions if isinstance(conditions, list) else []:
+            if not isinstance(cond, dict):
+                continue
             code = str(cond.get("mode"))
-            expected = {Constraint.value2code(str(v)) for v in cond.get("values") or []}
+            listed = cond.get("values")
+            expected = {Constraint.value2code(str(v)) for v in (listed if isinstance(listed, list) else [])}
             actual = values.get(code)
             matched = actual is not None and Constraint.value2code(str(actual)) in expected
             results.append((matched, code))
-        if trigger_alarms := set(trigger.get("alarms") or []):
+        listed = trigger.get("alarms")
+        if trigger_alarms := {str(a) for a in (listed if isinstance(listed, list) else []) if isinstance(a, (str, int))}:
             results.append((bool(trigger_alarms & alarms), cls.ALARM))
         if not results:
             return None

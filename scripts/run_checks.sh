@@ -45,7 +45,7 @@ docker run --rm --entrypoint sh \
   "$image" -c '
     set -eu
     python3 -c "from homeassistant.const import __version__; print(\"Home Assistant\", __version__)"
-    deps="websocket-client>=1.8.0,<2 pytest>=8.4"
+    deps="websocket-client>=1.8.0,<2 pytest>=8.4 hypothesis>=6.100,<7"
     python3 -m pip install --quiet --disable-pip-version-check $deps 2>/dev/null \
       || uv pip install --system --quiet $deps
     python3 -m pytest -q -p no:cacheprovider tests
