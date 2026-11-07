@@ -1,0 +1,6124 @@
+{
+ "_": "Refrigerator C4F640CWU1 (type REF) from upstream issue and7ey/haier_evo#52, May 2025, anonymized: MAC, serial number, IP and links replaced (tests/check_refrigerator.py)",
+ "backend_data": {
+  "presentation": {
+   "initActions": [],
+   "layout": {
+    "alert": null,
+    "scrollContainer": [
+     {
+      "id": "72a6d224-cb66-4e6d-b427-2e4609252684",
+      "component": "deviceList",
+      "contractName": "deviceList",
+      "stateId": "deviceList-0563b6a121641a05561883af1e19b59c",
+      "state": {
+       "title": "Устройства",
+       "subtitle": "Смарт",
+       "items": [
+        {
+         "title": "Refrigerator/Freezer C4F640CWU1",
+         "status": "Включен",
+         "image": "https://example.invalid/af4c88c0-ed6e-4175-ace0-18684f61264f",
+         "action": {
+          "type": "ACTION_TYPE_REDIRECT",
+          "link": "haierevo://device?deviceId=d8%3A13%3A2a%3A00%3A00%3A05&type=REF&serialNum=SNREF000000000000001&uitype=FR_BASE"
+         },
+         "trackingData": {
+          "component": {
+           "componentName": "deviceList",
+           "componentId": "72a6d224-cb66-4e6d-b427-2e4609252684",
+           "componentReadableName": "Список устройств"
+          },
+          "data": {
+           "component_position": "0",
+           "device_id": "656261",
+           "deeplink": "haierevo://device?deviceId=d8%3A13%3A2a%3A00%3A00%3A05&type=REF&serialNum=SNREF000000000000001&uitype=FR_BASE"
+          }
+         }
+        }
+       ]
+      },
+      "trackingData": {
+       "component": {
+        "componentName": "deviceList",
+        "componentId": "72a6d224-cb66-4e6d-b427-2e4609252684",
+        "componentReadableName": "Список устройств"
+       },
+       "requestTime": "200"
+      }
+     }
+    ],
+    "bottomContainer": [],
+    "navigationBar": {
+     "id": "1b6a0e91-601c-4bd6-aeb7-825fa759cb47",
+     "component": "navigationBar",
+     "stateId": "navigationBar-56debf98cab10fa3e0abde3c48b79252",
+     "state": "{\"rightBarButtons\":[{\"image\":{\"icon\":\"ic_plus\"},\"action\":{\"actionRedirect\":{\"link\":\"haierevo:\\/\\/addSmartDevice\"}}}],\"titled\":{\"text\":\"Мой дом\"}}",
+     "trackingData": {
+      "component": {
+       "componentName": "NavigationBar",
+       "componentId": "1b6a0e91-601c-4bd6-aeb7-825fa759cb47",
+       "componentReadableName": "Мой дом"
+      }
+     }
+    }
+   },
+   "theme": {
+    "type": "DEFAULT",
+    "default": {}
+   }
+  },
+  "pageInfo": {
+   "url": "/smartHome",
+   "layoutId": null,
+   "layoutVersion": null,
+   "abGroup": null,
+   "refreshTime": null,
+   "nextPage": null,
+   "templateType": "MOBILE",
+   "trackingData": null
+  }
+ },
+ "devices": [
+  {
+   "device_id": "d8:13:2a:00:00:05",
+   "device_mac": "d8:13:2a:00:00:05",
+   "device_name": "Refrigerator/Freezer C4F640CWU1",
+   "device_serial": "SNREF000000000000001",
+   "sw_version": "1.5.5",
+   "backend_data": {
+    "info": {
+     "macAddress": "d8:13:2a:00:00:05",
+     "model": "C4F640CWU1",
+     "serialNumber": "SNREF000000000000001"
+    },
+    "status": "ONLINE",
+    "settings": {
+     "name": {
+      "title": "Имя устройства",
+      "actionTitle": "Изменить имя устройства",
+      "actionDescription": "Имя отображается на дашборде",
+      "name": "Refrigerator/Freezer C4F640CWU1"
+     },
+     "firmware": {
+      "title": "Версия прошивки",
+      "value": "1.5.5",
+      "action": {
+       "link": "haierevo://hiHome/device/firmware-update?macAddress=d8:13:2a:00:00:05",
+       "params": {},
+       "type": "ACTION_TYPE_REDIRECT"
+      },
+      "updateRequired": false,
+      "autoUpdate": {
+       "description": "Автообновление прошивки",
+       "enabled": true
+      }
+     },
+     "notifications": {
+      "title": "Уведомления",
+      "isEnabled": true
+     },
+     "about": {
+      "title": "Об устройстве",
+      "action": {
+       "link": "haierevo://iot/device?serialNum=SNREF000000000000001&macAddress=d8:13:2a:00:00:05&iotDeviceId=656261&ip=192.0.2.5",
+       "params": {},
+       "type": "ACTION_TYPE_REDIRECT"
+      }
+     },
+     "removeDevice": {
+      "title": "Удалить устройство"
+     }
+    },
+    "attributes": [
+     {
+      "type": "LIST",
+      "name": "9",
+      "description": "Состояние дверцы холодильника",
+      "currentValue": "0",
+      "readable": true,
+      "writable": false,
+      "invisible": false,
+      "list": {
+       "type": "LIST",
+       "data": [
+        {
+         "data": "false",
+         "name": "Выключен"
+        },
+        {
+         "data": "true",
+         "name": "Активен"
+        }
+       ]
+      }
+     },
+     {
+      "type": "STEP",
+      "name": "2",
+      "description": "Температура в помещении",
+      "currentValue": "25",
+      "readable": true,
+      "writable": false,
+      "invisible": false,
+      "range": {
+       "type": "STEP",
+       "data": {
+        "dataType": "Integer",
+        "step": "1",
+        "minValue": "-38",
+        "maxValue": "50"
+       }
+      }
+     },
+     {
+      "type": "STEP",
+      "name": "1",
+      "description": "Температура морозильной камеры (°C)",
+      "currentValue": "-18",
+      "readable": true,
+      "writable": false,
+      "invisible": false,
+      "range": {
+       "type": "STEP",
+       "data": {
+        "dataType": "Integer",
+        "step": "1",
+        "minValue": "-38",
+        "maxValue": "50"
+       }
+      }
+     },
+     {
+      "type": "LIST",
+      "name": "3",
+      "description": "Холодильное отделение",
+      "currentValue": "6",
+      "defaultValue": "6",
+      "operationType": "I",
+      "readable": true,
+      "writable": true,
+      "invisible": false,
+      "list": {
+       "type": "LIST",
+       "data": [
+        {
+         "data": "3",
+         "name": "+2℃"
+        },
+        {
+         "data": "4",
+         "name": "+3℃"
+        },
+        {
+         "data": "5",
+         "name": "+4℃"
+        },
+        {
+         "data": "6",
+         "name": "+5℃"
+        },
+        {
+         "data": "7",
+         "name": "+6℃"
+        },
+        {
+         "data": "8",
+         "name": "+7℃"
+        },
+        {
+         "data": "9",
+         "name": "+8℃"
+        }
+       ]
+      }
+     },
+     {
+      "type": "LIST",
+      "name": "8",
+      "description": "Режим Отпуск",
+      "currentValue": "0",
+      "operationType": "I",
+      "readable": true,
+      "writable": true,
+      "invisible": false,
+      "list": {
+       "type": "LIST",
+       "data": [
+        {
+         "data": "false",
+         "name": "Выключен"
+        },
+        {
+         "data": "true",
+         "name": "Активен"
+        }
+       ]
+      }
+     },
+     {
+      "type": "LIST",
+      "name": "4",
+      "description": "Морозильное отделение",
+      "currentValue": "12",
+      "defaultValue": "12",
+      "operationType": "I",
+      "readable": true,
+      "writable": true,
+      "invisible": false,
+      "list": {
+       "type": "LIST",
+       "data": [
+        {
+         "data": "6",
+         "name": "-24℃"
+        },
+        {
+         "data": "7",
+         "name": "-23℃"
+        },
+        {
+         "data": "8",
+         "name": "-22℃"
+        },
+        {
+         "data": "9",
+         "name": "-21℃"
+        },
+        {
+         "data": "10",
+         "name": "-20℃"
+        },
+        {
+         "data": "11",
+         "name": "-19℃"
+        },
+        {
+         "data": "12",
+         "name": "-18℃"
+        },
+        {
+         "data": "13",
+         "name": "-17℃"
+        },
+        {
+         "data": "14",
+         "name": "-16℃"
+        }
+       ]
+      }
+     },
+     {
+      "type": "LIST",
+      "name": "7",
+      "description": "Супер-заморозка",
+      "currentValue": "0",
+      "operationType": "I",
+      "readable": true,
+      "writable": true,
+      "invisible": false,
+      "list": {
+       "type": "LIST",
+       "data": [
+        {
+         "data": "false",
+         "name": "Выключен"
+        },
+        {
+         "data": "true",
+         "name": "Активен"
+        }
+       ]
+      }
+     },
+     {
+      "type": "LIST",
+      "name": "6",
+      "description": "Супер-охлаждение",
+      "currentValue": "0",
+      "operationType": "I",
+      "readable": true,
+      "writable": true,
+      "invisible": false,
+      "list": {
+       "type": "LIST",
+       "data": [
+        {
+         "data": "false",
+         "name": "Выключен"
+        },
+        {
+         "data": "true",
+         "name": "Активен"
+        }
+       ]
+      }
+     },
+     {
+      "type": "STEP",
+      "name": "0",
+      "description": "Температура холодильника (℃)",
+      "currentValue": "5",
+      "readable": true,
+      "writable": false,
+      "invisible": false,
+      "range": {
+       "type": "STEP",
+       "data": {
+        "dataType": "Integer",
+        "step": "1",
+        "minValue": "-38",
+        "maxValue": "50"
+       }
+      }
+     },
+     {
+      "type": "LIST",
+      "name": "5",
+      "description": "My Zone",
+      "currentValue": "36",
+      "operationType": "I",
+      "readable": true,
+      "writable": true,
+      "invisible": false,
+      "list": {
+       "type": "LIST",
+       "data": [
+        {
+         "data": "26",
+         "name": "-5℃"
+        },
+        {
+         "data": "31",
+         "name": "0℃"
+        },
+        {
+         "data": "36",
+         "name": "5℃"
+        }
+       ]
+      }
+     }
+    ],
+    "errors": {
+     "alarmToResult": {
+      "freezerSensorErr": {
+       "text": "[F4] Неисправность датчика температуры в нижнем отделении.",
+       "description": "Обратитесь в отдел послепродажного обслуживания."
+      },
+      "vtRoomSensorErr": {
+       "text": "[F5] Неисправность датчика температуры окружающей среды устройства.",
+       "description": "Обратитесь в отдел послепродажного обслуживания."
+      },
+      "freezerDefrostingSensorErr": {
+       "text": "[F6] Неисправность датчика оттайки в нижнего отделения.",
+       "description": "Обратитесь в отдел послепродажного обслуживания."
+      },
+      "freezerDefrostingErr": {
+       "text": "[ED] Неисправность фнукционала оттайки нижнего отделения.",
+       "description": "Обратитесь в отдел послепродажного обслуживания."
+      },
+      "refrigeratorDoorAlarm": {
+       "text": "[P2] Дверь холодильника открыта.",
+       "description": "Закройте дверь."
+      },
+      "alarmCancel": {
+       "text": "Ошибка устройства.",
+       "description": "Обратитесь в отдел послепродажного обслуживания."
+      },
+      "freezerFanErr": {
+       "text": "[E1] Неисправность вентилятора нижнего отделения.",
+       "description": "Обратитесь в отдел послепродажного обслуживания."
+      },
+      "wifiCommunicationErr": {
+       "text": "[U0] Ошибка Wi-Fi модуля.",
+       "description": "Обратитесь в отдел послепродажного обслуживания."
+      },
+      "envTempSensorErr": {
+       "text": "[F2] Неисправность датчика температуры окружающей среды устройства.",
+       "description": "Обратитесь в отдел послепродажного обслуживания."
+      },
+      "refrigeratorSensorErr": {
+       "text": "[F3] Неисправность датчика температуры в верхнем отделении.",
+       "description": "Обратитесь в отдел послепродажного обслуживания."
+      },
+      "ctrBoardCommErr": {
+       "text": "[E0] Сбой связи между платой дисплея и основной платой.",
+       "description": "Обратитесь в отдел послепродажного обслуживания."
+      }
+     },
+     "detailsText": "Подробнее",
+     "undefinedAlarm": {
+      "text": "Неизвестная ошибка",
+      "description": "Обратитесь в отдел послепродажного обслуживания"
+     },
+     "chatSupportBtn": {
+      "text": "Чат поддержки",
+      "deeplink": "haierevo://chat"
+     }
+    },
+    "constraint": [],
+    "modifiers": [
+     {
+      "priority": 0,
+      "trigger": {
+       "operator": "AND",
+       "conditions": {
+        "condition": [
+         {
+          "mode": "6",
+          "values": [
+           "true"
+          ]
+         }
+        ]
+       },
+       "alarms": []
+      },
+      "actions": [
+       {
+        "name": "3",
+        "rewriteFields": "W",
+        "writable": false
+       }
+      ]
+     },
+     {
+      "priority": 1,
+      "trigger": {
+       "operator": "AND",
+       "conditions": {
+        "condition": [
+         {
+          "mode": "7",
+          "values": [
+           "true"
+          ]
+         }
+        ]
+       },
+       "alarms": []
+      },
+      "actions": [
+       {
+        "name": "4",
+        "rewriteFields": "W",
+        "writable": false
+       }
+      ]
+     },
+     {
+      "priority": 2,
+      "trigger": {
+       "operator": "AND",
+       "conditions": {
+        "condition": [
+         {
+          "mode": "8",
+          "values": [
+           "true"
+          ]
+         }
+        ]
+       },
+       "alarms": []
+      },
+      "actions": [
+       {
+        "name": "3",
+        "rewriteFields": "W",
+        "writable": false
+       },
+       {
+        "name": "5",
+        "rewriteFields": "W",
+        "writable": false
+       }
+      ]
+     }
+    ],
+    "alarms": [],
+    "groupCommands": [],
+    "pairingInfo": {
+     "info": {
+      "title": "Повторное подключение «%s»",
+      "subtitle": "На вашем устройстве было запущено повторное подключение к умному дому, если это действие активировано случайно, то нажмите «Отменить подключение»",
+      "continuePairingBtn": "Продолжить подключение",
+      "cancelPairingBtn": "Отменить подключение"
+     },
+     "progress": {
+      "title": "Отмена повторного подключения",
+      "subtitle": "Это может занять некоторое время, прежде чем устройство вернется в рабочее состояние"
+     },
+     "error": {
+      "title": "Не удалось отменить повторное подключение",
+      "subtitle": "Во время отмены повторного подключения «%s» возникла ошибка, из-за которой не удалось завершить процесс отмены",
+      "repeatBtn": "Повторить попытку"
+     }
+    },
+    "control": {
+     "zones": [
+      {
+       "value": {
+        "type": "LIST",
+        "name": "3",
+        "description": "refrigeratorTargetTempLevel"
+       },
+       "name": "Холодильное отделение",
+       "icon": "https://example.invalid/73382914-ec23-49a3-acbe-9987739d15a7",
+       "icons": [],
+       "type": "DEGRESS"
+      },
+      {
+       "value": {
+        "type": "LIST",
+        "name": "5",
+        "description": "vtRoomTargetTempLevel"
+       },
+       "name": "My Zone",
+       "icon": "36",
+       "icons": [
+        {
+         "icon": "https://example.invalid/201bb4b9-bbee-4e07-824d-42f974a608db",
+         "value": "26"
+        },
+        {
+         "icon": "https://example.invalid/d0815cf6-a989-4c1d-ae9b-a6e143ca83d6",
+         "value": "31"
+        },
+        {
+         "icon": "https://example.invalid/2185d899-85f4-4ee6-aa8e-ecaf307123d9",
+         "value": "36"
+        }
+       ],
+       "type": "DEGRESS"
+      },
+      {
+       "value": {
+        "type": "LIST",
+        "name": "4",
+        "description": "freezerTargetTempLevel"
+       },
+       "name": "Морозильное отделение",
+       "icon": "https://example.invalid/ab605e42-d1db-4e2c-b624-4525275b0596",
+       "icons": [],
+       "type": "DEGRESS"
+      }
+     ]
+    },
+    "cooling": {
+     "hintInfo": {
+      "title": "Как происходит расчёт",
+      "description": "У каждого типа напитка есть рекомендуемая температура подачи. Время охлаждения рассчитывается на основе выбранного вами типа напитка, его параметров и от того, в какое отделение вы положили напиток.\n\nЧтобы быстрее охладить напиток, рекомендуется класть его в морозильное отделение. Не оставляйте напитки в морозильном отделении надолго, они могут заледенеть.\n\nИсходная температура:\nКомнатная - 20-25°C\nТёплая - около 40°C"
+     },
+     "blocks": [
+      {
+       "drinks": [
+        {
+         "id": "6",
+         "icon": "https://example.invalid/ca709b82-8a18-41ca-9a78-56f499c1d1ef",
+         "name": "Фруктовый сок",
+         "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+         "previewHint": "Температура подачи 12-15°C ",
+         "packages": [
+          {
+           "id": "3",
+           "name": "Пластик",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "178",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "179",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "182",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "183",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "11",
+             "name": "2 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "184",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "185",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.002
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "176",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "177",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "180",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "181",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 0.01,
+           "areaHeatExchange": 0.08429
+          },
+          {
+           "id": "4",
+           "name": "Жесть",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "190",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "191",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "188",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "189",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "186",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "187",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 235.0,
+           "areaHeatExchange": 0.02706
+          },
+          {
+           "id": "2",
+           "name": "Стекло",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "8",
+             "name": "750 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "172",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "173",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00075
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "166",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "167",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "5",
+             "name": "375 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "168",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "169",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.000375
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "162",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "163",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "164",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "165",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "7",
+             "name": "660 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "170",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "171",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00066
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "174",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "175",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.005,
+           "conductivity": 0.037,
+           "areaHeatExchange": 0.05138
+          },
+          {
+           "id": "1",
+           "name": "Картон",
+           "isDefault": true,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "156",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "157",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "2",
+             "name": "200 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "154",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "155",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0002
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "160",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "161",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": true,
+             "temperatures": [
+              {
+               "id": "158",
+               "name": "Комнатная",
+               "isDefault": true,
+               "initial": 293.15
+              },
+              {
+               "id": "159",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.0025,
+           "conductivity": 0.066,
+           "areaHeatExchange": 0.07124
+          }
+         ],
+         "alcohol": 0.0,
+         "optimalTemperature": 286.15
+        }
+       ]
+      },
+      {
+       "drinks": [
+        {
+         "id": "3",
+         "icon": "https://example.invalid/f9f6afbb-1064-40bd-b2b6-8dc8fb5f6630",
+         "name": "Вино",
+         "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+         "previewHint": "Температура подачи 9-13°C ",
+         "packages": [
+          {
+           "id": "3",
+           "name": "Пластик",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "64",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "65",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "68",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "69",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "11",
+             "name": "2 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "70",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "71",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.002
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "62",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "63",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "66",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "67",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 0.01,
+           "areaHeatExchange": 0.08429
+          },
+          {
+           "id": "4",
+           "name": "Жесть",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "76",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "77",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "74",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "75",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "72",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "73",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 235.0,
+           "areaHeatExchange": 0.02706
+          },
+          {
+           "id": "2",
+           "name": "Стекло",
+           "isDefault": true,
+           "volumes": [
+            {
+             "id": "8",
+             "name": "750 мл",
+             "isDefault": true,
+             "temperatures": [
+              {
+               "id": "58",
+               "name": "Комнатная",
+               "isDefault": true,
+               "initial": 293.15
+              },
+              {
+               "id": "59",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00075
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "52",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "53",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "5",
+             "name": "375 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "54",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "55",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.000375
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "48",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "49",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "50",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "51",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "7",
+             "name": "660 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "56",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "57",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00066
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "60",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "61",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.005,
+           "conductivity": 0.037,
+           "areaHeatExchange": 0.05138
+          },
+          {
+           "id": "1",
+           "name": "Картон",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "42",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "43",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "2",
+             "name": "200 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "40",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "41",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0002
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "46",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "47",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "44",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "45",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.0025,
+           "conductivity": 0.066,
+           "areaHeatExchange": 0.07124
+          }
+         ],
+         "alcohol": 13.5,
+         "optimalTemperature": 284.15
+        }
+       ]
+      },
+      {
+       "drinks": [
+        {
+         "id": "1",
+         "icon": "https://example.invalid/a9fbf6b5-2c74-4b2a-bd6e-a88cb0a81ee5",
+         "name": "Лёд",
+         "hint": "Примерно потребуется для превращения воды в лёд",
+         "previewHint": "Время охлаждения 1 час",
+         "packages": [
+          {
+           "id": "5",
+           "name": "Формочка для льда",
+           "isDefault": true,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": true,
+             "temperatures": [
+              {
+               "id": "23",
+               "name": "",
+               "isDefault": true,
+               "initial": 0.0
+              }
+             ],
+             "volume": 0.0005
+            }
+           ],
+           "thickness": 0.0,
+           "conductivity": 0.0,
+           "areaHeatExchange": 0.0
+          }
+         ],
+         "alcohol": 0.0,
+         "optimalTemperature": 253.15
+        }
+       ]
+      },
+      {
+       "drinks": [
+        {
+         "id": "2",
+         "icon": "https://example.invalid/b22508a4-cdeb-4a4f-8b8d-eabfd0920861",
+         "name": "Спиртные напитки",
+         "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+         "previewHint": "Температура подачи 0-4°C ",
+         "packages": [
+          {
+           "id": "3",
+           "name": "Пластик",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "26",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "27",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "30",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "31",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "11",
+             "name": "2 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "32",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "33",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.002
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "24",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "25",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "28",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "29",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 0.01,
+           "areaHeatExchange": 0.08429
+          },
+          {
+           "id": "4",
+           "name": "Жесть",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "38",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "39",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "36",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "37",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "34",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "35",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 235.0,
+           "areaHeatExchange": 0.02706
+          },
+          {
+           "id": "2",
+           "name": "Стекло",
+           "isDefault": true,
+           "volumes": [
+            {
+             "id": "8",
+             "name": "750 мл",
+             "isDefault": true,
+             "temperatures": [
+              {
+               "id": "19",
+               "name": "Комнатная",
+               "isDefault": true,
+               "initial": 293.15
+              },
+              {
+               "id": "20",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00075
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "13",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "14",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "5",
+             "name": "375 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "15",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "16",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.000375
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "9",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "10",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "11",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "12",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "7",
+             "name": "660 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "17",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "18",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00066
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "21",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "22",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.005,
+           "conductivity": 0.037,
+           "areaHeatExchange": 0.05138
+          },
+          {
+           "id": "1",
+           "name": "Картон",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "3",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "4",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "2",
+             "name": "200 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "1",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "2",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0002
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "7",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "8",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "5",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "6",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.0025,
+           "conductivity": 0.066,
+           "areaHeatExchange": 0.07124
+          }
+         ],
+         "alcohol": 40.0,
+         "optimalTemperature": 275.15
+        }
+       ]
+      },
+      {
+       "drinks": [
+        {
+         "id": "7",
+         "icon": "https://example.invalid/1230be88-4aa9-4364-b2a0-2ea0d4f5b32a",
+         "name": "Вода",
+         "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+         "previewHint": "Температура подачи 16°C ",
+         "packages": [
+          {
+           "id": "3",
+           "name": "Пластик",
+           "isDefault": true,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "216",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "217",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "220",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "221",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "11",
+             "name": "2 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "222",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "223",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.002
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "214",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "215",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": true,
+             "temperatures": [
+              {
+               "id": "218",
+               "name": "Комнатная",
+               "isDefault": true,
+               "initial": 293.15
+              },
+              {
+               "id": "219",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 0.01,
+           "areaHeatExchange": 0.08429
+          },
+          {
+           "id": "4",
+           "name": "Жесть",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "228",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "229",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "226",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "227",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "224",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "225",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 235.0,
+           "areaHeatExchange": 0.02706
+          },
+          {
+           "id": "2",
+           "name": "Стекло",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "8",
+             "name": "750 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "210",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "211",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00075
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "204",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "205",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "5",
+             "name": "375 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "206",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "207",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.000375
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "200",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "201",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "202",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "203",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "7",
+             "name": "660 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "208",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "209",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00066
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "212",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "213",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.005,
+           "conductivity": 0.037,
+           "areaHeatExchange": 0.05138
+          },
+          {
+           "id": "1",
+           "name": "Картон",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "194",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "195",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "2",
+             "name": "200 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "192",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "193",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0002
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "198",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "199",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "196",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "197",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.0025,
+           "conductivity": 0.066,
+           "areaHeatExchange": 0.07124
+          }
+         ],
+         "alcohol": 0.0,
+         "optimalTemperature": 289.15
+        }
+       ]
+      },
+      {
+       "drinks": [
+        {
+         "id": "5",
+         "icon": "https://example.invalid/f5f223f8-c516-49bd-99dd-05c6f058bc1e",
+         "name": "Освежающие напитки",
+         "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+         "previewHint": "Температура подачи 4-5°C ",
+         "packages": [
+          {
+           "id": "3",
+           "name": "Пластик",
+           "isDefault": true,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": true,
+             "temperatures": [
+              {
+               "id": "140",
+               "name": "Комнатная",
+               "isDefault": true,
+               "initial": 293.15
+              },
+              {
+               "id": "141",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "144",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "145",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "11",
+             "name": "2 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "146",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "147",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.002
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "138",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "139",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "142",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "143",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 0.01,
+           "areaHeatExchange": 0.08429
+          },
+          {
+           "id": "4",
+           "name": "Жесть",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "152",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "153",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "150",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "151",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "148",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "149",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 235.0,
+           "areaHeatExchange": 0.02706
+          },
+          {
+           "id": "2",
+           "name": "Стекло",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "8",
+             "name": "750 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "134",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "135",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00075
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "128",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "129",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "5",
+             "name": "375 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "130",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "131",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.000375
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "124",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "125",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "126",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "127",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "7",
+             "name": "660 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "132",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "133",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00066
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "136",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "137",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.005,
+           "conductivity": 0.037,
+           "areaHeatExchange": 0.05138
+          },
+          {
+           "id": "1",
+           "name": "Картон",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "118",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "119",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "2",
+             "name": "200 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "116",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "117",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0002
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "122",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "123",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "120",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "121",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.0025,
+           "conductivity": 0.066,
+           "areaHeatExchange": 0.07124
+          }
+         ],
+         "alcohol": 0.0,
+         "optimalTemperature": 277.15
+        }
+       ]
+      },
+      {
+       "drinks": [
+        {
+         "id": "4",
+         "icon": "https://example.invalid/f49133b0-6f2e-4bdd-85bc-175391aa9d4f",
+         "name": "Пиво",
+         "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+         "previewHint": "Температура подачи 4-7°C ",
+         "packages": [
+          {
+           "id": "3",
+           "name": "Пластик",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "102",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "103",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "106",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "107",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "11",
+             "name": "2 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "108",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "109",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.002
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "100",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "101",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "104",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "105",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 0.01,
+           "areaHeatExchange": 0.08429
+          },
+          {
+           "id": "4",
+           "name": "Жесть",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "114",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "115",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "112",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "113",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "110",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "111",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            }
+           ],
+           "thickness": 0.001,
+           "conductivity": 235.0,
+           "areaHeatExchange": 0.02706
+          },
+          {
+           "id": "2",
+           "name": "Стекло",
+           "isDefault": true,
+           "volumes": [
+            {
+             "id": "8",
+             "name": "750 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "96",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "97",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00075
+            },
+            {
+             "id": "4",
+             "name": "330 мл",
+             "isDefault": true,
+             "temperatures": [
+              {
+               "id": "90",
+               "name": "Комнатная",
+               "isDefault": true,
+               "initial": 293.15
+              },
+              {
+               "id": "91",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00033
+            },
+            {
+             "id": "5",
+             "name": "375 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "92",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "93",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.000375
+            },
+            {
+             "id": "1",
+             "name": "150 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "86",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "87",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00015
+            },
+            {
+             "id": "3",
+             "name": "250 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "88",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "89",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00025
+            },
+            {
+             "id": "7",
+             "name": "660 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "94",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "95",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.00066
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "98",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "99",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.005,
+           "conductivity": 0.037,
+           "areaHeatExchange": 0.05138
+          },
+          {
+           "id": "1",
+           "name": "Картон",
+           "isDefault": false,
+           "volumes": [
+            {
+             "id": "6",
+             "name": "500 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "80",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "81",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0005
+            },
+            {
+             "id": "2",
+             "name": "200 мл",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "78",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "79",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0002
+            },
+            {
+             "id": "10",
+             "name": "1.5 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "84",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "85",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.0015
+            },
+            {
+             "id": "9",
+             "name": "1 л",
+             "isDefault": false,
+             "temperatures": [
+              {
+               "id": "82",
+               "name": "Комнатная",
+               "isDefault": false,
+               "initial": 293.15
+              },
+              {
+               "id": "83",
+               "name": "Тёплая",
+               "isDefault": false,
+               "initial": 303.15
+              }
+             ],
+             "volume": 0.001
+            }
+           ],
+           "thickness": 0.0025,
+           "conductivity": 0.066,
+           "areaHeatExchange": 0.07124
+          }
+         ],
+         "alcohol": 6.0,
+         "optimalTemperature": 278.15
+        }
+       ]
+      }
+     ],
+     "timerInfo": "Примерно потребуется для достижения оптимальной температуры",
+     "coolingDrinks": [],
+     "fridgeH1": 40.0,
+     "zones": [
+      {
+       "id": "1",
+       "name": "Морозильная камера",
+       "isDefault": true,
+       "zone": {
+        "type": "LIST",
+        "name": "4",
+        "description": "freezerTargetTempLevel"
+       },
+       "icon": "",
+       "descriptions": []
+      },
+      {
+       "id": "2",
+       "name": "Холодильное отделение",
+       "isDefault": false,
+       "zone": {
+        "type": "LIST",
+        "name": "3",
+        "description": "refrigeratorTargetTempLevel"
+       },
+       "icon": "",
+       "descriptions": []
+      },
+      {
+       "id": "3",
+       "name": "My Zone",
+       "isDefault": false,
+       "zone": {
+        "type": "LIST",
+        "name": "5",
+        "description": "vtRoomTargetTempLevel"
+       },
+       "icon": "",
+       "descriptions": [
+        {
+         "data": "26",
+         "desc": "Мягкая заморозка",
+         "icon": "https://example.invalid/201bb4b9-bbee-4e07-824d-42f974a608db"
+        },
+        {
+         "data": "31",
+         "desc": "Свежесть при 0°",
+         "icon": "https://example.invalid/d0815cf6-a989-4c1d-ae9b-a6e143ca83d6"
+        },
+        {
+         "data": "36",
+         "desc": "Фрукты и овощи",
+         "icon": "https://example.invalid/2185d899-85f4-4ee6-aa8e-ecaf307123d9"
+        }
+       ]
+      }
+     ]
+    },
+    "modes": {
+     "items": [
+      {
+       "value": {
+        "type": "BOOLEAN",
+        "name": "7",
+        "description": "quickFreezingMode"
+       },
+       "title": "Супер-заморозка",
+       "icon": "https://example.invalid/3dc9137f-8721-4d31-8a5e-aaffa5f1ed6c",
+       "toggleControl": {
+        "title": "Супер-заморозка",
+        "activeHint": "Активен",
+        "disableHint": "Выключен",
+        "description": "Активируйте данный режим если вы собираетесь положить большой объем продуктов в морозильную камеру. Режим супер-заморозки автоматически деактивируется через пятьдесят часов."
+       }
+      },
+      {
+       "value": {
+        "type": "BOOLEAN",
+        "name": "6",
+        "description": "quickRefrigeratingMode"
+       },
+       "title": "Супер-охлаждение",
+       "icon": "https://example.invalid/a2a8d350-28c2-45dc-91ea-e0c29cd439d6",
+       "toggleControl": {
+        "title": "Супер-охлаждение",
+        "activeHint": "Активен",
+        "disableHint": "Выключен",
+        "description": "Активируйте данный режим если вы собираетесь положить большой объем продуктов в холодильную камеру. Режим супер-охлаждения автоматически деактивируется через три часа."
+       }
+      },
+      {
+       "value": {
+        "type": "BOOLEAN",
+        "name": "8",
+        "description": "holidayMode"
+       },
+       "title": "Режим «Отпуск»",
+       "icon": "https://example.invalid/05b5adb2-2d6d-48c4-86b9-628cff9ee130",
+       "toggleControl": {
+        "title": "Режим «Отпуск»",
+        "activeHint": "Активен",
+        "disableHint": "Выключен",
+        "description": "Данный режим будет поддерживать температуру только в морозильном отделении холодильника, таким образом снизив потребление электроэнергии пока вы находитесь в поездке. Режим Отпуск деактивируется пользователем."
+       }
+      }
+     ]
+    },
+    "smartDrink": {
+     "cooling": {
+      "hintInfo": {
+       "title": "Как происходит расчёт",
+       "description": "У каждого типа напитка есть рекомендуемая температура подачи. Время охлаждения рассчитывается на основе выбранного вами типа напитка, его параметров и от того, в какое отделение вы положили напиток.\n\nЧтобы быстрее охладить напиток, рекомендуется класть его в морозильное отделение. Не оставляйте напитки в морозильном отделении надолго, они могут заледенеть.\n\nИсходная температура:\nКомнатная - 20-25°C\nТёплая - около 40°C"
+      },
+      "blocks": [
+       {
+        "drinks": [
+         {
+          "id": "6",
+          "icon": "https://example.invalid/ca709b82-8a18-41ca-9a78-56f499c1d1ef",
+          "name": "Фруктовый сок",
+          "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+          "previewHint": "Температура подачи 12-15°C ",
+          "packages": [
+           {
+            "id": "3",
+            "name": "Пластик",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "178",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "179",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "182",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "183",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "11",
+              "name": "2 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "184",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "185",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.002
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "176",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "177",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "180",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "181",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 0.01,
+            "areaHeatExchange": 0.08429
+           },
+           {
+            "id": "4",
+            "name": "Жесть",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "190",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "191",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "188",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "189",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "186",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "187",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 235.0,
+            "areaHeatExchange": 0.02706
+           },
+           {
+            "id": "2",
+            "name": "Стекло",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "8",
+              "name": "750 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "172",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "173",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00075
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "166",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "167",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "5",
+              "name": "375 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "168",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "169",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.000375
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "162",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "163",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "164",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "165",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "7",
+              "name": "660 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "170",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "171",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00066
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "174",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "175",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.005,
+            "conductivity": 0.037,
+            "areaHeatExchange": 0.05138
+           },
+           {
+            "id": "1",
+            "name": "Картон",
+            "isDefault": true,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "156",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "157",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "2",
+              "name": "200 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "154",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "155",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0002
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "160",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "161",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": true,
+              "temperatures": [
+               {
+                "id": "158",
+                "name": "Комнатная",
+                "isDefault": true,
+                "initial": 293.15
+               },
+               {
+                "id": "159",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.0025,
+            "conductivity": 0.066,
+            "areaHeatExchange": 0.07124
+           }
+          ],
+          "alcohol": 0.0,
+          "optimalTemperature": 286.15
+         }
+        ]
+       },
+       {
+        "drinks": [
+         {
+          "id": "3",
+          "icon": "https://example.invalid/f9f6afbb-1064-40bd-b2b6-8dc8fb5f6630",
+          "name": "Вино",
+          "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+          "previewHint": "Температура подачи 9-13°C ",
+          "packages": [
+           {
+            "id": "3",
+            "name": "Пластик",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "64",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "65",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "68",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "69",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "11",
+              "name": "2 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "70",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "71",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.002
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "62",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "63",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "66",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "67",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 0.01,
+            "areaHeatExchange": 0.08429
+           },
+           {
+            "id": "4",
+            "name": "Жесть",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "76",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "77",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "74",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "75",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "72",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "73",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 235.0,
+            "areaHeatExchange": 0.02706
+           },
+           {
+            "id": "2",
+            "name": "Стекло",
+            "isDefault": true,
+            "volumes": [
+             {
+              "id": "8",
+              "name": "750 мл",
+              "isDefault": true,
+              "temperatures": [
+               {
+                "id": "58",
+                "name": "Комнатная",
+                "isDefault": true,
+                "initial": 293.15
+               },
+               {
+                "id": "59",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00075
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "52",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "53",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "5",
+              "name": "375 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "54",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "55",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.000375
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "48",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "49",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "50",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "51",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "7",
+              "name": "660 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "56",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "57",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00066
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "60",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "61",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.005,
+            "conductivity": 0.037,
+            "areaHeatExchange": 0.05138
+           },
+           {
+            "id": "1",
+            "name": "Картон",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "42",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "43",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "2",
+              "name": "200 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "40",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "41",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0002
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "46",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "47",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "44",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "45",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.0025,
+            "conductivity": 0.066,
+            "areaHeatExchange": 0.07124
+           }
+          ],
+          "alcohol": 13.5,
+          "optimalTemperature": 284.15
+         }
+        ]
+       },
+       {
+        "drinks": [
+         {
+          "id": "1",
+          "icon": "https://example.invalid/a9fbf6b5-2c74-4b2a-bd6e-a88cb0a81ee5",
+          "name": "Лёд",
+          "hint": "Примерно потребуется для превращения воды в лёд",
+          "previewHint": "Время охлаждения 1 час",
+          "packages": [
+           {
+            "id": "5",
+            "name": "Формочка для льда",
+            "isDefault": true,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": true,
+              "temperatures": [
+               {
+                "id": "23",
+                "name": "",
+                "isDefault": true,
+                "initial": 0.0
+               }
+              ],
+              "volume": 0.0005
+             }
+            ],
+            "thickness": 0.0,
+            "conductivity": 0.0,
+            "areaHeatExchange": 0.0
+           }
+          ],
+          "alcohol": 0.0,
+          "optimalTemperature": 253.15
+         }
+        ]
+       },
+       {
+        "drinks": [
+         {
+          "id": "2",
+          "icon": "https://example.invalid/b22508a4-cdeb-4a4f-8b8d-eabfd0920861",
+          "name": "Спиртные напитки",
+          "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+          "previewHint": "Температура подачи 0-4°C ",
+          "packages": [
+           {
+            "id": "3",
+            "name": "Пластик",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "26",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "27",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "30",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "31",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "11",
+              "name": "2 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "32",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "33",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.002
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "24",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "25",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "28",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "29",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 0.01,
+            "areaHeatExchange": 0.08429
+           },
+           {
+            "id": "4",
+            "name": "Жесть",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "38",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "39",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "36",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "37",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "34",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "35",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 235.0,
+            "areaHeatExchange": 0.02706
+           },
+           {
+            "id": "2",
+            "name": "Стекло",
+            "isDefault": true,
+            "volumes": [
+             {
+              "id": "8",
+              "name": "750 мл",
+              "isDefault": true,
+              "temperatures": [
+               {
+                "id": "19",
+                "name": "Комнатная",
+                "isDefault": true,
+                "initial": 293.15
+               },
+               {
+                "id": "20",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00075
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "13",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "14",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "5",
+              "name": "375 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "15",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "16",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.000375
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "9",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "10",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "11",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "12",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "7",
+              "name": "660 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "17",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "18",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00066
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "21",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "22",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.005,
+            "conductivity": 0.037,
+            "areaHeatExchange": 0.05138
+           },
+           {
+            "id": "1",
+            "name": "Картон",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "3",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "4",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "2",
+              "name": "200 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "1",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "2",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0002
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "7",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "8",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "5",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "6",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.0025,
+            "conductivity": 0.066,
+            "areaHeatExchange": 0.07124
+           }
+          ],
+          "alcohol": 40.0,
+          "optimalTemperature": 275.15
+         }
+        ]
+       },
+       {
+        "drinks": [
+         {
+          "id": "7",
+          "icon": "https://example.invalid/1230be88-4aa9-4364-b2a0-2ea0d4f5b32a",
+          "name": "Вода",
+          "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+          "previewHint": "Температура подачи 16°C ",
+          "packages": [
+           {
+            "id": "3",
+            "name": "Пластик",
+            "isDefault": true,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "216",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "217",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "220",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "221",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "11",
+              "name": "2 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "222",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "223",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.002
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "214",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "215",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": true,
+              "temperatures": [
+               {
+                "id": "218",
+                "name": "Комнатная",
+                "isDefault": true,
+                "initial": 293.15
+               },
+               {
+                "id": "219",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 0.01,
+            "areaHeatExchange": 0.08429
+           },
+           {
+            "id": "4",
+            "name": "Жесть",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "228",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "229",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "226",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "227",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "224",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "225",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 235.0,
+            "areaHeatExchange": 0.02706
+           },
+           {
+            "id": "2",
+            "name": "Стекло",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "8",
+              "name": "750 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "210",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "211",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00075
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "204",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "205",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "5",
+              "name": "375 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "206",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "207",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.000375
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "200",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "201",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "202",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "203",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "7",
+              "name": "660 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "208",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "209",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00066
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "212",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "213",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.005,
+            "conductivity": 0.037,
+            "areaHeatExchange": 0.05138
+           },
+           {
+            "id": "1",
+            "name": "Картон",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "194",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "195",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "2",
+              "name": "200 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "192",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "193",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0002
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "198",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "199",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "196",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "197",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.0025,
+            "conductivity": 0.066,
+            "areaHeatExchange": 0.07124
+           }
+          ],
+          "alcohol": 0.0,
+          "optimalTemperature": 289.15
+         }
+        ]
+       },
+       {
+        "drinks": [
+         {
+          "id": "5",
+          "icon": "https://example.invalid/f5f223f8-c516-49bd-99dd-05c6f058bc1e",
+          "name": "Освежающие напитки",
+          "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+          "previewHint": "Температура подачи 4-5°C ",
+          "packages": [
+           {
+            "id": "3",
+            "name": "Пластик",
+            "isDefault": true,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": true,
+              "temperatures": [
+               {
+                "id": "140",
+                "name": "Комнатная",
+                "isDefault": true,
+                "initial": 293.15
+               },
+               {
+                "id": "141",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "144",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "145",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "11",
+              "name": "2 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "146",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "147",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.002
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "138",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "139",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "142",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "143",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 0.01,
+            "areaHeatExchange": 0.08429
+           },
+           {
+            "id": "4",
+            "name": "Жесть",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "152",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "153",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "150",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "151",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "148",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "149",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 235.0,
+            "areaHeatExchange": 0.02706
+           },
+           {
+            "id": "2",
+            "name": "Стекло",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "8",
+              "name": "750 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "134",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "135",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00075
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "128",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "129",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "5",
+              "name": "375 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "130",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "131",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.000375
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "124",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "125",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "126",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "127",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "7",
+              "name": "660 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "132",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "133",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00066
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "136",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "137",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.005,
+            "conductivity": 0.037,
+            "areaHeatExchange": 0.05138
+           },
+           {
+            "id": "1",
+            "name": "Картон",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "118",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "119",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "2",
+              "name": "200 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "116",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "117",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0002
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "122",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "123",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "120",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "121",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.0025,
+            "conductivity": 0.066,
+            "areaHeatExchange": 0.07124
+           }
+          ],
+          "alcohol": 0.0,
+          "optimalTemperature": 277.15
+         }
+        ]
+       },
+       {
+        "drinks": [
+         {
+          "id": "4",
+          "icon": "https://example.invalid/f49133b0-6f2e-4bdd-85bc-175391aa9d4f",
+          "name": "Пиво",
+          "hint": "Примерно потребуется для достижения оптимальной температуры напитка",
+          "previewHint": "Температура подачи 4-7°C ",
+          "packages": [
+           {
+            "id": "3",
+            "name": "Пластик",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "102",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "103",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "106",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "107",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "11",
+              "name": "2 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "108",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "109",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.002
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "100",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "101",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "104",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "105",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 0.01,
+            "areaHeatExchange": 0.08429
+           },
+           {
+            "id": "4",
+            "name": "Жесть",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "114",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "115",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "112",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "113",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "110",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "111",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             }
+            ],
+            "thickness": 0.001,
+            "conductivity": 235.0,
+            "areaHeatExchange": 0.02706
+           },
+           {
+            "id": "2",
+            "name": "Стекло",
+            "isDefault": true,
+            "volumes": [
+             {
+              "id": "8",
+              "name": "750 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "96",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "97",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00075
+             },
+             {
+              "id": "4",
+              "name": "330 мл",
+              "isDefault": true,
+              "temperatures": [
+               {
+                "id": "90",
+                "name": "Комнатная",
+                "isDefault": true,
+                "initial": 293.15
+               },
+               {
+                "id": "91",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00033
+             },
+             {
+              "id": "5",
+              "name": "375 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "92",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "93",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.000375
+             },
+             {
+              "id": "1",
+              "name": "150 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "86",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "87",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00015
+             },
+             {
+              "id": "3",
+              "name": "250 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "88",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "89",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00025
+             },
+             {
+              "id": "7",
+              "name": "660 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "94",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "95",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.00066
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "98",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "99",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.005,
+            "conductivity": 0.037,
+            "areaHeatExchange": 0.05138
+           },
+           {
+            "id": "1",
+            "name": "Картон",
+            "isDefault": false,
+            "volumes": [
+             {
+              "id": "6",
+              "name": "500 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "80",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "81",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0005
+             },
+             {
+              "id": "2",
+              "name": "200 мл",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "78",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "79",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0002
+             },
+             {
+              "id": "10",
+              "name": "1.5 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "84",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "85",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.0015
+             },
+             {
+              "id": "9",
+              "name": "1 л",
+              "isDefault": false,
+              "temperatures": [
+               {
+                "id": "82",
+                "name": "Комнатная",
+                "isDefault": false,
+                "initial": 293.15
+               },
+               {
+                "id": "83",
+                "name": "Тёплая",
+                "isDefault": false,
+                "initial": 303.15
+               }
+              ],
+              "volume": 0.001
+             }
+            ],
+            "thickness": 0.0025,
+            "conductivity": 0.066,
+            "areaHeatExchange": 0.07124
+           }
+          ],
+          "alcohol": 6.0,
+          "optimalTemperature": 278.15
+         }
+        ]
+       }
+      ],
+      "timerInfo": "Примерно потребуется для достижения оптимальной температуры",
+      "coolingDrinks": [],
+      "fridgeH1": 40.0,
+      "zones": [
+       {
+        "id": "1",
+        "name": "Морозильная камера",
+        "isDefault": true,
+        "zone": {
+         "type": "LIST",
+         "name": "4",
+         "description": "freezerTargetTempLevel"
+        },
+        "icon": "",
+        "descriptions": []
+       },
+       {
+        "id": "2",
+        "name": "Холодильное отделение",
+        "isDefault": false,
+        "zone": {
+         "type": "LIST",
+         "name": "3",
+         "description": "refrigeratorTargetTempLevel"
+        },
+        "icon": "",
+        "descriptions": []
+       },
+       {
+        "id": "3",
+        "name": "My Zone",
+        "isDefault": false,
+        "zone": {
+         "type": "LIST",
+         "name": "5",
+         "description": "vtRoomTargetTempLevel"
+        },
+        "icon": "",
+        "descriptions": [
+         {
+          "data": "26",
+          "desc": "Мягкая заморозка",
+          "icon": "https://example.invalid/201bb4b9-bbee-4e07-824d-42f974a608db"
+         },
+         {
+          "data": "31",
+          "desc": "Свежесть при 0°",
+          "icon": "https://example.invalid/d0815cf6-a989-4c1d-ae9b-a6e143ca83d6"
+         },
+         {
+          "data": "36",
+          "desc": "Фрукты и овощи",
+          "icon": "https://example.invalid/2185d899-85f4-4ee6-aa8e-ecaf307123d9"
+         }
+        ]
+       }
+      ]
+     },
+     "coolingIcon": "https://example.invalid/e767dbef-48c7-423e-83a9-e22f3a603f6f",
+     "staleIcon": "https://example.invalid/f17a9b04-06b8-4c98-812f-9eb3a7bef483",
+     "coolingTitle": "Smart Drink",
+     "coolingDescription": "Охлаждение напитков"
+    },
+    "connectionStatus": {
+     "status": "UNDEFINED",
+     "connections": {
+      "BAD": {
+       "title": "Плохое подключение к интернету",
+       "bottomSheetContent": {
+        "title": "Плохое подключение «${deviceName}» к интернету",
+        "description": "Команды на устройстве могут обрабатываться с задержкой. Проверьте качество связи сети Wi-Fi, к которой подключено устройство, или смените точку подключения"
+       }
+      },
+      "GOOD": {
+       "title": "Подключение восстановлено",
+       "bottomSheetContent": {
+        "title": "",
+        "description": ""
+       }
+      },
+      "LOST": {
+       "title": "Потеряно подключение к интернету",
+       "bottomSheetContent": {
+        "title": "",
+        "description": ""
+       }
+      }
+     },
+     "confirmBtnText": "Закрыть",
+     "detailsText": "Подробнее"
+    },
+    "sensors": {}
+   }
+  }
+ ]
+}
