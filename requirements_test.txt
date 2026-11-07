@@ -1,5 +1,7 @@
-# Home Assistant the tests run against (the version the integration is used with)
-homeassistant==2026.10.4
+# What the checks need besides Home Assistant itself. CI runs them inside the
+# Home Assistant container of every version it checks (scripts/run_checks.sh);
+# to run them without Docker, install the version you need first:
+#   python -m pip install homeassistant==<version> -r requirements_test.txt
 # the integration's own requirement (manifest.json); requests comes with Home Assistant
 websocket-client>=1.8.0,<2
 pytest>=8.4
