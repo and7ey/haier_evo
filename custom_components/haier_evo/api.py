@@ -1524,7 +1524,6 @@ class HaierAC(HaierDevice):
     ) -> None:
         super().__init__(**kwargs)
         self.current_temperature = 0
-        self.outdoor_temperature: float | None = None
         self.target_temperature = 0
         self.status = None
         self.mode = None
@@ -1570,7 +1569,6 @@ class HaierAC(HaierDevice):
         data = super().to_dict()
         data.update({
             "current_temperature": self.current_temperature,
-            "outdoor_temperature": self.outdoor_temperature,
             "target_temperature": self.target_temperature,
             "max_temperature": self.max_temperature,
             "min_temperature": self.min_temperature,
@@ -1609,8 +1607,6 @@ class HaierAC(HaierDevice):
     def _apply_attribute(self, attr: CFG.Attribute, value: str) -> None:
         if attr.name == "current_temperature":
             self.current_temperature = float(value)
-        elif attr.name == "outdoor_temperature":
-            self.outdoor_temperature = float(value)
         elif attr.name == "status":
             power = CFG.Constraint.value2code(str(value).strip().lower())
             self.status = 1 if power == "1" else 0 if power == "0" else int(power)
@@ -1665,11 +1661,10 @@ class HaierAC(HaierDevice):
         attrs = list(sorted(map(lambda x: CFG.Attribute(x), attributes), key=lambda x: x.code))
         for attr in attrs:
             if attr.name == "current_temperature" and str(attr.code) != sensor_curr_temp:
-                if sensor_curr_temp is None:
-                    continue
-                # the other "Температура в комнате" (code 38 on S2SF) is the
-                # outdoor unit's sensor: several degrees off the outdoor air
-                attr = CFG.Attribute({**attr, "attrname": "outdoor_temperature"})
+                # the other "Температура в комнате" (code 38 on S2SF): 1.6.0
+                # showed it as the outdoor unit, but on AS25S2SF2FA it never
+                # changes (the same values for days), so it is not used
+                continue
             self.config.attrs.append(attr)
         self.config.merge_attributes()
         self.config.apply_louver_layout(data.get("modes"))
@@ -1953,8 +1948,6 @@ class HaierAC(HaierDevice):
         entities = []
         if self.config['current_temperature'] is not None:
             entities.append(sensor.HaierACTemperatureSensor(self))
-        if self.config['outdoor_temperature'] is not None:
-            entities.append(sensor.HaierACOutdoorTemperatureSensor(self))
         return entities
 
     def create_entities_binary_sensor(self) -> list:
