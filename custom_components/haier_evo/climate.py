@@ -82,8 +82,15 @@ class HaierACEntity(ClimateEntity):
     def fan_mode(self) -> str:
         return self._device.fan_mode
 
+    # HA 2026.11 reads the native_* members and reports the old ones as
+    # deprecated (removed in 2027.11); older versions only know the old ones.
+    # Both are provided until the minimum version is 2026.11.
     @property
     def temperature_unit(self) -> str:
+        return UnitOfTemperature.CELSIUS
+
+    @property
+    def native_temperature_unit(self) -> str:
         return UnitOfTemperature.CELSIUS
 
     @property
@@ -99,7 +106,15 @@ class HaierACEntity(ClimateEntity):
         return self._device.current_temperature
 
     @property
+    def native_current_temperature(self) -> float:
+        return self._device.current_temperature
+
+    @property
     def target_temperature(self) -> float:
+        return self._device.target_temperature
+
+    @property
+    def native_target_temperature(self) -> float:
         return self._device.target_temperature
 
     @property

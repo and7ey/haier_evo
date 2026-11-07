@@ -16,6 +16,7 @@ from .logger import _LOGGER
 from .const import (
     DOMAIN, SETUP_INCOMPLETE_RETRIES, STORAGE_VERSION, LEGACY_TOKENS_FILE,
     CACHE_VERSION, CACHE_RETRY_FIRST, CACHE_RETRY_MAX, CACHE_REFRESH_HOURS,
+    STATE_REFRESH_MINUTES,
 )
 from . import api
 
@@ -145,6 +146,29 @@ async def _refresh(hass: HomeAssistant, entry: ConfigEntry, haier_object: api.Ha
         hass.config_entries.async_schedule_reload(entry.entry_id)
 
 
+async def _refresh_state(hass: HomeAssistant, entry: ConfigEntry, haier_object: api.Haier, store: Store) -> None:
+    """Read the state of every device again (between the full refreshes).
+
+    Only the values: the device list and the saved descriptions are left to
+    _refresh, unless the cloud now describes a device differently.
+    """
+    if haier_object.disconnect_requested:
+        return
+    try:
+        result = await hass.async_add_executor_job(haier_object.refresh_devices)
+    except (api.ReauthRequired, api.AuthUserError) as e:
+        _LOGGER.error(f"Haier Evo rejected the saved sign-in, re-authentication is needed: {e!r}")
+        haier_object.stop()
+        entry.async_start_reauth(hass)
+        return
+    except Exception as e:
+        _LOGGER.debug(f"Haier Evo: reading the state failed: {e!r}")
+        return
+    if result["changed"]:
+        await _save_devices(hass, store, haier_object)
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+
+
 def _token_saver(hass: HomeAssistant, store: Store):
     """Save rotated tokens from any thread, waiting for the write when possible."""
     def save(tokens: dict) -> None:
@@ -217,6 +241,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         tokens=tokens,
         token_saver=_token_saver(hass, store),
         on_auth_failed=lambda: hass.loop.call_soon_threadsafe(entry.async_start_reauth, hass),
+        device_id=api.entry_device_id(entry.entry_id),
     )
     devices_store = _devices_store(hass, entry.entry_id)
     cached = _cached_devices(await devices_store.async_load())
@@ -291,6 +316,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(async_track_time_interval(
         hass, periodic, timedelta(hours=CACHE_REFRESH_HOURS), cancel_on_shutdown=True,
+    ))
+
+    async def state(_now) -> None:
+        await _refresh_state(hass, entry, haier_object, devices_store)
+
+    entry.async_on_unload(async_track_time_interval(
+        hass, state, timedelta(minutes=STATE_REFRESH_MINUTES), cancel_on_shutdown=True,
     ))
     return True
 

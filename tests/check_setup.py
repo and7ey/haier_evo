@@ -33,8 +33,8 @@ FakeStore.removed = []
 class FakeHaier:
     behavior = None
     last = None
-    def __init__(self, hass, email, password, region, tokens=None, token_saver=None, on_auth_failed=None):
-        self.args = dict(email=email, password=password, region=region, tokens=tokens)
+    def __init__(self, hass, email, password, region, tokens=None, token_saver=None, on_auth_failed=None, device_id=None):
+        self.args = dict(email=email, password=password, region=region, tokens=tokens, device_id=device_id)
         self.devices, self.disconnect_requested, self.stopped = [], False, False
         self.refreshtoken = (tokens or {}).get("refreshtoken")
         self.token_saver, self.on_auth_failed = token_saver, on_auth_failed
@@ -234,7 +234,9 @@ async def main():
     check("saved descriptions: starts without the cloud", r is True and not h.pulled and h.cached_with == CACHE["haier_evo.E1.devices"]["devices"], repr(r))
     check("saved descriptions: websocket started, platforms set up, background refresh scheduled",
           h.connected and entries.async_forward_entry_setups.await_count == 1 and hass.tasks == ["haier_evo initial refresh"])
-    check("periodic refresh every 6 h", [i.total_seconds() for i in hass.intervals] == [6 * 3600])
+    check("periodic refresh every 6 h, the state every 15 min", [i.total_seconds() for i in hass.intervals] == [6 * 3600, 15 * 60],
+          str(hass.intervals))
+    check("the entry's own Device-Id", FakeHaier.last.args["device_id"] == api.entry_device_id("E1"))
 
     def broken(h): raise ValueError("bad cached device")
     FakeHaier.cache_behavior = broken
@@ -300,6 +302,31 @@ async def main():
     x = await refresh([OK], listed={"a", "b", "c"})
     check("refresh: rejected sign-in while probing new devices -> reauth", x.reauth == [1] and x.haier.stopped and x.reloads == [])
     FakeHaier.denied = set()
+
+    # the state read every 15 min (1.6.0)
+    async def state(results):
+        FakeHaier.refresh_results = list(results)
+        h = FakeHaier(None, "e", None, "ru", tokens=TOK)
+        h.devices = devs("a", "b")
+        store = FakeStore("haier_evo.E1.devices")
+        FakeStore.data, FakeStore.removed = {}, []
+        entries = FakeEntries([]); entries.reloads = []
+        reauth = []
+        entry = SimpleNamespace(entry_id="E1", async_start_reauth=lambda hass: reauth.append(1))
+        async def executor(fn, *a): return fn(*a)
+        hass = SimpleNamespace(config_entries=entries, async_add_executor_job=executor)
+        await integ._refresh_state(hass, entry, h, store)
+        return SimpleNamespace(saved=FakeStore.data.get("haier_evo.E1.devices"), reloads=entries.reloads, reauth=reauth, haier=h)
+    x = await state([OK])
+    check("state read: nothing saved, no reload", x.saved is None and x.reloads == [] and x.reauth == [])
+    x = await state([{"failed": ["b"], "changed": False}])
+    check("state read: a failing device is left to the next try", x.saved is None and x.reloads == [])
+    x = await state([RuntimeError("net")])
+    check("state read: a cloud error is not fatal", x.saved is None and x.reloads == [] and not x.haier.stopped)
+    x = await state([{"failed": [], "changed": True}])
+    check("state read: a device described differently -> saved, then reload", x.saved is not None and x.reloads == ["E1"])
+    x = await state([api.ReauthRequired("no tokens")])
+    check("state read: rejected sign-in -> stop and ask for the password", x.reauth == [1] and x.haier.stopped)
 
 asyncio.run(main())
 print("FAILS:", fails)

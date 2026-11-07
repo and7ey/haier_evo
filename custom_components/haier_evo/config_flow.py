@@ -46,10 +46,14 @@ class TooManyRequests(exceptions.HomeAssistantError):
     """The cloud limits sign-ins (HTTP 429): not a wrong password."""
 
 
-async def sign_in(hass: HomeAssistant, email: str, password: str, region: str) -> dict:
-    """Sign in once and return the tokens; the password is not kept anywhere."""
+async def sign_in(hass: HomeAssistant, email: str, password: str, region: str,
+                  device_id: str | None = None) -> dict:
+    """Sign in once and return the tokens; the password is not kept anywhere.
+
+    device_id: the entry's own on re-authentication (a new entry has no id yet).
+    """
     def run() -> dict:
-        client = api.Haier(hass, email, password, region)
+        client = api.Haier(hass, email, password, region, device_id=device_id)
         try:
             client.login()
             return client.tokens_dict()
@@ -74,9 +78,10 @@ async def sign_in(hass: HomeAssistant, email: str, password: str, region: str) -
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
-    async def _try_sign_in(self, email: str, password: str, region: str, errors: dict) -> dict | None:
+    async def _try_sign_in(self, email: str, password: str, region: str, errors: dict,
+                           device_id: str | None = None) -> dict | None:
         try:
-            return await sign_in(self.hass, email, password, region)
+            return await sign_in(self.hass, email, password, region, device_id)
         except InvalidCredentials:
             errors["base"] = "invalid_auth"
         except CannotConnect:
@@ -117,7 +122,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             tokens = await self._try_sign_in(
-                email, user_input["password"], entry.data.get("region", "ru"), errors
+                email, user_input["password"], entry.data.get("region", "ru"), errors,
+                api.entry_device_id(entry.entry_id),
             )
             if tokens is not None:
                 return self.async_update_reload_and_abort(entry, data_updates={"tokens": tokens})

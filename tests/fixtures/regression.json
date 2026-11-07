@@ -923,6 +923,18 @@
         "min": "0.0",
         "step": "0.5"
        }
+      },
+      {
+       "code": 38,
+       "current": "6",
+       "description": "Температура в комнате",
+       "list": [],
+       "name": "outdoor_temperature",
+       "range": {
+        "max": "191",
+        "min": "-64",
+        "step": "1"
+       }
       }
      ],
      "command_name": "4"
@@ -939,6 +951,7 @@
     "max_temperature": 30.0,
     "min_temperature": 16.0,
     "mode": "cool",
+    "outdoor_temperature": 6.0,
     "preset_mode": "boost",
     "quiet_on": false,
     "sound_on": false,
@@ -1868,6 +1881,18 @@
         "min": "0.0",
         "step": "0.5"
        }
+      },
+      {
+       "code": 38,
+       "current": "-6",
+       "description": "Температура в комнате",
+       "list": [],
+       "name": "outdoor_temperature",
+       "range": {
+        "max": "191",
+        "min": "-64",
+        "step": "1"
+       }
       }
      ],
      "command_name": "4"
@@ -1884,6 +1909,7 @@
     "max_temperature": 30.0,
     "min_temperature": 16.0,
     "mode": "cool",
+    "outdoor_temperature": -6.0,
     "preset_mode": "boost",
     "quiet_on": false,
     "sound_on": false,
@@ -2821,6 +2847,18 @@
         "min": "0.0",
         "step": "0.5"
        }
+      },
+      {
+       "code": 38,
+       "current": "7",
+       "description": "Температура в комнате",
+       "list": [],
+       "name": "outdoor_temperature",
+       "range": {
+        "max": "191",
+        "min": "-64",
+        "step": "1"
+       }
       }
      ],
      "command_name": "4"
@@ -2837,6 +2875,7 @@
     "max_temperature": 30.0,
     "min_temperature": 16.0,
     "mode": "cool",
+    "outdoor_temperature": 7.0,
     "preset_mode": "boost",
     "quiet_on": false,
     "sound_on": false,

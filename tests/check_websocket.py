@@ -87,7 +87,7 @@ class Dev:
     def on_message(self, m): pass
     def write_ha_state(self): pass
     resync_data = None
-    def resync(self):
+    def resync(self, guard=False):
         self.resyncs += 1
         return self.resync_data
     def init_if_needed(self):
