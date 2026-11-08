@@ -1,0 +1,50 @@
+name: Новое устройство
+description: Модели нет в списке поддерживаемых, или она работает не полностью
+title: "Устройство: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо! Из диагностики получаются тестовые данные: с ними модель попадает в таблицу README как «данные облака», и её поведение проверяется в CI на каждой версии Home Assistant.
+  - type: input
+    id: model
+    attributes:
+      label: Модель
+      description: Как в приложении Evo («Об устройстве») или на шильдике
+      placeholder: AS25S2SF2FA-B
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Тип
+      options:
+        - Кондиционер
+        - Холодильник
+        - Водонагреватель
+        - Стиральная машина
+        - Сушильная машина
+        - Другое
+    validations:
+      required: true
+  - type: textarea
+    id: works
+    attributes:
+      label: Что работает и что нет
+      description: Какие сущности появились, чего не хватает, что показывается неверно
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Диагностика
+      description: >-
+        Настройки → Устройства и службы → Haier Evo → ⋮ → «Скачать диагностику».
+        Перетащите файл в это поле. Почта, токены, MAC, серийные номера и IP-адреса в нём уже скрыты.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Версии
+      placeholder: Home Assistant 2026.11.0, Haier Evo 1.6.4
