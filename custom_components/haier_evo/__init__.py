@@ -14,6 +14,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.loader import async_get_integration
 from .logger import _LOGGER
 from .const import (
+    CONF_LAUNDRY_CONTROL,
     DOMAIN, SETUP_INCOMPLETE_RETRIES, STORAGE_VERSION, LEGACY_TOKENS_FILE,
     CACHE_VERSION, CACHE_RETRY_FIRST, CACHE_RETRY_MAX, CACHE_REFRESH_HOURS,
     STATE_REFRESH_MINUTES,
@@ -22,6 +23,7 @@ from . import api
 
 
 PLATFORMS: list[str] = [
+    Platform.BUTTON,
     Platform.CLIMATE,
     Platform.SWITCH,
     Platform.SELECT,
@@ -254,6 +256,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         on_auth_failed=lambda: hass.loop.call_soon_threadsafe(entry.async_start_reauth, hass),
         device_id=api.entry_device_id(entry.entry_id),
     )
+    # the control of washers and dryers (beta) is an option of the entry, off by default
+    haier_object.laundry_control = bool(entry.options.get(CONF_LAUNDRY_CONTROL, False))
     devices_store = _devices_store(hass, entry.entry_id)
     cached = _cached_devices(await devices_store.async_load())
     from_cache = False

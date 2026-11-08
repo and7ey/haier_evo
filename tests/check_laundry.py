@@ -1,7 +1,8 @@
 """Washing machines and dryers in the cloud's current format (fixtures/laundry_dump.json:
 HW60-BP12929AE, HW90-B14367U1 and the dryer HD80-A2367U1 from upstream issues, anonymized):
 what each code means comes from the app's screens, the state, program, phase and time
-left, pushes and program events, and that the integration sends them nothing."""
+left, pushes and program events; nothing is sent unless the control (beta) is on, and
+then only what the cloud's description defines, when the machine allows it."""
 import sys, json, os, copy, tempfile, logging
 from pathlib import Path
 _HERE = Path(__file__).resolve().parent
@@ -167,6 +168,125 @@ m = make(HW60, data=bare)
 check("without the app's screens: none of these meanings, no guessing, only the state and program sensors",
       ({k: v for k, v in m.codes.items() if k in KEYS}, m.state, [e._attr_unique_id.rsplit("_", 1)[-1] for e in entities(m)["sensor"]]),
       ({}, None, ["state", "program"]))
+
+# ---- control (beta): only with the entry's option on
+class ControlHaier(FakeHaier):
+    laundry_control = True
+
+def make_ctl(src, kind=None, data=None):
+    clients.append(ControlHaier())
+    kind = kind or TYPES[src["device_name"].split()[-1][:4]]
+    return api.HaierDevice.create(haier=clients[-1], device_type=kind, device_mac=src["device_id"], device_serial=src["device_serial"],
+                                  device_title=src["device_name"], backend_data=copy.deepcopy(src["backend_data"] if data is None else data))
+
+def raised(fn):
+    try:
+        fn()
+    except Exception as e:  # noqa: BLE001 - the checks look at what came out
+        return getattr(e, "translation_key", type(e).__name__)
+    return None
+
+def program_state(m, status):
+    event(m, "ProgramDryerBaseEvent" if m.is_dryer else "ProgramWasherBaseEvent", program={"title": m.program_title, "status": status})
+
+def remote(m, on):
+    push(m, **{"_" + m.codes["remoteCtrValid"]: "1" if on else "0"})
+
+check("control off (the default): no program to start and no buttons, as before",
+      [(m.create_entities_select(), m.create_entities_button()) for m in (make(HW60), make(HW90), make(HD80))], [([], [])] * 3)
+w60, w90, d80 = make_ctl(HW60), make_ctl(HW90), make_ctl(HD80)
+business = {name: {b["name"]: b["commandParameters"] for b in src["backend_data"]["smartDeviceControl"]["businessAttributes"]}
+            for name, src in (("HW60", HW60), ("HW90", HW90), ("HD80", HD80))}
+check("programs from the app's catalogue that have a definition: every one once, in the app's order",
+      [(len(m.programs), len({p["title"] for p in m.programs}), m.programs[0]["title"]) for m in (w60, w90, d80)],
+      [(28, 28, "Кашемир"), (29, 29, "Белые вещи"), (20, 20, "Хлопок")])
+check("a program is its definition's group command with every value it has (defaults; the machine sets the rest)",
+      all(p["group"] == business[n][p["link"]]["name"] and p["commands"] == [
+          {"commandName": str(f["name"]), "value": str(f["defaultValue"])}
+          for f in business[n][p["link"]]["attrNameList"] if f.get("defaultValue") is not None]
+          for n, m in (("HW60", w60), ("HW90", w90), ("HD80", d80)) for p in m.programs), True)
+check("the delayed start's status of a washer (no value in the definition) is not sent",
+      "15" in {str(f["name"]) for f in business["HW60"]["washTypeAntiAllergy"]["attrNameList"]}
+      and "15" not in {c["commandName"] for p in w60.programs if p["link"] == "washTypeAntiAllergy" for c in p["commands"]}, True)
+dryer_program = d80.programs[0]
+check("a dryer's program turns the machine on and sets it running, in the same command",
+      ({"commandName": "6", "value": "true"} in dryer_program["commands"], {"commandName": "5", "value": "1"} in dryer_program["commands"]),
+      (True, True))
+check("start, pause and cancel as the app's control screens give them (the codes differ between models)",
+      [m.actions for m in (w60, w90, d80)],
+      [{"pause": {"commandName": "19", "value": "2"}, "resume": {"commandName": "19", "value": "1"}, "cancel": {"commandName": "194", "value": "1"}},
+       {"pause": {"commandName": "19", "value": "2"}, "resume": {"commandName": "19", "value": "1"}, "cancel": {"commandName": "144", "value": "1"}},
+       {"pause": {"commandName": "5", "value": "2"}, "resume": {"commandName": "5", "value": "1"}, "cancel": {"commandName": "44", "value": "1"}}])
+check("the program suggested to start: the machine's last one, as the app does",
+      [m.selected_program for m in (w60, w90, d80)], ["Ежедневная", "Постельное бельё", "Быстрая 30 мин"])
+ents = {"select": w90.create_entities_select(), "button": w90.create_entities_button()}
+mac = HW90["device_id"]
+check("control on: a program to start and four buttons",
+      {k: [(e._attr_unique_id.removeprefix(f"{mac}_HW90B14367U_"), e._attr_name.removeprefix("Washing Machine HW90-B14367U1 ")) for e in v]
+       for k, v in ents.items()},
+      {"select": [("laundry_program", "Программа для запуска")],
+       "button": [("laundry_start", "Старт"), ("laundry_pause", "Пауза"), ("laundry_resume", "Продолжить"), ("laundry_cancel", "Отменить программу")]})
+check("the program select: the programs' titles, the suggested one chosen",
+      (ents["select"][0]._attr_options[:3], ents["select"][0].current_option), (["Белые вещи", "Деликатная", "Кашемир"], "Постельное бельё"))
+
+sent = clients[-2].sent  # w90's client
+w90.set_selected_program("Деликатная")
+check("choosing a program sends nothing", (w90.selected_program, sent), ("Деликатная", []))
+check("a program that is not offered cannot be chosen", (raised(lambda: w90.set_selected_program("Нет такой")), w90.selected_program),
+      ("laundry_unknown_program", "Деликатная"))
+
+remote(w90, False)
+program_state(w90, "FINISHED")
+check("remote control off on the machine: nothing starts, nothing is sent", (raised(w90.start), sent), ("laundry_remote_off", []))
+remote(w90, True)
+program_state(w90, "IN_PROGRESS")
+check("a program running: no second start", (raised(w90.start), raised(w90.resume), sent), ("laundry_cannot_start", "laundry_cannot_resume", []))
+w90.pause()
+check("pause while running: the runningMode command", sent[-1:],
+      [{"action": "command", "macAddress": mac, "command": {"commandName": "19", "value": "2"}}])
+program_state(w90, "PAUSED")
+check("paused: no pause, resume goes", (raised(w90.pause), raised(w90.resume)), ("laundry_cannot_pause", None))
+check("resume: runningMode 1", sent[-1]["command"], {"commandName": "19", "value": "1"})
+w90.cancel()
+check("cancel while paused: returnStandby (144 on HW90)", sent[-1]["command"], {"commandName": "144", "value": "1"})
+program_state(w90, "CANCELED")
+check("cancelled: nothing to cancel or pause", (raised(w90.cancel), raised(w90.pause)), ("laundry_cannot_cancel", "laundry_cannot_pause"))
+sent.clear()
+w90.start()
+chosen = next(p for p in w90.programs if p["title"] == "Деликатная")
+check("start: the chosen program's group command with all its values, as one message",
+      sent, [{"action": "operation", "macAddress": mac, "commandName": "8", "commands": chosen["commands"]}])
+w90._control_lock.acquire()
+check("a second press while a command is on its way is refused", raised(w90.start), "laundry_busy")
+w90._control_lock.release()
+w90.selected_program = None
+check("no program chosen: nothing to start", raised(w90.start), "laundry_no_program")
+w90._haier.laundry_control = False
+check("the option turned off: no command even when called", raised(w90.cancel), "laundry_control_off")
+
+remote(d80, True)
+program_state(d80, "IN_PROGRESS")
+d80.pause()
+check("a dryer: pause and cancel with its own codes", clients[-1].sent[-1]["command"], {"commandName": "5", "value": "2"})
+check("a machine that does not say whether remote control is on: refused",
+      raised(make_ctl(HW60, data={k: v for k, v in HW60["backend_data"].items() if k != "remoteControlMode"}).start), "laundry_remote_off")
+
+picked = copy.deepcopy(HW60["backend_data"])
+first = picked["allProgram"]["blocks"][0]["programs"][0]
+temperature = next(f for f in business["HW60"][first["programConfig"]["link"]["name"]]["attrNameList"] if str(f["name"]) == "48")
+allowed = [o["data"] for o in temperature["valueRange"]["list"]["data"]]
+first["programConfig"]["selectedValues"] = [{"attrName": "48", "attrValue": allowed[-1]}, {"attrName": "61", "attrValue": "99999"}]
+m = make_ctl(HW60, data=picked)
+values = {c["commandName"]: c["value"] for c in m.programs[0]["commands"]}
+check("the program's selected values go instead of the defaults; a value the definition does not allow does not",
+      (values["48"], values["61"]), (allowed[-1], next(str(f["defaultValue"]) for f in business["HW60"][first["programConfig"]["link"]["name"]]["attrNameList"] if str(f["name"]) == "61")))
+check("broken descriptions give no programs and no actions, no error",
+      [(api.laundry_programs(x), api.laundry_actions(x)) for x in (None, {}, {"allProgram": "x"}, {"controlBlock": {"pause": {"link": "19"}}},
+                                                                    {"smartDeviceControl": {"businessAttributes": [None, {"name": 5}]}, "allProgram": {"blocks": [{"programs": [None, {"preview": "x"}]}]}})],
+      [([], {})] * 5)
+check("the diagnostics show the control: on, programs, actions, the chosen program",
+      {k: (len(v) if isinstance(v, list) else v) for k, v in w60.to_dict()["control"].items()},
+      {"enabled": True, "programs": 28, "actions": w60.actions, "selected_program": "Ежедневная"})
 
 print("FAILS:", fails)
 sys.exit(1 if fails else 0)

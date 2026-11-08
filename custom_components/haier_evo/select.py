@@ -11,6 +11,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     entities = []
     for device in haier_object.devices:
         entities.extend(device.create_entities_select())
+    from .button import remove_control_entities
+    remove_control_entities(hass, haier_object.devices, "select", ["laundry_program"])
     if entities:
         async_add_entities(entities)
         haier_object.write_ha_state()
@@ -116,3 +118,31 @@ class HaierWMSpinSpeedSelect(HaierSelect):
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_spin_speed"
         self._attr_name = f"{device.device_name} Скорость отжима"
         self._attr_options = device.get_spin_speed_options()
+
+
+class HaierLaundryProgramSelect(HaierEntityMixin, SelectEntity):
+    """The program the start button runs (beta, washers and dryers): choosing
+    one sends nothing, the program starts only with the button."""
+    _attr_should_poll = False
+    _attr_icon = "mdi:washing-machine"
+
+    def __init__(self, device: api.HaierLaundry) -> None:
+        self._device = weakref.proxy(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_laundry_program"
+        self._attr_name = f"{device.device_name} Программа для запуска"
+        self._attr_options = [p["title"] for p in device.programs]
+
+    @property
+    def device_info(self) -> dict:
+        return self._device.device_info
+
+    @property
+    def available(self) -> bool:
+        return self._device.available
+
+    @property
+    def current_option(self) -> str | None:
+        return self._device.selected_program
+
+    async def async_select_option(self, option: str) -> None:
+        self._device.set_selected_program(option)  # nothing is sent: no I/O here

@@ -29,6 +29,20 @@
             }
         }
     },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Haier Evo settings",
+                "description": "Control of washing machines and dryers is a beta: it has not been checked on a real machine yet. With it on, every machine gets a program to start and Start, Pause, Resume and Cancel buttons. A command goes out only when remote control is on on the machine.",
+                "data": {
+                    "laundry_control": "Control of washing machines and dryers (beta)"
+                },
+                "data_description": {
+                    "laundry_control": "Off: the machines are only shown, nothing is sent to them."
+                }
+            }
+        }
+    },
     "entity": {
         "climate": {
             "conditioner": {
@@ -144,6 +158,33 @@
         },
         "too_many_commands": {
             "message": "{device}: too many commands are waiting for the Haier Evo cloud, try again later"
+        },
+        "laundry_control_off": {
+            "message": "{device}: control of washing machines and dryers is off in the settings of the integration"
+        },
+        "laundry_remote_off": {
+            "message": "{device}: remote control is off on the machine, turn it on with the button on its panel"
+        },
+        "laundry_cannot_start": {
+            "message": "{device}: a program cannot be started now (state: {state})"
+        },
+        "laundry_cannot_pause": {
+            "message": "{device}: nothing to pause now (state: {state})"
+        },
+        "laundry_cannot_resume": {
+            "message": "{device}: nothing to resume now (state: {state})"
+        },
+        "laundry_cannot_cancel": {
+            "message": "{device}: nothing to cancel now (state: {state})"
+        },
+        "laundry_no_program": {
+            "message": "{device}: choose the program to start first"
+        },
+        "laundry_unknown_program": {
+            "message": "{device}: there is no program «{program}»"
+        },
+        "laundry_busy": {
+            "message": "{device}: the previous command is still on its way"
         }
     }
 }
