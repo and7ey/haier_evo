@@ -21,6 +21,9 @@ ROUTES = {
     ("POST", "/v2/ru/users/auth/refresh"): "refresh",
     ("GET", "/v2/ru/pages/sduiRawPaginated/smartHome"): "devices",
     ("GET", "/mobile-backend-service/api/v1/config/{mac}"): "status",
+    # another host for redirects: reached as "localhost", the cloud as 127.0.0.1
+    ("GET", "/stolen"): "stolen",
+    ("POST", "/stolen"): "stolen",
 }
 
 def answer(status=200, body=None, delay=0.0):
@@ -43,6 +46,8 @@ def handler(name):
         status, body, delay = queue.pop(0) if len(queue) > 1 else queue[0]
         if delay:
             await asyncio.sleep(delay)
+        if 300 <= status < 400 and isinstance(body, dict) and "location" in body:
+            return web.Response(status=status, headers={"Location": body["location"]})
         text = body if isinstance(body, str) else json.dumps(body)
         return web.Response(status=status, text=text, content_type="application/json")
     return handle
@@ -143,11 +148,18 @@ check("after a rejected sign-in nothing more goes out", (type(raised(h.login))._
 
 h, err = sign_in_fails(answer(200, cloud_error("Не удалось подключиться к CRM.")))
 check("an error message of the cloud: InvalidAuth, the next sign-in waits 60 s more",
-      (type(err).__name__, api.Haier.auth_login_limits.period), ("InvalidAuth", C.LOGIN_LIMIT_PERIOD + C.LOGIN_LIMIT_500))
+      (type(err).__name__, h.auth_login_limits.period), ("InvalidAuth", C.LOGIN_LIMIT_PERIOD + C.LOGIN_LIMIT_500))
 h, err = sign_in_fails(answer(429, cloud_error("Превышено количество запросов", code=429)))
 check("HTTP 429: InvalidAuth from ManyRequestsError, the next sign-in waits 60 s more",
-      (type(err).__name__, type(err.__cause__).__name__, api.Haier.auth_login_limits.period),
+      (type(err).__name__, type(err.__cause__).__name__, h.auth_login_limits.period),
       ("InvalidAuth", "ManyRequestsError", C.LOGIN_LIMIT_PERIOD + C.LOGIN_LIMIT_429))
+# up to 1.7.0 the limits were shared by the class: another client (a sign-in in
+# the config flow, a reload, a second account) reset this wait
+other = client()
+other.stop()
+check("the wait after 429 is the client's own: another client and its stop() leave it",
+      (h.auth_login_limits.period, other.auth_login_limits.period, api.Haier.auth_login_limits.period),
+      (C.LOGIN_LIMIT_PERIOD + C.LOGIN_LIMIT_429, C.LOGIN_LIMIT_PERIOD, C.LOGIN_LIMIT_PERIOD))
 odd = {
     "HTTP 502 with an HTML page": answer(502, "<html><body>Bad Gateway</body></html>"),
     "200 with a broken body": answer(200, '{"data": {"token": '),
@@ -197,7 +209,7 @@ plan(refresh=answer(200, cloud_error("Не удалось подключитьс
 h = client(tokens=expired())
 err = raised(h.auth)
 check("refresh: an error message of the cloud keeps the tokens, the next refresh waits 60 s more",
-      (type(err).__name__, h.refreshtoken, api.Haier.auth_refresh_limits.period),
+      (type(err).__name__, h.refreshtoken, h.auth_refresh_limits.period),
       ("InvalidAuth", "ref-old", C.REFRESH_LIMIT_PERIOD + C.REFRESH_LIMIT_500))
 plan(refresh=token(5), sign_in=token(6))
 h = client(tokens=dict(expired(), refreshexpire=(datetime.now(timezone.utc) - timedelta(days=1)).isoformat()))
@@ -285,6 +297,24 @@ plan(status=answer(403, {"error": "Forbidden"}))
 h = client(tokens=valid)
 check("refused devices are found, the others not", h.denied_devices([MAC]), {MAC})
 
+# ---- redirects are not followed (1.7.1): requests would take X-Auth-Token
+# and Device-Id to another host, and the sign-in form on 307/308
+STOLEN = f"http://localhost:{PORT}/stolen"
+plan(sign_in=answer(307, {"location": STOLEN}))
+h = client()
+err = raised(h.login)
+check("sign-in answered with 307 to another host: InvalidAuth from TooManyRedirects, the form goes nowhere",
+      (type(err).__name__, type(err.__cause__).__name__, len(hits("stolen"))), ("InvalidAuth", "TooManyRedirects", 0))
+plan(status=answer(302, {"location": STOLEN}))
+h = client(tokens=valid)
+err = raised(lambda: h.pull_device_data(MAC))
+check("description answered with 302 to another host: an error, the token goes nowhere",
+      (type(err).__name__, len(hits("stolen"))), ("TooManyRedirects", 0))
+plan(devices=answer(308, {"location": STOLEN}))
+h = client(tokens=valid)
+check("device list answered with 308 to another host: nothing, the token goes nowhere",
+      (h.pull_data_from_api(), len(hits("stolen"))), ({}, 0))
+
 # ---- stop
 plan(sign_in=token(10))
 h = client()
@@ -297,6 +327,10 @@ secrets = [PASSWORD] + [f"acc{n}" for n in range(1, 11)] + [f"ref{n}" for n in r
 leaked = sorted({s for s in secrets for line in Records.lines if s in line})
 check("the log has neither the password nor a token (debug included)", leaked, [])
 check("... and the log was written at all", len(Records.lines) > 20, True)
+masked = MAC[:9] + "**:**:" + MAC[-2:]
+check("MAC addresses in the log are masked (debug included), the URLs of errors too",
+      (sorted({line for line in Records.lines if MAC.lower() in line.lower()})[:3], any(masked in line for line in Records.lines)),
+      ([], True))
 
 print("FAILS:", fails)
 sys.exit(1 if fails else 0)

@@ -12,7 +12,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.loader import async_get_integration
-from .logger import _LOGGER
+from .logger import _LOGGER, mask_ids
 from .const import (
     CONF_LAUNDRY_CONTROL,
     DOMAIN, SETUP_INCOMPLETE_RETRIES, STORAGE_VERSION, LEGACY_TOKENS_FILE,
@@ -276,11 +276,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await hass.async_add_executor_job(haier_object.pull_data)
         except (api.ReauthRequired, api.AuthUserError) as e:
             await _stop(hass, haier_object)
-            raise ConfigEntryAuthFailed(f"Haier Evo needs signing in again: {e!r}") from e
+            raise ConfigEntryAuthFailed(mask_ids(f"Haier Evo needs signing in again: {e!r}")) from e
         except Exception as e:
             await _stop(hass, haier_object)
             # network problems, cloud errors, timeouts: let Home Assistant retry the setup
-            raise ConfigEntryNotReady(f"Haier Evo is not available: {e!r}") from e
+            # HA logs these texts itself, past the filter of logger.py: MACs masked here
+            raise ConfigEntryNotReady(mask_ids(f"Haier Evo is not available: {e!r}")) from e
 
         found = {str(device.device_id).lower() for device in haier_object.devices}
         missing = _known_device_ids(hass, entry) - found
@@ -292,10 +293,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if attempts <= SETUP_INCOMPLETE_RETRIES:
                 _INCOMPLETE_SETUPS[entry.entry_id] = attempts
                 await _stop(hass, haier_object)
-                raise ConfigEntryNotReady(
+                raise ConfigEntryNotReady(mask_ids(
                     f"Haier Evo did not return {len(missing)} known device(s): "
                     f"{', '.join(sorted(missing))} (attempt {attempts}/{SETUP_INCOMPLETE_RETRIES})"
-                )
+                ))
             _LOGGER.warning(
                 f"Haier Evo still does not return {', '.join(sorted(missing))}, "
                 f"starting with the {len(found)} device(s) it returned"

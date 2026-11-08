@@ -279,14 +279,10 @@ class HaierACConfig(HaierDeviceConfig):
         return bool(self.get_preset_modes())
 
     def get_custom_preset_modes(self) -> list[str]:
-        try:
-            modes = self._config.get('preset_modes')
-            assert isinstance(modes, list)
-            assert len(modes) > 0
-            assert all(((m and isinstance(m, str)) for m in modes))
+        modes = self._config.get('preset_modes')
+        if isinstance(modes, list) and modes and all(m and isinstance(m, str) for m in modes):
             return modes
-        except AssertionError:
-            return []
+        return []
 
     def get_preset_modes(self) -> list[str]:
         return self.get_custom_preset_modes() + [
@@ -704,10 +700,9 @@ class HeatingStatus(Item):
 class Temperature(Item):
     def __init__(self, data: dict) -> None:
         description = (data.get("name") or "").strip()
-        self.mappings.setdefault(
-            description,
-            description.replace("℃", "").strip()
-        )
+        # a copy for this item: up to 1.7.0 the names came into Item.mappings,
+        # shared by every device of every entry, and piled up there
+        self.mappings = {description: description.replace("℃", "").strip(), **type(self).mappings}
         super().__init__(data)
 
 

@@ -67,6 +67,10 @@ class ResettableLimits:
         self.period = min(self.period + period, self._max)
         return self.period
 
+    def copy(self) -> "ResettableLimits":
+        """A fresh limiter with the same settings (its own counters and waits)."""
+        return ResettableLimits(calls=self.calls, period=self._init_period, max=self._max)
+
     def reset(self) -> None:
         with self._lock:
             self.period = self._init_period
