@@ -105,7 +105,7 @@ async def run(behavior, known=frozenset(), data=None, unique_id="u", store=None,
     def background(hass, coro, name):
         tasks.append(name); coro.close()
     entry = SimpleNamespace(entry_id="E1", unique_id=unique_id,
-                            data=dict(data or {"email": "E@x", "region": "ru"}),
+                            data=dict(data or {"email": "E@x", "region": "ru"}), options={},
                             async_start_reauth=lambda hass: None,
                             async_create_background_task=background,
                             async_on_unload=unloads.append)

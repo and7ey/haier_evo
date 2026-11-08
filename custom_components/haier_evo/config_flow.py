@@ -8,7 +8,7 @@ import voluptuous as vol
 from typing import Any
 from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout
 from homeassistant import config_entries, exceptions
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
@@ -16,7 +16,7 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
-from .const import DOMAIN
+from .const import CONF_LAUNDRY_CONTROL, DOMAIN
 from .logger import _LOGGER
 from . import api
 
@@ -32,6 +32,7 @@ USER_SCHEMA = vol.Schema({
     vol.Required("region", default="ru"): REGION,
 })
 REAUTH_SCHEMA = vol.Schema({vol.Required("password"): PASSWORD})
+OPTIONS_SCHEMA = vol.Schema({vol.Required(CONF_LAUNDRY_CONTROL, default=False): bool})
 
 
 class InvalidCredentials(exceptions.HomeAssistantError):
@@ -77,6 +78,11 @@ async def sign_in(hass: HomeAssistant, email: str, password: str, region: str,
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
+        return OptionsFlowHandler()
 
     async def _try_sign_in(self, email: str, password: str, region: str, errors: dict,
                            device_id: str | None = None) -> dict | None:
@@ -132,4 +138,17 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=REAUTH_SCHEMA,
             description_placeholders={"email": email},
             errors=errors,
+        )
+
+
+class OptionsFlowHandler(config_entries.OptionsFlowWithReload):
+    """Settings of an entry: the control of washers and dryers (beta), off by
+    default. Saving them reloads the integration."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None):
+        if user_input is not None:
+            return self.async_create_entry(data={CONF_LAUNDRY_CONTROL: bool(user_input.get(CONF_LAUNDRY_CONTROL))})
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self.add_suggested_values_to_schema(OPTIONS_SCHEMA, dict(self.config_entry.options)),
         )

@@ -151,7 +151,7 @@ exception_keys = set(re.findall(r"""translation_key=["'](\w+)["']""", CODE["api.
 check("every exception the code raises is translated", sorted(exception_keys - set(EN.get("exceptions", {}))), [])
 check("every translated exception is raised somewhere", sorted(set(EN.get("exceptions", {})) - exception_keys), [])
 
-flow = CODE["config_flow.py"]
+flow, _, options_flow = CODE["config_flow.py"].partition("class OptionsFlowHandler")
 errors = set(re.findall(r"""errors\["base"\] = ["'](\w+)["']""", flow))
 steps = set(re.findall(r"""step_id=["'](\w+)["']""", flow))
 aborts = ({"already_configured"} if "_abort_if_unique_id_configured" in flow else set()) | (
@@ -163,6 +163,17 @@ check("config flow: every error, step and abort reason is translated",
       ([], [], []))
 check("config flow: every form field has a label",
       sorted(fields - {f for s in config.get("step", {}).values() for f in s.get("data", {})}), [])
+# the options flow (the control of washers and dryers): its fields are named by constants of const.py
+consts = dict(re.findall(r"""^(CONF_\w+) = ["'](\w+)["']""", CODE["const.py"], re.M))
+schema = re.search(r"OPTIONS_SCHEMA = vol\.Schema\(\{(.*?)\}\)", flow, re.S)
+option_fields = {consts.get(name, name.strip("\"'")) for name in re.findall(r"vol\.(?:Required|Optional)\(([\w\"']+)", schema.group(1))} if schema else set()
+options = EN.get("options", {})
+check("options flow: every step is translated, every field has a label and a description",
+      (sorted(set(re.findall(r"""step_id=["'](\w+)["']""", options_flow)) - set(options.get("step", {}))),
+       sorted(option_fields - {f for s in options.get("step", {}).values() for f in s.get("data", {})}),
+       sorted(option_fields - {f for s in options.get("step", {}).values() for f in s.get("data_description", {})})),
+      ([], [], []))
+check("options flow: the option of the control is there", option_fields, {"laundry_control"})
 check("config flow: the reauth text shows the email it is given",
       ("{email}" in config["step"]["reauth_confirm"]["description"], "{email}" in RU["config"]["step"]["reauth_confirm"]["description"],
        'description_placeholders={"email"' in flow), (True, True, True))

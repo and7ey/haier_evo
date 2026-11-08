@@ -1,6 +1,8 @@
 from datetime import timedelta
 
 DOMAIN = "haier_evo"
+# option of an entry: control of washers and dryers (beta), off by default
+CONF_LAUNDRY_CONTROL = "laundry_control"
 COMMON_LIMIT_CALLS = 5
 COMMON_LIMIT_PERIOD = 60
 LOGIN_LIMIT_CALLS = 1

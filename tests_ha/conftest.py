@@ -200,6 +200,12 @@ class FakeCloud:
         for ws in list(self.sockets):
             await ws.send_str(message)
 
+    async def send(self, message: dict) -> None:
+        """Any message of the cloud to every open session (a program event, say)."""
+        text = json.dumps(message, ensure_ascii=False)
+        for ws in list(self.sockets):
+            await ws.send_str(text)
+
     async def drop_sessions(self) -> None:
         for ws in list(self.sockets):
             await ws.close()
@@ -365,10 +371,10 @@ async def cloud(hass: HomeAssistant, socket_enabled: None, monkeypatch: pytest.M
 
 @pytest.fixture
 def make_entry(hass: HomeAssistant) -> Callable[..., MockConfigEntry]:
-    def make(**data: Any) -> MockConfigEntry:
+    def make(options: dict | None = None, **data: Any) -> MockConfigEntry:
         entry = MockConfigEntry(
             domain=DOMAIN, title=f"{EMAIL} (ru)", unique_id=f"{EMAIL}_ru",
-            data={"email": EMAIL, "region": "ru", **data},
+            data={"email": EMAIL, "region": "ru", **data}, options=options or {},
         )
         entry.add_to_hass(hass)
         return entry
