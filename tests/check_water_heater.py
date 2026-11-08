@@ -53,7 +53,7 @@ def locked_key(fn):
     except api.HaierCommandLocked as e:
         return e.translation_key
 
-for model in ("ES80V-F7", "ES50V-F7"):   # with model yaml / description-only mapping
+for model in ("ES80V-F7", "ES30V-F7"):   # with model yaml / description-only mapping (no ES30VF7.yaml)
     print("=== model", model)
     h, d = make(api.HaierWH, "5c:01", model)
     print(d.config)
