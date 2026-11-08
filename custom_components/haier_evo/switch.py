@@ -4,6 +4,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from .const import DOMAIN
 from . import api
+from .entity import HaierEntityMixin
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> bool:
@@ -26,15 +27,13 @@ def _remove_hidden(hass: HomeAssistant, devices) -> None:
                 registry.async_remove(entity_id)
 
 
-class HaierSwitch(SwitchEntity):
+class HaierSwitch(HaierEntityMixin, SwitchEntity):
     _attr_should_poll = False
     _attr_icon = "mdi:toggle-switch"
 
     def __init__(self, device: api.HaierDevice) -> None:
         self._device = weakref.proxy(device)
         self._device_attr_name = None
-
-        device.add_write_ha_state_callback(self.async_write_ha_state)
 
     @property
     def device_info(self) -> dict:

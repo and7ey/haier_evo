@@ -37,6 +37,8 @@ API_WS_PATH = "wss://iot-platform.evo.haieronline.ru/gateway-ws-service/ws/"
 # WebSocket: TCP connect + TLS + upgrade must finish in WS_CONNECT_TIMEOUT s,
 # a ping is sent every WS_PING_INTERVAL s and a missing pong drops the socket.
 WS_CONNECT_TIMEOUT = 10
+# the close code the gateway ends a connection with when it refuses the token
+WS_CLOSE_TOKEN_REFUSED = 1007
 WS_PING_INTERVAL = 15
 WS_PING_TIMEOUT = 10
 # A command waits up to WS_SEND_WAIT s for the socket to (re)connect and

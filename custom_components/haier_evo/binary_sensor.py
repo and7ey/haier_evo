@@ -4,6 +4,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from .const import DOMAIN
 from . import api
+from .entity import HaierEntityMixin
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> bool:
@@ -17,14 +18,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     return True
 
 
-class HaierBinarySensor(BinarySensorEntity):
+class HaierBinarySensor(HaierEntityMixin, BinarySensorEntity):
     _attr_should_poll = False
 
     def __init__(self, device: api.HaierDevice) -> None:
         self._device = weakref.proxy(device)
         self._device_attr_name = None
-
-        device.add_write_ha_state_callback(self.async_write_ha_state)
 
     @property
     def device_info(self) -> dict:

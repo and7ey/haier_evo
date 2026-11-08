@@ -6,6 +6,7 @@ from homeassistant.components.climate.const import HVACMode
 from .const import DOMAIN
 from .logger import _LOGGER
 from . import api
+from .entity import HaierEntityMixin
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> bool:
@@ -27,7 +28,7 @@ def _with_current(options: list[str] | None, current: str | None) -> list[str] |
 
 
 # https://developers.home-assistant.io/docs/core/entity/climate
-class HaierACEntity(ClimateEntity):
+class HaierACEntity(HaierEntityMixin, ClimateEntity):
     _attr_translation_key = "conditioner"
     _attr_should_poll = False
     _attr_icon = "mdi:air-conditioner"
@@ -44,8 +45,6 @@ class HaierACEntity(ClimateEntity):
         self._attr_preset_modes = device.get_preset_modes()
         # https://developers.home-assistant.io/blog/2024/01/24/climate-climateentityfeatures-expanded/
         self._enable_turn_on_off_backwards_compatibility = False
-
-        device.add_write_ha_state_callback(self.async_write_ha_state)
 
     @property
     def hvac_mode(self) -> str | None:

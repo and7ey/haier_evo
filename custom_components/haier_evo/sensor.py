@@ -6,6 +6,7 @@ from homeassistant.const import UnitOfTemperature
 from homeassistant.const import TEMPERATURE
 from .const import DOMAIN
 from . import api
+from .entity import HaierEntityMixin
 
 
 # sensors of earlier versions that are gone, by unique_id suffix: the outdoor
@@ -35,13 +36,11 @@ def _remove_retired(hass: HomeAssistant, devices) -> None:
                 registry.async_remove(entity_id)
 
 
-class HaierSensor(SensorEntity):
+class HaierSensor(HaierEntityMixin, SensorEntity):
 
     def __init__(self, device: api.HaierDevice):
         self._device = weakref.proxy(device)
         self._device_attr_name = None
-
-        device.add_write_ha_state_callback(self.async_write_ha_state)
 
     @property
     def device_info(self) -> dict:

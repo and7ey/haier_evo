@@ -238,6 +238,26 @@ check("lost: a timer tells the entities when they go unavailable", (armed, len(h
 h._went_offline(); h.stop()
 check("stop cancels the timer", h._offline_timer, None)
 
+# ---------- state writes only for entities Home Assistant has added ----------
+import asyncio
+ac, _ = make_ac(**{POWER: "1"})
+entities = (ac.create_entities_climate() + ac.create_entities_switch() + ac.create_entities_select()
+            + ac.create_entities_sensor() + ac.create_entities_binary_sensor())
+check("a created entity is not subscribed yet: a disabled one is never added (upstream #75)",
+      (len(entities) > 5, ac._write_ha_state_callbacks), (True, []))
+added = entities[:3]
+for entity in added:
+    asyncio.run(entity.async_added_to_hass())
+check("an added entity takes the updates of its device, each once",
+      [cb.__self__ for cb in ac._write_ha_state_callbacks], added)
+for entity in added[:2]:
+    for remove in entity._on_remove or []:
+        remove()
+check("a removed entity no longer does", len(ac._write_ha_state_callbacks), 1)
+unsubscribe = ac.add_write_ha_state_callback(lambda: None)
+unsubscribe(); unsubscribe()
+check("unsubscribing twice is harmless", len(ac._write_ha_state_callbacks), 1)
+
 # ---------- Home Assistant 2026.11 names ----------
 ac, _ = make_ac(**{CUR: "21", TGT: "24"})
 ent = climate.HaierACEntity(ac)

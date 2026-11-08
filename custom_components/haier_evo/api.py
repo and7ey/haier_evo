@@ -820,6 +820,13 @@ class Haier(object):
             self._connected.clear()
             self.socket_status = SocketStatus.NOT_INITIALIZED
         _LOGGER.debug(f"Websocket closed. Code: {close_code}, message: {close_message}")
+        # the gateway may take the upgrade and then close with 1007 "Auth token
+        # not valid!": the token is refused, renew it for the next connection
+        # (up to 1.6.3 the same token was tried again until it expired locally,
+        # up to an hour with the devices unavailable)
+        if close_code == C.WS_CLOSE_TOKEN_REFUSED or "token" in str(close_message or "").lower():
+            _LOGGER.info(f"Haier Evo: the websocket was closed for the token ({close_code} {close_message!r})")
+            self.token_rejected(self._ws_token)
 
     def write_ha_state(self) -> None:
         for device in self.devices:
@@ -1483,12 +1490,19 @@ class HaierDevice(object):
             _LOGGER.warning(f"Got unknown message: {message_dict}")
 
     def write_ha_state(self) -> None:
-        for callback in self._write_ha_state_callbacks:
+        # a copy: an entity may unsubscribe from the event loop meanwhile
+        for callback in list(self._write_ha_state_callbacks):
             self.hass.loop.call_soon_threadsafe(callback)
 
-    def add_write_ha_state_callback(self, callback) -> None:
+    def add_write_ha_state_callback(self, callback) -> Callable[[], None]:
+        """Call callback in the event loop on every change; returns the unsubscribe."""
         if callback not in self._write_ha_state_callbacks:
             self._write_ha_state_callbacks.append(callback)
+
+        def remove() -> None:
+            if callback in self._write_ha_state_callbacks:
+                self._write_ha_state_callbacks.remove(callback)
+        return remove
 
     # noinspection PyMethodMayBeStatic
     def create_entities_climate(self) -> list:
