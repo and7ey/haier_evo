@@ -54,6 +54,11 @@ WS_RESYNC_AFTER = 30
 # Without the websocket for this long (s), the entities go unavailable: the
 # state they show may be stale by then.
 WS_UNAVAILABLE_AFTER = 180
+# A session the cloud has sent nothing over for this long since it opened is
+# not served (the cloud pushes the state within seconds): it is replaced; the
+# WS_SILENT_SESSIONS_FRESH_TOKEN-th such session in a row with a renewed token.
+WS_SILENT_SESSION_TIMEOUT = 60
+WS_SILENT_SESSIONS_FRESH_TOKEN = 2
 WS_MAX_PENDING_COMMANDS = 4
 WS_SLOT_WAIT = 1
 # How many setups in a row may retry because the cloud returned fewer devices
