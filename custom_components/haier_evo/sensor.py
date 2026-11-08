@@ -159,3 +159,52 @@ class HaierACTemperatureSensor(HaierSensor):
     @property
     def native_value(self) -> float | None:
         return self._device.current_temperature
+
+
+class HaierLaundrySensor(HaierSensor):
+    """A washer or dryer value; the device knows it under self._device_attr_name."""
+
+    def __init__(self, device: api.HaierLaundry, attr: str, suffix: str, name: str) -> None:
+        super().__init__(device)
+        self._laundry_attr = attr
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_{suffix}"
+        self._attr_name = f"{device.device_name} {name}"
+
+    @property
+    def native_value(self):
+        return getattr(self._device, self._laundry_attr, None)
+
+
+class HaierLaundryStateSensor(HaierLaundrySensor):
+    """off / idle / running / paused / finished / cancelled: an automation on
+    "finished" tells that the washing is done."""
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = list(api.LAUNDRY_STATES)
+    _attr_translation_key = "laundry_state"
+    _attr_icon = "mdi:washing-machine"
+
+    def __init__(self, device: api.HaierLaundry) -> None:
+        super().__init__(device, "state", "state", "Состояние")
+
+
+class HaierLaundryProgramSensor(HaierLaundrySensor):
+    _attr_icon = "mdi:format-list-bulleted"
+
+    def __init__(self, device: api.HaierLaundry) -> None:
+        super().__init__(device, "program_title", "program", "Программа")
+
+
+class HaierLaundryPhaseSensor(HaierLaundrySensor):
+    _attr_icon = "mdi:progress-clock"
+
+    def __init__(self, device: api.HaierLaundry) -> None:
+        super().__init__(device, "phase", "phase", "Этап")
+
+
+class HaierLaundryRemainingTimeSensor(HaierLaundrySensor):
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = "min"
+    _attr_icon = "mdi:timer-sand"
+
+    def __init__(self, device: api.HaierLaundry) -> None:
+        super().__init__(device, "remaining_time", "remaining_time", "Осталось")
