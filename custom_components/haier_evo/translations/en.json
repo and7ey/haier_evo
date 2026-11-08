@@ -106,6 +106,18 @@
                     "performance": "Max (whole tank)"
                 }
             }
+        },
+        "sensor": {
+            "laundry_state": {
+                "state": {
+                    "off": "Off",
+                    "idle": "Idle",
+                    "running": "Running",
+                    "paused": "Paused",
+                    "finished": "Finished",
+                    "cancelled": "Cancelled"
+                }
+            }
         }
     },
     "exceptions": {

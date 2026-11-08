@@ -158,6 +158,15 @@ def firmware_text(value) -> str | None:
     return None
 
 
+def device_part(data) -> dict:
+    """The part of a description with info, settings and attributes: washers and
+    dryers in the cloud's current format nest it in smartDeviceControl, next to
+    the app's screens; the other devices have it at the top."""
+    data = data if isinstance(data, dict) else {}
+    inner = data.get("smartDeviceControl")
+    return inner if isinstance(inner, dict) else data
+
+
 def entry_device_id(entry_id: str) -> str:
     """Device-Id of a config entry: the same on every start (it used to be random)."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"{C.DOMAIN}:{entry_id}"))
@@ -1160,7 +1169,7 @@ class HaierDevice(object):
 
     @property
     def _firmware(self) -> dict:
-        firmware = ((self.status_data or {}).get("settings") or {}).get("firmware")
+        firmware = (device_part(self.status_data).get("settings") or {}).get("firmware")
         return firmware if isinstance(firmware, dict) else {}
 
     @property
@@ -1177,7 +1186,7 @@ class HaierDevice(object):
     @property
     def alarm_texts(self) -> list[str]:
         """Human-readable alarms from the cloud's own table (errors.alarmToResult)."""
-        errors = (self.status_data or {}).get("errors") or {}
+        errors = device_part(self.status_data).get("errors") or {}
         table = errors.get("alarmToResult") or {}
         unknown = (errors.get("undefinedAlarm") or {}).get("text") or "Unknown error"
         return [
@@ -1201,7 +1210,7 @@ class HaierDevice(object):
 
     def _cloud_attribute(self, code) -> dict:
         return next((
-            a for a in (self.status_data or {}).get("attributes") or []
+            a for a in device_part(self.status_data).get("attributes") or []
             if isinstance(a, dict) and str(a.get("name")) == str(code)
         ), {})
 
@@ -1301,7 +1310,8 @@ class HaierDevice(object):
         }
 
     def _get_status(self, data: dict) -> dict:
-        self._status_data = data = (data or {})
+        self._status_data = whole = (data or {})
+        data = device_part(whole)
         info = data.setdefault("info", {})
         self.device_serial = info.setdefault("serialNumber", self.device_serial)
         device_model = info.setdefault("model", "AC")
@@ -1318,7 +1328,7 @@ class HaierDevice(object):
         self._set_alarms(data.get("alarms"))
         # read config and current values
         self._load_config_from_attributes(data)
-        return data
+        return whole
 
     def _load_config_from_attributes(self, data: dict) -> None:
         pass
@@ -1377,6 +1387,7 @@ class HaierDevice(object):
         """Apply a fresh REST status (values only, the config stays)."""
         if not isinstance(data, dict) or self.config is None:
             return
+        data = device_part(data)
         self.available = data.get("status") or "ONLINE"
         self._set_alarms(data.get("alarms"))
         for attr in data.get("attributes") or []:
@@ -1389,7 +1400,7 @@ class HaierDevice(object):
     def description_signature(data: dict | None) -> tuple:
         """What the entities are built from: attributes and their values, louver
         screens, model and firmware. Values and alarms are not part of it."""
-        data = data if isinstance(data, dict) else {}
+        data = device_part(data)
         attrs = []
         for attr in data.get("attributes") or []:
             if not isinstance(attr, dict):
@@ -1585,12 +1596,18 @@ class HaierDevice(object):
         backend_data: dict | None = None,
     ) -> HaierDevice:
         """backend_data: a saved description; without it the cloud is asked."""
-        device_cls = {
-            "AC": HaierAC,
-            "REF": HaierREF,
-            "WM": HaierWM,
-            "WH": HaierWH,
-        }.get(device_type, cls)
+        if backend_data is None:
+            backend_data = haier.pull_device_data(device_mac)
+        device_cls: type[HaierDevice]
+        if device_type in LAUNDRY_TYPES and HaierLaundry.describes(backend_data):
+            device_cls = HaierLaundry  # the current format of washers and dryers
+        else:
+            device_cls = {
+                "AC": HaierAC,
+                "REF": HaierREF,
+                "WM": HaierWM,
+                "WH": HaierWH,
+            }.get(device_type, cls)
         if device_cls is cls:
             _LOGGER.warning(f"Unknown device type: {device_type}")
         device = device_cls(
@@ -1598,7 +1615,7 @@ class HaierDevice(object):
             device_mac=device_mac,
             device_serial=device_serial,
             device_title=device_title,
-            backend_data=backend_data if backend_data is not None else haier.pull_device_data(device_mac),
+            backend_data=backend_data,
         )
         device.device_type = device_type
         return device
@@ -2503,6 +2520,249 @@ def already_applied(message: dict, data: dict) -> bool:
 
 MAINTENANCE_ALARMS = {"filterCleaningAlarm"}
 FILTER_ALARM = "filterCleaningAlarm"
+
+
+# washing machines, washer-dryers and dryers
+LAUNDRY_TYPES = ("WM", "WD", "DRY", "TD")
+# the state of a program as the cloud names it (control.currentProgram / program / events)
+LAUNDRY_PROGRAM_STATES = {
+    "IN_PROGRESS": "running", "STARTED": "running", "PAUSED": "paused",
+    "FINISHED": "finished", "CANCELED": "cancelled", "CANCELLED": "cancelled",
+}
+LAUNDRY_STATES = ("off", "idle", "running", "paused", "finished", "cancelled")
+
+
+def laundry_codes(data: dict) -> dict[str, str]:
+    """{meaning: attribute code} from the app's screens in a description.
+
+    The attributes of a washer or a dryer come without names, and the codes
+    differ between models (remaining hours: 31 on HW60, 32 on HW90); the app's
+    screens link to them as {"name": code, "description": "remainingTimeHH"}.
+    The first link of a meaning wins.
+    """
+    codes_known = {str(a.get("name")) for a in device_part(data).get("attributes") or [] if isinstance(a, dict)}
+    found: dict[str, str] = {}
+
+    def walk(node, depth=0):
+        if depth > 12:
+            return
+        if isinstance(node, dict):
+            code, meaning = node.get("name"), node.get("description")
+            if (isinstance(code, str) and code in codes_known and isinstance(meaning, str)
+                    and re.fullmatch(r"[A-Za-z][A-Za-z0-9]{2,40}", meaning) and meaning != "not found"):
+                found.setdefault(meaning, code)
+            for key, value in node.items():
+                if key not in ("smartDeviceControl", "attributes"):
+                    walk(value, depth + 1)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value, depth + 1)
+
+    walk(data if isinstance(data, dict) else {})
+    return found
+
+
+def laundry_screen(data: dict) -> dict:
+    """The monitoring screen: a washer has it in allProgram, a dryer in device."""
+    data = data if isinstance(data, dict) else {}
+    for parent in (data.get("device"), data.get("allProgram")):
+        screen = parent.get("monitoringScreen") if isinstance(parent, dict) else None
+        if isinstance(screen, dict):
+            return screen
+    return {}
+
+
+def laundry_phase_titles(data: dict) -> dict[str, str]:
+    """{value of the cycle phase: the app's title}."""
+    screen = laundry_screen(data)
+    found = screen.get("phase")
+    phase: dict = found if isinstance(found, dict) else {}
+    titles = phase.get("cyclePhaseValueToTitle")
+    out = {str(k): str(v) for k, v in titles.items() if isinstance(v, str) and v.strip()} if isinstance(titles, dict) else {}
+    for block, key in (("weighing", "weightAttrValue"), ("finishing", "finishingAttrValue"),
+                       ("finishing", "cyclePhaseValue"), ("freshAirSystem", "freshAirSystemAttrValue")):
+        for parent in (screen, phase):
+            part = parent.get(block)
+            if isinstance(part, dict) and part.get(key) not in (None, "") and isinstance(part.get("title"), str):
+                out.setdefault(str(part[key]), part["title"])
+    return out
+
+
+class HaierLaundry(HaierDevice):
+    """A washing machine, washer-dryer or dryer in the cloud's current format:
+    its description (inside smartDeviceControl) has attributes without names,
+    and what a code means is read from the app's screens (laundry_codes), so
+    models and kinds with other codes work alike. The integration only reads
+    them: what is running, the phase, the time left, remote control, the
+    child lock and the alarms. A command could start a machine; there is no
+    machine here to check one on.
+    """
+
+    def __init__(self, backend_data: dict | None = None, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.codes: dict[str, str] = {}
+        self.phase_titles: dict[str, str] = {}
+        self.program_title: str | None = None
+        self.program_status: str | None = None  # IN_PROGRESS, PAUSED, FINISHED... as the cloud says
+        self.is_dryer = False
+        self._get_status(backend_data or {})
+
+    @staticmethod
+    def describes(data) -> bool:
+        return isinstance(data, dict) and isinstance(data.get("smartDeviceControl"), dict)
+
+    def _load_config_from_attributes(self, data: dict) -> None:
+        config = CFG.HaierDeviceConfig(self.device_model, self.hass.config.path(C.DOMAIN))
+        config.attrs = [CFG.Attribute(a) for a in data.get("attributes") or [] if isinstance(a, dict)]
+        self._config = config  # type: ignore[assignment]  # the base declares it as None (old typing)
+        whole = self.status_data
+        self.codes = laundry_codes(whole)
+        self.phase_titles = laundry_phase_titles(whole)
+        self.is_dryer = isinstance(whole.get("device"), dict)
+        self._apply_program(self._program_block(whole))
+
+    @staticmethod
+    def _program_block(data) -> dict | None:
+        data = data if isinstance(data, dict) else {}
+        program = data.get("program")
+        if isinstance(program, dict):
+            return program
+        control = data.get("control")
+        current = control.get("currentProgram") if isinstance(control, dict) else None
+        return current if isinstance(current, dict) else None
+
+    def _apply_program(self, program: dict | None) -> None:
+        if program is None:
+            self.program_title = self.program_status = None
+            return
+        title = program.get("title")
+        self.program_title = title.strip() if isinstance(title, str) and title.strip() else None
+        status = program.get("status")
+        self.program_status = str(status).upper().removeprefix("PROGRAM_") if isinstance(status, str) and status else None
+
+    def update_from_backend(self, data: dict) -> None:
+        if isinstance(data, dict):
+            self._apply_program(self._program_block(data))
+        super().update_from_backend(data)
+
+    def _set_attribute_value(self, code: str, value: str) -> None:
+        pass  # the raw values (self._values) are read where they are needed
+
+    def _raw(self, meaning: str) -> str | None:
+        code = self.codes.get(meaning)
+        return None if code is None else self._values.get(code)
+
+    def _flag(self, meaning: str) -> bool | None:
+        raw = self._raw(meaning)
+        return None if raw is None else raw in ("1", "on")
+
+    def _number(self, meaning: str) -> int | None:
+        raw = self._raw(meaning)
+        try:
+            value = float(raw) if raw is not None else float("nan")
+        except (TypeError, ValueError):
+            return None
+        return int(value) if value == value and abs(value) != float("inf") else None
+
+    @property
+    def power(self) -> bool | None:
+        return self._flag("onOffStatus")
+
+    @property
+    def remote_control(self) -> bool | None:
+        return self._flag("remoteCtrValid")
+
+    @property
+    def child_lock(self) -> bool | None:
+        return self._flag("childLockStatus")
+
+    @property
+    def phase_value(self) -> str | None:
+        return self._raw("cyclePhase")
+
+    @property
+    def phase(self) -> str | None:
+        value = self.phase_value
+        if value is None:
+            return None
+        return self.phase_titles.get(value) or f"Этап {value}"
+
+    @property
+    def remaining_time(self) -> int | None:
+        """Minutes left; 0 for a machine that is off (it keeps the last value)."""
+        if self.power is False:
+            return 0
+        if "remainingDryTime" in self.codes:
+            return self._number("remainingDryTime")
+        hours, minutes = self._number("remainingTimeHH"), self._number("remainingTimeMM")
+        if hours is None and minutes is None:
+            return None
+        return (hours or 0) * 60 + (minutes or 0)
+
+    @property
+    def state(self) -> str | None:
+        if self.power is False:
+            return "off"
+        state = LAUNDRY_PROGRAM_STATES.get(self.program_status or "")
+        if state is not None:
+            return state
+        if self.phase_value is None:
+            return None if self.power is None else "idle"
+        return "idle" if self.phase_value == "0" else "running"
+
+    def to_dict(self) -> dict:
+        data = super().to_dict()
+        data.update({
+            "state": self.state,
+            "program": self.program_title,
+            "program_status": self.program_status,
+            "phase": self.phase,
+            "remaining_time": self.remaining_time,
+            "remote_control": self.remote_control,
+            "child_lock": self.child_lock,
+            "codes": dict(self.codes),
+        })
+        return data
+
+    def on_message(self, message_dict: dict) -> None:
+        event = message_dict.get("event")
+        if event in ("ProgramWasherBaseEvent", "ProgramDryerBaseEvent"):
+            # the program changed: started, paused, finished, cancelled
+            data = message_dict.get("data")
+            data = data if isinstance(data, dict) else {}
+            program = data.get("program")
+            if isinstance(program, dict):
+                self._apply_program(program)
+            elif data.get("status") in ("PROGRAM_STARTED", "PROGRAM_FINISHED"):
+                self.program_status = str(data["status"]).removeprefix("PROGRAM_").replace("STARTED", "IN_PROGRESS")
+            self.changed_at = time.monotonic()
+            self.write_ha_state()
+        elif event == "alarms":
+            payload = message_dict.get("payload")
+            alarms = payload.get("alarms") if isinstance(payload, dict) else None
+            if isinstance(alarms, list):
+                self._set_alarms(alarms)
+                self.write_ha_state()
+        else:
+            super().on_message(message_dict)
+
+    def create_entities_sensor(self) -> list:
+        from . import sensor
+        entities = [sensor.HaierLaundryStateSensor(self), sensor.HaierLaundryProgramSensor(self)]
+        if "cyclePhase" in self.codes:
+            entities.append(sensor.HaierLaundryPhaseSensor(self))
+        if {"remainingDryTime", "remainingTimeHH", "remainingTimeMM"} & set(self.codes):
+            entities.append(sensor.HaierLaundryRemainingTimeSensor(self))
+        return entities
+
+    def create_entities_binary_sensor(self) -> list:
+        from . import binary_sensor
+        entities = [binary_sensor.HaierProblemSensor(self)]
+        if "remoteCtrValid" in self.codes:
+            entities.append(binary_sensor.HaierLaundryRemoteControlSensor(self))
+        if "childLockStatus" in self.codes:
+            entities.append(binary_sensor.HaierLaundryChildLockSensor(self))
+        return entities
 
 
 def parsebool(value) -> bool:

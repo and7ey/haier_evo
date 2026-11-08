@@ -106,6 +106,18 @@
                     "performance": "Max (весь бак)"
                 }
             }
+        },
+        "sensor": {
+            "laundry_state": {
+                "state": {
+                    "off": "Выключена",
+                    "idle": "Ожидание",
+                    "running": "Работает",
+                    "paused": "Пауза",
+                    "finished": "Завершена",
+                    "cancelled": "Отменена"
+                }
+            }
         }
     },
     "exceptions": {

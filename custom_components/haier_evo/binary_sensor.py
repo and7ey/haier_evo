@@ -168,3 +168,31 @@ class HaierFirmwareUpdateSensor(HaierBinarySensor):
             "installed_version": self._device.sw_version,
             "auto_update": self._device.firmware_auto_update,
         }
+
+
+class HaierLaundryRemoteControlSensor(HaierBinarySensor):
+    """Remote control is on: the machine takes commands from the app."""
+    _attr_icon = "mdi:remote"
+
+    def __init__(self, device: api.HaierLaundry) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_remote_control"
+        self._attr_name = f"{device.device_name} Удалённое управление"
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self._device.remote_control)
+
+
+class HaierLaundryChildLockSensor(HaierBinarySensor):
+    """On while the child lock holds the buttons (no LOCK class: its "on" means unlocked)."""
+    _attr_icon = "mdi:lock"
+
+    def __init__(self, device: api.HaierLaundry) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_child_lock"
+        self._attr_name = f"{device.device_name} Блокировка от детей"
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self._device.child_lock)
