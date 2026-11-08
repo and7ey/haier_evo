@@ -54,6 +54,25 @@ jobs:
       - name: ruff and mypy
         run: scripts/run_lint.sh "$LINT_HA"
 
+  # The integration inside a real Home Assistant core (tests_ha/): config
+  # entries and flows, the entity and device registries, services, storage,
+  # diagnostics, and the checks of Home Assistant's own test harness after
+  # every test (no lingering tasks, timers or threads, no connection beyond
+  # 127.0.0.1). The harness, pytest-homeassistant-custom-component, pins one
+  # release: HA_CORE is that release, raised together with requirements_test_ha.txt.
+  ha-core:
+    name: "Home Assistant core"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 15
+    env:
+      HA_CORE: "2026.10.4"
+    steps:
+      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tests on a real Home Assistant
+        run: scripts/run_ha_tests.sh "$HA_CORE"
+
   # The versions are worked out on every run (scripts/ha_versions.py): the two
   # previous releases, the current one, the next one (beta, else the nightly
   # build) and the minimum of hacs.json once the window has left it behind.
