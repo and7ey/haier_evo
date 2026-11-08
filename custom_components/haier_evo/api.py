@@ -370,8 +370,7 @@ class Haier(object):
                 self._offline_timer.cancel()
                 self._offline_timer = None
         self.reset_limits()
-        if self.socket_app is not None:
-            self.socket_app.close()
+        self._end_session(self.socket_app)
         self._session.close()  # idle keep-alive connections
 
     @common_limits.sleep_and_retry
@@ -793,7 +792,7 @@ class Haier(object):
     # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def _on_open(self, ws: WebSocketApp) -> None:
         if self.disconnect_requested:
-            ws.close()  # stop() came while this connection was being opened
+            self._end_session(ws)  # stop() came while this connection was being opened
             return
         if ws.sock is not None:
             ws.sock.settimeout(None)  # connect timeout must not limit reads
@@ -848,7 +847,7 @@ class Haier(object):
             f"(silent sessions in a row: {self._silent_sessions})")
         if self._silent_sessions >= C.WS_SILENT_SESSIONS_FRESH_TOKEN:
             self.token_rejected(self._ws_token)
-        app.close()
+        self._end_session(app)
 
     # noinspection PyUnusedLocal
     def _on_error(self, ws: WebSocketApp, error: Exception) -> None:
@@ -901,19 +900,50 @@ class Haier(object):
         """Close a connection that looks dead, the connection thread reconnects."""
         if app is not None and app is self.socket_app:
             self._connected.clear()
+            self._end_session(app)
+
+    @staticmethod
+    def _end_session(app: WebSocketApp | None) -> None:
+        """End a websocket session at once, without waiting for the cloud.
+
+        WebSocketApp.close() sends the close frame and then reads the socket for
+        the cloud's answer, up to 3 s in websocket-client 1.9, alongside the
+        websocket thread that reads the same socket; called from the event loop
+        (unload, up to 1.6.4) it froze Home Assistant for that long, from a
+        command it held the retry back. As the fork JampireX/haier_evo does:
+        the run loop is told to stop, the close frame goes out without waiting
+        for the answer (on an open session only), and the TCP socket is shut
+        down, so the read the websocket thread waits in returns at once and the
+        thread tears the session down itself. Nothing here blocks or raises.
+        """
+        if app is None:
+            return
+        app.keep_running = False
+        ws = getattr(app, "sock", None)
+        if ws is not None and getattr(ws, "connected", False):
             try:
-                app.close()
-            except Exception as e:
-                _LOGGER.debug(f"Failed to close websocket: {e}")
+                ws.send_close()
+            except Exception as e:  # the connection may be gone already
+                _LOGGER.debug(f"Failed to send the websocket close frame: {e!r}")
+        # the socket of the session; during the handshake, the one _open_socket gave
+        sock = getattr(ws, "sock", None) or getattr(app, "prepared_socket", None)
+        if sock is None:
+            return
+        try:
+            # socket.socket.shutdown on purpose: SSLSocket.shutdown() would also
+            # take the TLS layer away from the websocket thread reading through it
+            socket.socket.shutdown(sock, socket.SHUT_RDWR)
+        except (OSError, TypeError) as e:  # closed already, or not a socket
+            _LOGGER.debug(f"Failed to shut the websocket down: {e!r}")
 
     @staticmethod
     def _close_prepared_socket(app: WebSocketApp | None) -> None:
         """Close the socket _open_socket gave the app, once its run is over.
 
-        websocket-client closes it itself, except when close() (stop()) comes
-        during the handshake: the app drops its WebSocket while the handshake
-        still runs on it, the handshake completes, and nobody closes that
-        connection. Closing an already closed socket is harmless.
+        websocket-client closes it itself, except when the session ends during
+        the handshake (stop() up to 1.6.1 left that connection open; now
+        _end_session only shuts the socket down, and closing it is left here).
+        Closing an already closed socket is harmless.
         """
         sock = getattr(app, "prepared_socket", None)
         if sock is None:
@@ -1888,7 +1918,7 @@ class HaierAC(HaierDevice):
         self._send_commands([
             {
                 "commandName": self.config['target_temperature'],
-                "value": str(value)
+                "value": number_text(value)
             }
         ])
         self.target_temperature = value
@@ -1929,7 +1959,7 @@ class HaierAC(HaierDevice):
             else:
                 commands.append({
                     "commandName": self.config["target_temperature"],
-                    "value": str(self._deferred_target),
+                    "value": number_text(self._deferred_target),
                 })
                 self.target_temperature = self._deferred_target
                 self._deferred_target = None
@@ -2776,6 +2806,16 @@ def parsefloat(value, default: float | None = None) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def number_text(value) -> str:
+    """A setpoint as the app sends it and the cloud reports it: "23", not "23.0".
+
+    Home Assistant's services hand over floats (23.0); a half degree stays "23.5".
+    """
+    number = float(value)
+    return str(int(number)) if number.is_integer() else str(number)
+
 
 # Parts of a device description the integration never reads: app analytics,
 # pairing details, scenario links. Links (signed for a week) are dropped too.

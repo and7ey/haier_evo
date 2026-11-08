@@ -1,0 +1,7 @@
+# The tests on a real Home Assistant core (tests_ha/, scripts/run_ha_tests.sh).
+# pytest-homeassistant-custom-component is Home Assistant's own test harness
+# for one release and pins it: the tests run in the container of that release
+# (HA_CORE in .github/workflows/validate.yaml), raised together with this pin.
+pytest-homeassistant-custom-component==0.13.375  # Home Assistant 2026.10.4
+# the integration's own requirement (manifest.json)
+websocket-client>=1.8.0,<2

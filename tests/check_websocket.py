@@ -23,6 +23,7 @@ S = {"mode": "normal", "connections": 0, "commands": [], "ping_reply": True, "ac
      "seq": 0, "open": {},  # open: server-side connection id -> token of the client that opened it
      "tokens": [], "reject_handshake": 0, "open_ws": [], "junk": False,
      "mute": False,  # mute: the server sends nothing at all over a session
+     "no_close_reply": False,  # the server never answers the client's close frame
      "close_1007": set()}  # tokens the server takes the upgrade for and then closes with 1007
 
 
@@ -33,7 +34,7 @@ async def ws_handler(request):
         return web.Response(status=401)  # the cloud dropped the token
     S["connections"] += 1
     conn = S["connections"]
-    ws = web.WebSocketResponse(autoping=S["ping_reply"])
+    ws = web.WebSocketResponse(autoping=S["ping_reply"], autoclose=not S["no_close_reply"])
     await ws.prepare(request)
     S["active"] += 1
     S["seq"] += 1
@@ -50,6 +51,12 @@ async def ws_handler(request):
             await ws.send_str(junk)
     try:
         await serve(ws, conn)
+        if S["no_close_reply"]:
+            # a half-dead connection: the close frame got no answer, the server
+            # side stays as it is until the client drops the TCP connection
+            transport, end = request.transport, time.time() + 10
+            while transport is not None and not transport.is_closing() and time.time() < end:
+                await asyncio.sleep(0.05)
     finally:
         S["active"] -= 1
         S["open"].pop(cid, None)
@@ -425,6 +432,31 @@ err, dt = timed(lambda: h.send_command(cmd("1", "71")))
 check("unreadable messages ignored: same socket, command confirmed", err is None and S["connections"] == 1, f"{err!r} conns={S['connections']}")
 S["junk"] = False
 stopped(h)
+
+# 17. the cloud never answers the close frame (a half-dead connection): neither
+# stop() nor dropping a dead session waits for it. Up to 1.6.4 WebSocketApp.close()
+# read the socket for the answer for up to 3 s: on every unload that froze Home
+# Assistant's event loop, and the client thread lived on for ~10 s.
+S["no_close_reply"] = True
+h = scenario("normal")
+wait(lambda: h._connected.is_set(), 5); time.sleep(0.3)
+err, dt = timed(h.stop)
+check("cloud never answers the close: stop() returns at once", err is None and dt < 0.5, f"{err!r} dt={dt:.2f}s")
+_, joined = timed(lambda: h.socket_thread.join(5))
+check("cloud never answers the close: the client thread ends at once",
+      not h.socket_thread.is_alive() and joined < 1.5, f"alive={h.socket_thread.is_alive()} {joined:.2f}s")
+check("cloud never answers the close: the connection is dropped",
+      wait(lambda: not S["active"], 2), f"open connections={S['active']}")
+stopped(h)
+
+h = scenario("normal")
+wait(lambda: h._connected.is_set(), 5); time.sleep(0.3)
+err, dt = timed(lambda: h._drop_socket(h.socket_app))
+check("dead session dropped without waiting for the cloud's answer", err is None and dt < 0.5, f"{err!r} dt={dt:.2f}s")
+check("dead session dropped: a new one opens", wait(lambda: S["connections"] >= 2 and h._connected.is_set(), 10),
+      f"connections={S['connections']}")
+stopped(h)
+S["no_close_reply"] = False
 
 # after every scenario above
 check("every scenario: stop() leaves no client thread and no open connection", not LEAKS, "; ".join(LEAKS))
