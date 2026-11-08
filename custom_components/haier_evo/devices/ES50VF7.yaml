@@ -1,0 +1,37 @@
+# Haier ES50V-F7 water heater (device type WH): the codes of ES80V-F7, confirmed
+# on an ES50V-F7 by the fork trojan415/haier_evo.
+attributes:
+  - name: current_temperature
+    id: "0"
+  - name: target_temperature
+    id: "1"
+  - name: status
+    id: "35"
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: sterilization
+    id: "38"
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: heating_mode
+    id: "41"
+    mappings:
+      - haier: "0"
+        value: "none"
+      - haier: "1"
+        value: "eco"
+      - haier: "2"
+        value: "performance"
+  - name: heating_status
+    id: "43"
+    mappings:
+      - haier: "1"
+        value: "keep_warm"
+      - haier: "2"
+        value: "heating"

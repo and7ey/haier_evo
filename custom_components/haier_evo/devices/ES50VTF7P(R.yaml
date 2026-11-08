@@ -1,0 +1,40 @@
+# Haier ES50VTF7P(R) water heater (device type WH). The cloud's model name is cut
+# to 11 characters, hence the file name. Codes from the fork
+# VitaliyMitrofanov/haier_evo (a live unit), other than those of ES50V/ES80V-F7;
+# the names are this integration's (heating_mode, performance instead of the
+# fork's operation_mode, max).
+attributes:
+  - name: current_temperature
+    id: "0"
+  - name: target_temperature
+    id: "1"
+  - name: status
+    id: "56"
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: sterilization
+    id: "62"
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: heating_mode
+    id: "68"
+    mappings:
+      - haier: "0"
+        value: "none"
+      - haier: "1"
+        value: "eco"
+      - haier: "2"
+        value: "performance"
+  - name: heating_status
+    id: "70"
+    mappings:
+      - haier: "1"
+        value: "keep_warm"
+      - haier: "2"
+        value: "heating"
