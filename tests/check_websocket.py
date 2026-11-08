@@ -15,12 +15,14 @@ C.WS_PING_TIMEOUT = 1
 C.WS_SEND_WAIT = 8
 C.WS_ACK_TIMEOUT = 1.5
 C.WS_CONNECT_TIMEOUT = 2
+C.WS_SILENT_SESSION_TIMEOUT = 1.5
 
 PORT = 18765
 MAC = "5c:01:3b:00:00:01"
 S = {"mode": "normal", "connections": 0, "commands": [], "ping_reply": True, "active": 0,
      "seq": 0, "open": {},  # open: server-side connection id -> token of the client that opened it
      "tokens": [], "reject_handshake": 0, "open_ws": [], "junk": False,
+     "mute": False,  # mute: the server sends nothing at all over a session
      "close_1007": set()}  # tokens the server takes the upgrade for and then closes with 1007
 
 
@@ -40,6 +42,9 @@ async def ws_handler(request):
     S["open_ws"].append(ws)
     if request.match_info["token"] in S["close_1007"]:
         await ws.close(code=1007, message=b"Auth token not valid!")  # as the gateway does
+    elif not S["mute"]:
+        # as the cloud does: the state of the devices right after an opening
+        await ws.send_str(json.dumps({"event": "status", "macAddress": MAC, "payload": {"statuses": [{"properties": {}}]}}))
     if S["junk"]:
         for junk in ("not json at all", "[1, 2]", '"text"', ""):
             await ws.send_str(junk)
@@ -380,6 +385,25 @@ check("close 1007 after the upgrade: the next connection has a renewed token",
       f"tokens={S['tokens']}")
 stopped(h)
 S["close_1007"] = set()
+
+# 14c. a session the cloud sends nothing over is replaced; the second one in a row
+# goes with a renewed token; a served session is kept
+S.update(mode="normal", connections=0, commands=[], ping_reply=True, tokens=[], open_ws=[], mute=True)
+h = TokenHaier(None, "e", "p", "ru")
+h.devices = [Dev(h)]
+h.token, h.tokenexpire = "quiet", datetime.now(timezone.utc) + timedelta(minutes=10)
+api.Haier.connect_limits.reset()
+h.connect_in_thread()
+replaced = wait(lambda: S["connections"] >= 3, 25)
+check("silent sessions are replaced, the second in a row with a renewed token",
+      replaced and S["tokens"][:2] == ["quiet", "quiet"] and S["tokens"][2].startswith("fresh"), f"tokens={S['tokens']}")
+S["mute"] = False
+wait(lambda: S["connections"] >= 4 and h._connected.is_set(), 25)
+n = S["connections"]
+time.sleep(4)
+check("a session the cloud serves is kept", (S["connections"], h._connected.is_set(), h._silent_sessions) == (n, True, 0),
+      f"connections {n} -> {S['connections']}, silent {h._silent_sessions}")
+stopped(h)
 
 # 15. state read again after the connection was down for long, not after a short drop
 for threshold, want, label in ((1, 1, "long outage: state read again"), (600, 0, "short drop: no extra reads")):

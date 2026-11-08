@@ -219,6 +219,11 @@ class Haier(object):
         self._session.headers["Device-Id"] = self._device_id  # the sign-in too, as the app does
         self._connected = threading.Event()
         self._ever_connected = False
+        # messages over the current websocket session, and sessions in a row
+        # the cloud sent nothing over (see _check_silent_session)
+        self._session_messages = 0
+        self._silent_sessions = 0
+        self._silent_timer: threading.Timer | None = None
         self._down_since: float | None = None  # time.monotonic() when the socket was lost
         # time.monotonic() since when there is no websocket (from the start
         # until the first connection too): entities go unavailable after
@@ -350,6 +355,7 @@ class Haier(object):
     def stop(self) -> None:
         self.disconnect_requested = True
         self._connected.clear()
+        self._cancel_silent_check()
         with self._offline_lock:
             if self._offline_timer is not None:
                 self._offline_timer.cancel()
@@ -754,6 +760,8 @@ class Haier(object):
     # noinspection PyUnusedLocal
     def _on_message(self, ws: WebSocket, message: str) -> None:
         _LOGGER.debug(f"Received WSS message: {message}")
+        self._session_messages += 1
+        self._silent_sessions = 0
         try:
             message_dict = json.loads(message)
         except (TypeError, ValueError):
@@ -783,6 +791,7 @@ class Haier(object):
         self.socket_status = SocketStatus.INITIALIZED
         self._connected.set()
         _LOGGER.debug("Websocket opened")
+        self._arm_silent_check(ws)
         self._came_online()
         down_since, self._down_since = self._down_since, None
         self._ever_connected = True
@@ -795,6 +804,42 @@ class Haier(object):
                 device.init_if_needed()
             except Exception as e:
                 _LOGGER.warning(f"{device.device_name}: init after connect failed: {e!r}")
+
+    def _arm_silent_check(self, app: WebSocketApp) -> None:
+        self._session_messages = 0
+        self._cancel_silent_check()
+        # 60 s, then twice as long for every silent session in a row (up to 8 min):
+        # a cloud that never pushes anything costs a reconnect now and then, no more
+        delay = C.WS_SILENT_SESSION_TIMEOUT * 2 ** min(self._silent_sessions, 3)
+        self._silent_timer = timer = threading.Timer(delay, self._check_silent_session, args=(app,))
+        timer.daemon = True
+        timer.start()
+
+    def _cancel_silent_check(self) -> None:
+        timer, self._silent_timer = self._silent_timer, None
+        if timer is not None:
+            timer.cancel()
+
+    def _check_silent_session(self, app: WebSocketApp) -> None:
+        """Drop a session the cloud has sent nothing over since it opened.
+
+        Within seconds of an opening the cloud pushes the state of the devices;
+        a session nothing at all has come over is accepted but not served (seen
+        in the fork JampireX/haier_evo): commands into it get no answer, pushes
+        never come. The connect loop opens a new one; the second silent session
+        in a row goes with a renewed token.
+        """
+        if self.disconnect_requested or app is not self.socket_app or not self._connected.is_set():
+            return
+        if self._session_messages:
+            return
+        self._silent_sessions += 1
+        log = _LOGGER.warning if self._silent_sessions == 1 else _LOGGER.debug
+        log(f"Haier Evo: nothing came over the websocket since it opened, opening a new one "
+            f"(silent sessions in a row: {self._silent_sessions})")
+        if self._silent_sessions >= C.WS_SILENT_SESSIONS_FRESH_TOKEN:
+            self.token_rejected(self._ws_token)
+        app.close()
 
     # noinspection PyUnusedLocal
     def _on_error(self, ws: WebSocketApp, error: Exception) -> None:
@@ -819,6 +864,7 @@ class Haier(object):
         if ws is self.socket_app:
             self._connected.clear()
             self.socket_status = SocketStatus.NOT_INITIALIZED
+            self._cancel_silent_check()
         _LOGGER.debug(f"Websocket closed. Code: {close_code}, message: {close_message}")
         # the gateway may take the upgrade and then close with 1007 "Auth token
         # not valid!": the token is refused, renew it for the next connection
