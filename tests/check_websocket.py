@@ -144,7 +144,6 @@ def scenario(mode, ping_reply=True, port=PORT, send_on_open=False, token=None):
     if token:
         h.ws_token = token  # tells the server which client a connection is from
     h.devices = [Dev(h, send_on_open)]
-    api.Haier.connect_limits.reset()
     h.connect_in_thread()
     return h
 
@@ -370,7 +369,6 @@ C.API_WS_PATH = f"ws://127.0.0.1:{PORT}/ws/"
 h = TokenHaier(None, "e", "p", "ru")
 h.devices = [Dev(h)]
 h.token, h.tokenexpire = "old", datetime.now(timezone.utc) + timedelta(minutes=10)
-api.Haier.connect_limits.reset()
 h.connect_in_thread()
 connected = wait(lambda: h._connected.is_set(), 15)
 check("handshake 401: next try connects with a refreshed token",
@@ -384,7 +382,6 @@ S.update(mode="normal", connections=0, commands=[], ping_reply=True, tokens=[], 
 h = TokenHaier(None, "e", "p", "ru")
 h.devices = [Dev(h)]
 h.token, h.tokenexpire = "refused", datetime.now(timezone.utc) + timedelta(minutes=10)
-api.Haier.connect_limits.reset()
 h.connect_in_thread()
 renewed = wait(lambda: h._connected.is_set() and S["tokens"] and S["tokens"][-1] != "refused", 15)
 check("close 1007 after the upgrade: the next connection has a renewed token",
@@ -399,7 +396,6 @@ S.update(mode="normal", connections=0, commands=[], ping_reply=True, tokens=[], 
 h = TokenHaier(None, "e", "p", "ru")
 h.devices = [Dev(h)]
 h.token, h.tokenexpire = "quiet", datetime.now(timezone.utc) + timedelta(minutes=10)
-api.Haier.connect_limits.reset()
 h.connect_in_thread()
 replaced = wait(lambda: S["connections"] >= 3, 25)
 check("silent sessions are replaced, the second in a row with a renewed token",

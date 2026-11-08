@@ -6,7 +6,7 @@ the saved refresh token, Home Assistant asks for the password again (reauth).
 from __future__ import annotations
 import voluptuous as vol
 from typing import Any
-from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout
+from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout, TooManyRedirects
 from homeassistant import config_entries, exceptions
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.selector import (
@@ -69,10 +69,11 @@ async def sign_in(hass: HomeAssistant, email: str, password: str, region: str,
     except api.InvalidAuth as e:
         if isinstance(e.__cause__, api.ManyRequestsError):
             raise TooManyRequests from e
-        if isinstance(e.__cause__, (RequestsConnectionError, Timeout)):
+        # a redirect is not followed (api.Haier._build_session): not a wrong password
+        if isinstance(e.__cause__, (RequestsConnectionError, Timeout, TooManyRedirects)):
             raise CannotConnect from e
         raise InvalidCredentials from e
-    except (RequestsConnectionError, Timeout) as e:
+    except (RequestsConnectionError, Timeout, TooManyRedirects) as e:
         raise CannotConnect from e
 
 

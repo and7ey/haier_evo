@@ -146,5 +146,34 @@ check("diagnostics: no MAC / IP / serial", not macs and not ips and not serial_h
 check("diagnostics: no email / password / tokens", "user@example.com" not in text and '"pw"' not in text and '"R"' not in text and '"T"' not in text)
 check("diagnostics: no signed URL secrets", "X-Amz-Signature=**REDACTED**" in text and not re.search(r"X-Amz-Signature=[0-9a-f]{10}", text))
 check("diagnostics: device data kept", '"ES80V-F7"' in text and '"Бойлер"' in text, f"size={len(text)}")
+
+# fields the cloud does not send today but may (sharing, Wi-Fi, the home's
+# place), and identifiers in forms the fixtures do not have (1.7.1)
+PII = {
+    "owner": {"ownerEmail": "owner@mail.ru", "phone": "+7 916 123-45-67", "userId": "u-77"},
+    "sharedWith": [{"login": "wife@yandex.ru", "name": "Мария", "note": "звонить 8 (916) 765-43-21"}],
+    "network": {"SSID": "MyHomeWiFi", "bssid": "AA-BB-CC-DD-EE-FF", "routerMac": "aabbccddeeff"},
+    "location": {"latitude": 55.7558, "longitude": 37.6173, "homeAddress": "Москва, ул. Пример, 1"},
+    "links": ["https://cdn.example.invalid/x.png?token=SECRET123&Signature=SIG456&Expires=1",
+              "haierevo://device/settings?mac=5c%3A01%3A3b%3A12%3A34%3A56", "текст с 5C-01-3B-12-34-56 внутри"],
+    "jwt": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl",
+    "sn": "AA0B1C2D3E4F5", "imei": "356938035643809",
+    "kept": {"uuid": "6f1c2b3a-1d2e-4f5a-9b8c-0123456789ab", "model": "AS25S2SF2FA-B", "value": "24", "id": "31"},
+}
+class PIIHaier:
+    def to_dict(self):
+        return {"socket_status": 2, "devices": [{"backend_data": copy.deepcopy(PII)}], "backend_data": {}}
+class PIIHass:
+    data = {"haier_evo": {"E": PIIHaier()}}
+out = asyncio.run(diagnostics.async_get_config_entry_diagnostics(PIIHass(), FakeEntry()))
+text = json.dumps(out, ensure_ascii=False)
+probes = ["owner@mail.ru", "916 123-45-67", "u-77", "wife@yandex.ru", "765-43-21", "MyHomeWiFi", "AA-BB-CC-DD-EE-FF",
+          "aabbccddeeff", "55.7558", "37.6173", "ул. Пример", "SECRET123", "SIG456", "5c%3A01%3A3b%3A12%3A34%3A56",
+          "5C-01-3B-12-34-56", "eyJhbGciOiJIUzI1NiJ9", "AA0B1C2D3E4F5", "356938035643809"]
+leaked = [p for p in probes if p in text]
+check("diagnostics: e-mails, phones, user ids, Wi-Fi, places, link secrets, JWTs and MACs of any form hidden",
+      not leaked, f"leaked={leaked}")
+check("diagnostics: UUIDs, models, values and names stay",
+      all(v in text for v in ("6f1c2b3a-1d2e-4f5a-9b8c-0123456789ab", "AS25S2SF2FA-B", '"24"', '"31"', "Мария", "Expires=")), text[:300])
 print("FAILS:", fails)
 sys.exit(1 if fails else 0)

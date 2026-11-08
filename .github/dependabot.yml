@@ -1,0 +1,12 @@
+# The actions of the workflow are pinned to commits: Dependabot proposes the
+# new ones (security fixes included) as pull requests, once a week.
+# pip is left out on purpose: requirements_test_ha.txt pins the test harness
+# of one Home Assistant release, raised together with HA_CORE in the workflow.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "CI"

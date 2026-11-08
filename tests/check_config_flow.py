@@ -132,6 +132,19 @@ async def main():
         except Exception as e:
             got = e
     check("sign_in maps a network error -> CannotConnect", isinstance(got, cf.CannotConnect), repr(got))
+    # a redirect is not followed (1.7.1): no connection, not a wrong password
+    class Redirected(C):
+        def login(self):
+            try:
+                raise requests.exceptions.TooManyRedirects("Exceeded 0 redirects.")
+            except Exception as e:
+                raise api.InvalidAuth() from e
+    with mock.patch.object(cf.api, "Haier", Redirected):
+        try:
+            await cf.sign_in(hass, "a", "b", "ru"); got = None
+        except Exception as e:
+            got = e
+    check("sign_in maps a refused redirect -> CannotConnect", isinstance(got, cf.CannotConnect), repr(got))
 
     # HTTP 429 at sign-in is not a wrong password (1.5.1)
     class Limited(C):

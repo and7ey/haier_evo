@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 from websocket import WebSocketApp, WebSocket
 from requests.adapters import HTTPAdapter
 from requests.exceptions import ConnectionError, Timeout, HTTPError
+from functools import wraps
 from urllib.parse import urlparse, urljoin, parse_qs
 from urllib3.exceptions import NewConnectionError
 from urllib3.util.retry import Retry
@@ -109,10 +110,11 @@ class AuthResponse(object):
         return None
 
     @property
-    def access_token(self) -> str | None:
-        assert "accessToken" in self.token, "Bad data: accessToken not found"
-        value = self.token["accessToken"]
-        assert isinstance(value, str) and value, f"Bad token: {value!r}"
+    def access_token(self) -> str:
+        value = self.token.get("accessToken") if isinstance(self.token, dict) else None
+        if not isinstance(value, str) or not value:
+            # the value itself is not shown: it may be a token in an odd form
+            raise ValueError(f"Bad data: no usable accessToken ({type(value).__name__})")
         return value
 
     @property
@@ -167,6 +169,20 @@ def device_part(data) -> dict:
     return inner if isinstance(inner, dict) else data
 
 
+def _limited(name: str):
+    """Rate-limit a method of Haier with the limiter of its instance (attribute
+    name): every client has its own limits, so a sign-in in the config flow, a
+    reload or a second account does not reset the waiting of another one
+    (up to 1.7.0 they were shared by the class and reset by any instance)."""
+    def decorate(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            limits = getattr(self, name)
+            return limits.sleep_and_retry(limits(func))(self, *args, **kwargs)
+        return wrapper
+    return decorate
+
+
 def entry_device_id(entry_id: str) -> str:
     """Device-Id of a config entry: the same on every start (it used to be random)."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"{C.DOMAIN}:{entry_id}"))
@@ -174,6 +190,8 @@ def entry_device_id(entry_id: str) -> str:
 
 class Haier(object):
 
+    # templates: every instance takes copies of them (see _limited); tests
+    # change these to make the waits shorter for the clients they create
     connect_limits = ResettableLimits(calls=1, period=5)
     common_limits = ResettableLimits(
         calls=C.COMMON_LIMIT_CALLS,
@@ -247,7 +265,11 @@ class Haier(object):
         self._command_slots = threading.BoundedSemaphore(C.WS_MAX_PENDING_COMMANDS)
         # control of washers and dryers (beta): the entry's option, set by async_setup_entry
         self.laundry_control = False
-        self.reset_limits()
+        cls = type(self)
+        self.connect_limits = cls.connect_limits.copy()
+        self.common_limits = cls.common_limits.copy()
+        self.auth_login_limits = cls.auth_login_limits.copy()
+        self.auth_refresh_limits = cls.auth_refresh_limits.copy()
         self.set_tokens(tokens)
 
     @staticmethod
@@ -267,6 +289,10 @@ class Haier(object):
             raise_on_status=False,
         )
         session = requests.Session()
+        # no redirects: requests would take X-Auth-Token and Device-Id along to
+        # another host (it drops only Authorization), and the sign-in form with
+        # the password on 307/308; the cloud's endpoints never redirect
+        session.max_redirects = 0
         session.mount("https://", HTTPAdapter(max_retries=retries))
         session.headers.update({
             "User-Agent": "evo-mobile",
@@ -375,11 +401,11 @@ class Haier(object):
         self._end_session(self.socket_app)
         self._session.close()  # idle keep-alive connections
 
-    @common_limits.sleep_and_retry
-    @common_limits
+    @_limited("common_limits")
     def make_request(self, method: str, url: str, **kwargs) -> requests.Response:
         try:
-            assert self.disconnect_requested is False, 'Service already stoped'
+            if self.disconnect_requested:
+                raise RuntimeError("Service already stopped")
             # Setting a default timeout for requests
             kwargs.setdefault('timeout', self._timeout())
             resp = self._session.request(method, url, **kwargs)
@@ -400,8 +426,7 @@ class Haier(object):
             _LOGGER.error(f"HTTP error occurred: {e}")
             raise e
 
-    @auth_login_limits.sleep_and_retry
-    @auth_login_limits
+    @_limited("auth_login_limits")
     def auth_login(self) -> AuthResponse:
         try:
             path = urljoin(C.API_PATH, C.API_LOGIN.format(region=self.region))
@@ -428,8 +453,7 @@ class Haier(object):
             self.auth_refresh_limits.reset()
         return response
 
-    @auth_refresh_limits.sleep_and_retry
-    @auth_refresh_limits
+    @_limited("auth_refresh_limits")
     def auth_refresh(self) -> AuthResponse:
         try:
             path = urljoin(C.API_PATH, C.API_TOKEN_REFRESH.format(region=self.region))
@@ -471,7 +495,8 @@ class Haier(object):
                     if not self.password:
                         raise ReauthRequired("Haier Evo: no valid tokens, sign in again")
                     resp = self.auth_login()
-                assert resp, "No response from login"
+                if not resp:
+                    raise ValueError("No response from login")
                 # called under self._lock (auth) or before any thread runs (config flow)
                 self.token = resp.access_token
                 self.tokenexpire = resp.access_expire
@@ -516,8 +541,10 @@ class Haier(object):
             }, timeout=self._timeout())
             # _LOGGER.debug(response.text)
             response.raise_for_status()
-            data = response.json().get("data", {})
-            assert isinstance(data, dict), f"Data is not dict: {data}"
+            body = response.json()
+            data = body.get("data", {}) if isinstance(body, dict) else None
+            if not isinstance(data, dict):
+                raise ValueError(f"Data is not a dict: {type(data).__name__}")
             return data
         except Exception as e:
             _LOGGER.error(f"Failed to get devices {e}, response was: {response}")
@@ -584,7 +611,8 @@ class Haier(object):
                 )
                 continue
             self.devices.append(device)
-            _LOGGER.info(f"Added device: {device}")
+            _LOGGER.info(f"Added device: {device.device_name} ({device.device_type} {device.device_model}, {device.device_id})")
+            _LOGGER.debug(f"Added device: {device!r}")
         if len(self.devices) > 0:
             self.connect_in_thread()
 
@@ -966,8 +994,7 @@ class Haier(object):
         thread.daemon = True
         thread.start()
 
-    @connect_limits.sleep_and_retry
-    @connect_limits
+    @_limited("connect_limits")
     def run_forever(self) -> None:
         _LOGGER.debug(f"Connecting to websocket ({C.API_WS_PATH})")
         try:
@@ -1148,7 +1175,6 @@ class HaierDevice(object):
             f"{self.__class__.__name__}("
             f"{self.device_id!r},"
             f"name={self.device_name!r},"
-            f"serial={self.device_serial!r},"
             f"model={self.device_model!r},"
             f"config={self.config!r}"
             f")"
@@ -1576,7 +1602,8 @@ class HaierDevice(object):
                 self.link_status = payload.get("status")
                 self.write_ha_state()
         else:
-            _LOGGER.warning(f"Got unknown message: {message_dict}")
+            _LOGGER.warning(f"{self.device_name}: got an unknown message {str(message_type)[:40]!r}")
+            _LOGGER.debug(f"Unknown message: {message_dict}")
 
     def write_ha_state(self) -> None:
         # a copy: an entity may unsubscribe from the event loop meanwhile
