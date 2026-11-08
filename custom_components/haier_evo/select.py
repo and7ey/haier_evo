@@ -3,6 +3,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from .const import DOMAIN
 from . import api
+from .entity import HaierEntityMixin
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> bool:
@@ -16,7 +17,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     return True
 
 
-class HaierSelect(SelectEntity):
+class HaierSelect(HaierEntityMixin, SelectEntity):
     _attr_should_poll = False
     _attr_icon = "mdi:format-list-bulleted"
 
@@ -24,8 +25,6 @@ class HaierSelect(SelectEntity):
         self._device = weakref.proxy(device)
         self._device_attr_name = None
         self._attr_options = []
-
-        device.add_write_ha_state_callback(self.async_write_ha_state)
 
     @property
     def device_info(self) -> dict:

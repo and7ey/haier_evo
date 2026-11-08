@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN
 from .logger import _LOGGER
 from . import api
+from .entity import HaierEntityMixin
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> bool:
@@ -23,7 +24,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 
 
 # https://developers.home-assistant.io/docs/core/entity/water-heater
-class HaierWHEntity(WaterHeaterEntity):
+class HaierWHEntity(HaierEntityMixin, WaterHeaterEntity):
     _attr_translation_key = "water_heater"
     _attr_should_poll = False
     _attr_icon = "mdi:water-boiler"
@@ -42,8 +43,6 @@ class HaierWHEntity(WaterHeaterEntity):
         self._attr_unique_id = f"{device.device_id}_{device.device_model}"
         self._attr_name = device.device_name
         self._attr_operation_list = [STATE_OFF] + device.get_heating_modes()
-
-        device.add_write_ha_state_callback(self.async_write_ha_state)
 
     @property
     def device_info(self) -> dict:
