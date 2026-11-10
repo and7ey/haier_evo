@@ -1,12 +1,12 @@
 # Haier Evo integration
-[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz) [![Release](https://img.shields.io/github/v/release/AGrigorii/haier_evo)](https://github.com/AGrigorii/haier_evo/releases/latest) [![Validate](https://github.com/AGrigorii/haier_evo/actions/workflows/validate.yaml/badge.svg?branch=main)](https://github.com/AGrigorii/haier_evo/actions/workflows/validate.yaml?query=branch%3Amain) [![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAGrigorii%2Fhaier_evo%2Fbadges%2Ftests.json)](https://github.com/AGrigorii/haier_evo/actions/workflows/validate.yaml?query=branch%3Amain) [![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#stable)\
-[![Home Assistant minimum](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAGrigorii%2Fhaier_evo%2Fbadges%2Fha-minimum.json)](#разработка) [![Home Assistant previous but one](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAGrigorii%2Fhaier_evo%2Fbadges%2Fha-prev2.json)](#разработка) [![Home Assistant previous](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAGrigorii%2Fhaier_evo%2Fbadges%2Fha-prev1.json)](#разработка) [![Home Assistant current](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAGrigorii%2Fhaier_evo%2Fbadges%2Fha-current.json)](#разработка) [![Home Assistant next](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAGrigorii%2Fhaier_evo%2Fbadges%2Fha-next.json)](#разработка)
+[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz) [![Release](https://img.shields.io/github/v/release/and7ey/haier_evo)](https://github.com/and7ey/haier_evo/releases/latest) [![Validate](https://github.com/and7ey/haier_evo/actions/workflows/validate.yaml/badge.svg?branch=main)](https://github.com/and7ey/haier_evo/actions/workflows/validate.yaml?query=branch%3Amain) [![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Ftests.json)](https://github.com/and7ey/haier_evo/actions/workflows/validate.yaml?query=branch%3Amain) [![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#stable)\
+[![Home Assistant minimum](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Fha-minimum.json)](#разработка) [![Home Assistant previous but one](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Fha-prev2.json)](#разработка) [![Home Assistant previous](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Fha-prev1.json)](#разработка) [![Home Assistant current](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Fha-current.json)](#разработка) [![Home Assistant next](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Fha-next.json)](#разработка)
 
 Неофициальная интеграция для работы [Haier Evo](https://haieronline.ru/evo-iot/) (RU, KZ, BY).
 
-Форк [and7ey/haier_evo](https://github.com/and7ey/haier_evo): поддержка водонагревателей (бойлеров), устойчивая работа при сбоях облака Haier, названия функций как в приложении Evo.
+Поддержка водонагревателей (бойлеров), устойчивая работа при сбоях облака Haier, названия функций как в приложении Evo.
 
-[![Открыть репозиторий в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=AGrigorii&repository=haier_evo&category=integration)
+[![Открыть репозиторий в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=and7ey&repository=haier_evo&category=integration)
 
 > **English.** Unofficial Home Assistant integration for the Haier Evo cloud (Russia, Kazakhstan, Belarus): air conditioners, refrigerators, F7 water heaters (tested on ES80V-F7), washing machines and dryers (their state; starting, pausing and cancelling programs is a beta, off by default and not yet checked on a real machine). Install it through HACS as a custom repository (the button above adds it in one click), restart Home Assistant, then add **Haier Evo** in *Settings → Devices & services* and sign in with your Evo account. The rest of this page is in Russian.
 
@@ -57,7 +57,7 @@
 | Сушильная машина | HD70-A929E | ⚪ сообщение | дамп в upstream-issue #63, по формату как HD80 |
 <!-- devices:end -->
 
-Если вашей модели нет в таблице или что-то работает не так, заполните [форму «Новое устройство»](https://github.com/AGrigorii/haier_evo/issues/new?template=new_device.yml) и приложите диагностику: из неё получаются тестовые данные, и модель переходит в «данные облака».
+Если вашей модели нет в таблице или что-то работает не так, заполните [форму «Новое устройство»](https://github.com/and7ey/haier_evo/issues/new?template=new_device.yml) и приложите диагностику: из неё получаются тестовые данные, и модель переходит в «данные облака».
 
 ### Кондиционеры
 Кроме карточки климата, переключателей режимов и выбора эко-датчика для кондиционера создаются:
@@ -130,7 +130,7 @@
 
 В остальных случаях Home Assistant показывает понятную ошибку, а машине ничего не отправляется. Чтобы не нажать «Старт» случайно, в карточке кнопки на панели можно включить подтверждение (`tap_action` с `confirmation`).
 
-Если у вас стиральная или сушильная машина Haier в приложении Evo, сообщите, работает ли управление: заполните [форму «Новое устройство»](https://github.com/AGrigorii/haier_evo/issues/new?template=new_device.yml) и приложите диагностику. Без такой проверки управление остаётся бетой.
+Если у вас стиральная или сушильная машина Haier в приложении Evo, сообщите, работает ли управление: заполните [форму «Новое устройство»](https://github.com/and7ey/haier_evo/issues/new?template=new_device.yml) и приложите диагностику. Без такой проверки управление остаётся бетой.
 
 ### Свой профиль модели
 Встроенные профили моделей лежат в `custom_components/haier_evo/devices/`. Чтобы заменить профиль своим, положите его в `/config/haier_evo.<МОДЕЛЬ>.yaml` (например, `haier_evo.AS25S2SF2FA.yaml`): он главнее встроенного, в журнале при запуске будет строка об этом. До 1.5.2 интеграция сама копировала туда встроенный профиль, и копия навсегда закрывала исправления профиля в новых версиях. Теперь такие копии не создаются, а копия, совпадающая со встроенным профилем, удаляется при запуске. Копию более старого профиля, которая от встроенного уже отличается, удалите вручную, если не меняли её сами.
@@ -248,13 +248,13 @@ Haier предлагает разные мобильные приложения 
 
 Интеграция кастомная, её добавляют как пользовательский репозиторий. Быстрее всего — кнопкой: она откроет репозиторий в вашем Home Assistant, останется нажать **Download**. В 2026.11 старые адреса HACS ведут в Marketplace, так что кнопка работает и там.
 
-[![Открыть репозиторий в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=AGrigorii&repository=haier_evo&category=integration)
+[![Открыть репозиторий в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=and7ey&repository=haier_evo&category=integration)
 
-Или вручную. В Marketplace: **Настройки → Marketplace**, меню **⋮** → добавить репозиторий по ссылке `https://github.com/AGrigorii/haier_evo` (тип — интеграция) → **Haier Evo** → **Download**. В HACS:
+Или вручную. В Marketplace: **Настройки → Marketplace**, меню **⋮** → добавить репозиторий по ссылке `https://github.com/and7ey/haier_evo` (тип — интеграция) → **Haier Evo** → **Download**. В HACS:
 
 1. Откройте **HACS** в боковой панели Home Assistant.
 2. Нажмите на три точки (⋮) в верхнем правом углу и выберите **Custom repositories** (Пользовательские репозитории).
-3. В поле **Repository** вставьте ссылку: `https://github.com/AGrigorii/haier_evo`
+3. В поле **Repository** вставьте ссылку: `https://github.com/and7ey/haier_evo`
 4. В поле **Category** выберите **Integration** (Интеграция).
 5. Нажмите **Add** (Добавить).
 6. Теперь найдите **Haier Evo** в поиске HACS и нажмите **Download** (Загрузить).
