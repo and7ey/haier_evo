@@ -1,0 +1,16 @@
+configure_program:
+  target:
+    entity:
+      integration: haier_evo
+      domain: select
+  fields:
+    program:
+      required: true
+      example: "Смешанная"
+      selector:
+        text:
+    parameters:
+      required: true
+      example: '{"50": "30"}'
+      selector:
+        object:

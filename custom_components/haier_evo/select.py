@@ -1,14 +1,35 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+import voluptuous as vol
 from homeassistant.components.select import SelectEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_platform
 
 from . import api
 from .entity import HaierEntity, async_setup_platform
 
+if TYPE_CHECKING:
+    from .device_laundry import HaierLaundry
+
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> None:
     async_setup_platform(hass, config_entry, async_add_entities, "select")
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        "configure_program",
+        cv.make_entity_service_schema({vol.Required("program"): cv.string, vol.Required("parameters"): dict}),
+        _async_configure_program,
+    )
+
+
+async def _async_configure_program(entity: HaierSelect, call: ServiceCall) -> None:
+    if not isinstance(entity, HaierLaundryProgramSelect):
+        raise ServiceValidationError(translation_domain="haier_evo", translation_key="laundry_parameters_target")
+    entity._device.configure_program(call.data["program"], call.data["parameters"])
 
 
 class HaierSelect(HaierEntity, SelectEntity):
@@ -108,12 +129,22 @@ class HaierLaundryProgramSelect(HaierSelect):
     """
 
     _attr_icon = "mdi:washing-machine"
+    _unrecorded_attributes = frozenset({"program_catalog", "program_settings", "active_program_details"})
+    _device: HaierLaundry
 
-    def __init__(self, device: api.HaierDevice) -> None:
+    def __init__(self, device: HaierLaundry) -> None:
         super().__init__(device)
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_laundry_program"
         self._attr_name = "Программа для запуска"
         self._attr_options = [p["title"] for p in device.programs]
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            "program_catalog": self._device.program_catalog,
+            "program_settings": self._device.program_settings,
+            "active_program_details": self._device.active_program_details,
+        }
 
     @property
     def current_option(self) -> str | None:

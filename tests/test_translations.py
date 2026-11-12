@@ -181,9 +181,10 @@ def test_entity_keys_of_the_code_are_translated():
 
 def test_exceptions_of_the_code_are_translated():
     raised = set(re.findall(r"""translation_key=["'](\w+)["']""", ALL_CODE))
+    raised |= set(re.findall(r"""ProgramValidationError\(["'](\w+)["']""", CODE.get("programs.py", "")))
     # the laundry's errors go through _control_error / _check_control / _act
     raised |= set(re.findall(
-        r"""(?:_control_error\(|_check_control\([^,]+, |_act\([^,]+, )["'](\w+)["']""", CODE["device_laundry.py"]
+        r"""(?:_control_error\(|_parameter_error\(|_check_control\([^,]+, |_act\([^,]+, )["'](\w+)["']""", CODE["device_laundry.py"]
     ))
     # f"locked_{reason}": the reasons of HaierDevice._modifier_reason, "by:<code>" is "by"
     raised |= {f"locked_{r}" for r in ("off", "mode", "alarm", "by")}
