@@ -1,0 +1,39 @@
+# Haier ES100V-F7 water heater (device type WH): the codes of ES80V-F7, the
+# same F7 line as ES50V-F7, whose codes match. Not yet checked on a unit: the
+# cloud's attribute names of ES100V-F7 (and7ey/haier_evo#101) are those of
+# ES80V-F7, its codes are still to be confirmed by a diagnostics download.
+attributes:
+  - name: current_temperature
+    id: "0"
+  - name: target_temperature
+    id: "1"
+  - name: status
+    id: "35"
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: sterilization
+    id: "38"
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: heating_mode
+    id: "41"
+    mappings:
+      - haier: "0"
+        value: "none"
+      - haier: "1"
+        value: "eco"
+      - haier: "2"
+        value: "performance"
+  - name: heating_status
+    id: "43"
+    mappings:
+      - haier: "1"
+        value: "keep_warm"
+      - haier: "2"
+        value: "heating"
