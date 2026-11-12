@@ -101,6 +101,23 @@ for model in ("ES80V-F7", "ES100V-F7", "ES30V-F7"):   # with model yaml (two) / 
     ws(d, {"35": "1"}); check("wh current op", wh.current_operation, "performance")
     check("wh features", int(wh.supported_features), 1 | 2 | 8)
 
+print("=== ES100V-F7 (fixtures/wh_dump.json: diagnostics from and7ey/haier_evo#101)")
+es100 = json.load(open(_HERE / "fixtures" / "wh_dump.json", encoding="utf-8"))["devices"][0]
+h = FakeHaier()
+d = api.HaierWH(haier=h, device_mac=es100["device_id"], device_serial="x", device_title=es100["device_name"],
+                backend_data=copy.deepcopy(es100["backend_data"]))
+check("es100 model and profile", (d.device_model, d.config.command_name), ("ES100VF7", None))
+check("es100 codes", {n: d.config[n] for n in ("current_temperature", "target_temperature", "status", "sterilization", "heating_mode", "heating_status")},
+      {"current_temperature": "0", "target_temperature": "1", "status": "35", "sterilization": "38", "heating_mode": "41", "heating_status": "43"})
+check("es100 state", (d.current_temperature, d.target_temperature, d.status, d.heating_mode, d.heating, d.sterilization_on),
+      (72.0, 75.0, True, "eco", False, False))
+check("es100 range and modes", (d.min_temperature, d.max_temperature, d.get_heating_modes()), (35.0, 75.0, ["eco", "performance"]))
+d.set_temperature(74); check("es100 set_temp", sent(h), [("1", "74")])
+d.set_heating_mode("performance"); check("es100 Max", sent(h), [("41", "2")])
+d.set_sterilization_on(True); check("es100 BPS on", sent(h), [("38", "1")])
+ws(d, {"38": "1"}); check("es100 BPS locks temp", locked_key(lambda: d.set_temperature(60)), "locked_by")
+d.switch_off(); check("es100 off", sent(h), [("35", "0")])
+
 print("=== AC regression")
 h, ac = make(api.HaierAC, "a0:a3")
 print(json.dumps(ac.to_dict()["config"], ensure_ascii=False, sort_keys=True)[:300])
