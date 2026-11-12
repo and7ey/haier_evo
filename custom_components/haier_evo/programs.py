@@ -408,6 +408,32 @@ def program_settings(data, option, base_program, overrides=None, live_values=Non
                          for command in commands]}
 
 
+def enrich_label(metadata, value) -> str:
+    """The app's word for a value of an enrichAttributes parameter: the name
+    in its list ("Выключен", "Кровь"), else the selector of the range mode the
+    value falls in ("Выкл"); "" when the app has none. The parameter sensors
+    (device_laundry) and active_program_details name values alike with it."""
+    metadata = _object(metadata)
+    value = _wire(value)
+    labels = _object(_object(metadata.get("list")).get("valueToIcon"))
+    if {"true", "false"} <= labels.keys():
+        value = {"0": "false", "1": "true"}.get(value, value)
+    label = _text(_object(labels.get(value)).get("name"))
+    if label:
+        return label
+    for mode in _items(_object(metadata.get("range")).get("modes")):
+        if not isinstance(mode, dict):
+            continue
+        try:
+            if _number(mode.get("minValue")) <= _number(value) <= _number(mode.get("maxValue")):
+                label = _text(_object(mode.get("name")).get("selector"))
+                if label:
+                    return label
+        except ValueError:
+            continue
+    return ""
+
+
 def active_program_details(data, program_name, programs, live_values, program_values=None):
     """Describe observed values only; programme defaults are never observations."""
     result = {"program": _text(program_name), "fields": []}
@@ -459,7 +485,7 @@ def active_program_details(data, program_name, programs, live_values, program_va
         labels = _object(_object(metadata.get("list")).get("valueToIcon"))
         if {"true", "false"} <= labels.keys():
             value = {"0": "false", "1": "true"}.get(value, value)
-        label = _text(_object(labels.get(value)).get("name"))
+        label = enrich_label(metadata, value)
         if not label and value in ("true", "false"):
             label = value
         if key == soil_key and soil_rates:
@@ -476,17 +502,6 @@ def active_program_details(data, program_name, programs, live_values, program_va
                 continue
             title = _text(soil.get("title")) or title
             label, description = _text(matches[0].get("title")), _text(matches[0].get("description"))
-        if not label:
-            for mode in _items(_object(metadata.get("range")).get("modes")):
-                if not isinstance(mode, dict):
-                    continue
-                try:
-                    if _number(mode.get("minValue")) <= _number(value) <= _number(mode.get("maxValue")):
-                        label = _text(_object(mode.get("name")).get("selector"))
-                        if label:
-                            break
-                except ValueError:
-                    continue
         label = label or value
         unit = _text(_object(_object(_object(field.get("valueRange")).get("range")).get("data")).get("unit"))
         try:
