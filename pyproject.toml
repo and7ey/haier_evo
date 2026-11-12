@@ -1,0 +1,19 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "I", "ASYNC", "LOG", "G004"]
+# Device profiles keep the upstream style of long attribute tables.
+ignore = ["E501", "UP007"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ASYNC109", "ASYNC110", "ASYNC240"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["custom_components"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

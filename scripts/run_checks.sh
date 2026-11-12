@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run the checks (tests/) inside the Home Assistant container of one version:
+# Run the tests (tests/) inside the Home Assistant container of one version:
 #   scripts/run_checks.sh 2026.9.4      a release
 #   scripts/run_checks.sh 2026.12.0b1   a beta
 #   scripts/run_checks.sh dev           the nightly build
@@ -7,7 +7,9 @@
 # per version (see scripts/ha_versions.py); it also works on any Docker host.
 # With CHECKS_REPORT=<file> a report is written there in JSON lines: the image
 # and its digest, the versions inside it, then per script the counts of passed
-# and failed checks, its time and its failures (see tests/test_checks.py).
+# and failed tests, its time and its failures (see tests/ci_report.py).
+# The test harness that fits the version is installed in the container
+# (scripts/install_test_env.py); the Home Assistant of the image stays.
 set -eu
 
 tag="${1:?usage: scripts/run_checks.sh <Home Assistant container tag>}"
@@ -36,7 +38,7 @@ echo "Image $image ${digest#*@}"
 if [ -n "$report" ]; then
   printf '{"image": "%s", "digest": "%s"}\n' "$image" "${digest#*@}" >> "$report"
 fi
-# the checkout is mounted read-only: the checks write to temporary directories
+# the checkout is mounted read-only: the tests write to temporary directories
 # (and to the report, if asked)
 docker run --rm --entrypoint sh \
   -v "$PWD:/repo:ro" -w /repo \
@@ -45,8 +47,12 @@ docker run --rm --entrypoint sh \
   "$image" -c '
     set -eu
     python3 -c "from homeassistant.const import __version__; print(\"Home Assistant\", __version__)"
-    deps="websocket-client>=1.8.0,<2 pytest>=8.4 hypothesis>=6.100,<7"
-    python3 -m pip install --quiet --disable-pip-version-check $deps 2>/dev/null \
-      || uv pip install --system --quiet $deps
-    python3 -m pytest -q -p no:cacheprovider tests
+    python3 scripts/install_test_env.py
+    # a hang ends the run: the whole run has 15 minutes
+    status=0
+    timeout 900 python3 -m pytest -q -p no:cacheprovider -ra --durations=8 tests || status=$?
+    if [ "$status" -eq 124 ] || [ "$status" -eq 143 ]; then
+      echo "the tests did not finish in 15 minutes: something hangs" >&2
+    fi
+    exit "$status"
   '

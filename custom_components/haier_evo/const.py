@@ -1,84 +1,91 @@
 from datetime import timedelta
 
 DOMAIN = "haier_evo"
-# option of an entry: control of washers and dryers (beta), off by default
+CONF_REGION = "region"
+# tokens of the config flow's sign-in, handed over to the entry once (moved to .storage)
+CONF_TOKENS = "tokens"
+# entry option: control of washers and dryers (beta, 1.7), off by default
 CONF_LAUNDRY_CONTROL = "laundry_control"
-COMMON_LIMIT_CALLS = 5
-COMMON_LIMIT_PERIOD = 60
-LOGIN_LIMIT_CALLS = 1
+REGIONS = ["ru", "kz", "by"]
+
+# Login throttling: at most one login per LOGIN_LIMIT_PERIOD seconds,
+# after HTTP 429 wait LOGIN_LIMIT_429 seconds, doubling up to LOGIN_LIMIT_MAX.
 LOGIN_LIMIT_PERIOD = 15
-LOGIN_LIMIT_MAX = 900
 LOGIN_LIMIT_429 = 60
-LOGIN_LIMIT_500 = 60
-REFRESH_LIMIT_CALLS = 1
-REFRESH_LIMIT_PERIOD = 15
-REFRESH_LIMIT_MAX = 900
-REFRESH_LIMIT_429 = 60
-REFRESH_LIMIT_500 = 60
-API_TIMEOUT = 15
-# Tokens: the access token is renewed TOKEN_MARGIN before it expires, an auth
-# answer without a readable expiry counts as valid for TOKEN_FALLBACK_TTL. A
-# token issued less than TOKEN_FRESH s ago and refused anyway is tried once more
-# after TOKEN_RETRY_DELAY s (the IoT backend learns new tokens with a delay).
-TOKEN_MARGIN = timedelta(seconds=60)
-TOKEN_FALLBACK_TTL = timedelta(hours=1)
+LOGIN_LIMIT_MAX = 900
+# Tokens: a token issued less than TOKEN_FRESH s ago and refused anyway is
+# tried once more as is after TOKEN_RETRY_DELAY s, without renewing it: the IoT
+# backend learns new tokens with a delay (as in 1.7).
 TOKEN_FRESH = 30
 TOKEN_RETRY_DELAY = 3
-# HTTP: a part of new TCP connections to iot-platform gets no SYN-ACK, so the
-# connect timeout is short and connection errors are retried (reads only for GET).
+
+# HTTP, as in 1.7: a part of new TCP connections to iot-platform gets no
+# SYN-ACK, so the connect timeout is short and a connection that was not
+# established is tried API_CONNECT_RETRIES times more (the request never left:
+# safe for the sign-in too). A dropped or timed out answer is tried
+# API_READ_RETRIES times more, for GET only. The pauses grow from
+# API_RETRY_BACKOFF s, doubling.
 API_CONNECT_TIMEOUT = 5
 API_READ_TIMEOUT = 15
 API_CONNECT_RETRIES = 3
 API_READ_RETRIES = 2
+API_RETRY_BACKOFF = 0.5
 API_PATH = "https://evo.haieronline.ru"
 API_LOGIN = "v2/{region}/users/auth/sign-in"
 API_TOKEN_REFRESH = "v2/{region}/users/auth/refresh"
 API_DEVICES = "v2/{region}/pages/sduiRawPaginated/smartHome?part=1&partitionWeight=6"
 API_STATUS = "https://iot-platform.evo.haieronline.ru/mobile-backend-service/api/v1/config/{mac}?type=DETAILED"
 API_WS_PATH = "wss://iot-platform.evo.haieronline.ru/gateway-ws-service/ws/"
-# WebSocket: TCP connect + TLS + upgrade must finish in WS_CONNECT_TIMEOUT s,
-# a ping is sent every WS_PING_INTERVAL s and a missing pong drops the socket.
+
+# WebSocket: ping every WS_HEARTBEAT s, a missing pong closes the socket.
+WS_HEARTBEAT = 30
+# TCP + TLS + upgrade must finish in this time: a stuck handshake used to hold
+# the connection (and every command waiting for it) for up to aiohttp's 300 s.
 WS_CONNECT_TIMEOUT = 10
-# the close code the gateway ends a connection with when it refuses the token
-WS_CLOSE_TOKEN_REFUSED = 1007
-WS_PING_INTERVAL = 15
-WS_PING_TIMEOUT = 10
-# A command waits up to WS_SEND_WAIT s for the socket to (re)connect and
-# WS_ACK_TIMEOUT s for command_response, then it is re-sent once on a new socket.
-WS_SEND_WAIT = 20
-WS_ACK_TIMEOUT = 6
-# One command never holds an executor thread longer than WS_COMMAND_BUDGET s,
-# and at most WS_MAX_PENDING_COMMANDS wait at once (others fail after WS_SLOT_WAIT s).
-WS_COMMAND_BUDGET = 30
-# After the websocket was down this long (s), the state of every device is
-# read again: changes made meanwhile (remote, app) sent no event to us.
-WS_RESYNC_AFTER = 30
-# Without the websocket for this long (s), the entities go unavailable: the
-# state they show may be stale by then.
+# How long a command waits for the socket to come back.
+WS_SEND_TIMEOUT = 15
+# Reconnect backoff, reset after a connection that lived WS_STABLE_AFTER s.
+WS_BACKOFF_MIN = 2
+WS_BACKOFF_MAX = 60
+WS_STABLE_AFTER = 60
+# Entities go unavailable after this long without the cloud.
 WS_UNAVAILABLE_AFTER = 180
+# After an outage longer than this, re-read device statuses over REST.
+WS_RESYNC_AFTER = 30
+# Wait this long for command_response before re-sending a command once.
+WS_ACK_TIMEOUT = 10
+# A service call waits this long for command_response, so a refusal of the
+# cloud (non-zero errNo for values the unit does not have) reaches the UI as
+# an error. No answer by then: the call returns, the re-send and the read-back
+# go on in the background.
+WS_COMMAND_WAIT = 5
+# Safety net against a session that stays open but goes silent.
+REST_REFRESH_INTERVAL = timedelta(minutes=15)
+# The device list and descriptions are compared with the cloud this often: a
+# unit added in the app, or one the cloud now describes differently (new
+# firmware, attributes), reloads the entry (1.6).
+DEVICE_LIST_REFRESH_INTERVAL = timedelta(hours=6)
 # A session the cloud has sent nothing over for this long since it opened is
-# not served (the cloud pushes the state within seconds): it is replaced; the
-# WS_SILENT_SESSIONS_FRESH_TOKEN-th such session in a row with a renewed token.
+# accepted but not served (the cloud pushes statuses within seconds of an
+# opening): it is replaced. The timeout doubles with every silent session in a
+# row (up to 8x), the WS_SILENT_SESSIONS_FRESH_TOKEN-th one goes with a renewed token.
 WS_SILENT_SESSION_TIMEOUT = 60
 WS_SILENT_SESSIONS_FRESH_TOKEN = 2
-WS_MAX_PENDING_COMMANDS = 4
-WS_SLOT_WAIT = 1
-# How many setups in a row may retry because the cloud returned fewer devices
-# than the device registry knows before the integration starts with what it got.
+# The gateway may accept the upgrade and then close with this code
+# ("Auth token not valid!"): the token is refused.
+WS_CLOSE_TOKEN_REFUSED = 1007
+
+# Setups in a row that may retry because the cloud listed fewer devices than
+# the device registry knows, before the entry starts with what it got.
 SETUP_INCOMPLETE_RETRIES = 3
-# Tokens live in .storage/haier_evo.<entry_id> (0600, atomic writes).
-STORAGE_VERSION = 1
-# Device descriptions from the last good start live in
-# .storage/haier_evo.<entry_id>.devices: the next start builds the devices from
-# them at once and reads the fresh state in the background, retrying with a
-# growing pause up to CACHE_RETRY_MAX s; every CACHE_REFRESH_HOURS h they are
-# read again (state, firmware flag, changes made in the app).
+
+# Device descriptions of the last good start live in
+# .storage/haier_evo.<entry_id>.devices. When the cloud is not reachable at
+# start, the entry is built from them; the cloud is then polled (from
+# CACHE_RETRY_FIRST s, doubling up to CACHE_RETRY_MAX s) and the entry reloaded
+# from it once it answers. Statuses are written back CACHE_SAVE_DELAY s after
+# a refresh.
 CACHE_VERSION = 1
 CACHE_RETRY_FIRST = 5
 CACHE_RETRY_MAX = 300
-CACHE_REFRESH_HOURS = 6
-# Between those, the state of every device is read again every
-# STATE_REFRESH_MINUTES min: a session that stays open but stops delivering
-# events is not noticed by ping/pong.
-STATE_REFRESH_MINUTES = 15
-LEGACY_TOKENS_FILE = DOMAIN  # /config/haier_evo up to 1.1.x
+CACHE_SAVE_DELAY = 60

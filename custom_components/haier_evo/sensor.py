@@ -1,69 +1,41 @@
-import weakref
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
+from __future__ import annotations
+
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
+from homeassistant.const import UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
-from homeassistant.const import UnitOfTemperature
-from homeassistant.const import TEMPERATURE
-from .const import DOMAIN
+
 from . import api
-from .entity import HaierEntityMixin
+from .device_laundry import LAUNDRY_STATES
+from .entity import HaierEntity, async_setup_platform
 
 
-# sensors of earlier versions that are gone, by unique_id suffix: the outdoor
-# unit of 1.6.0 (code 38 does not change on AS25S2SF2FA)
-RETIRED_SENSORS = ("outdoor_temperature",)
+async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> None:
+    async_setup_platform(hass, config_entry, async_add_entities, "sensor")
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> bool:
-    haier_object = hass.data[DOMAIN][config_entry.entry_id]
-    entities = []
-    for device in haier_object.devices:
-        entities.extend(device.create_entities_sensor())
-    _remove_retired(hass, haier_object.devices)
-    if entities:
-        async_add_entities(entities)
-        haier_object.write_ha_state()
-    return True
-
-
-def _remove_retired(hass: HomeAssistant, devices) -> None:
-    """Drop sensors earlier versions created and this one no longer offers."""
-    registry = er.async_get(hass)
-    for device in devices:
-        for suffix in RETIRED_SENSORS:
-            unique_id = f"{device.device_id}_{device.device_model}_{suffix}"
-            if entity_id := registry.async_get_entity_id("sensor", DOMAIN, unique_id):
-                registry.async_remove(entity_id)
-
-
-class HaierSensor(HaierEntityMixin, SensorEntity):
+class HaierSensor(HaierEntity, SensorEntity):
 
     def __init__(self, device: api.HaierDevice):
-        self._device = weakref.proxy(device)
-        self._device_attr_name = None
+        super().__init__(device)
 
     @property
-    def device_info(self) -> dict:
-        return self._device.device_info
-
-    @property
-    def available(self) -> bool:
-        return self._device.available
-
-    @property
-    def native_value(self) -> float:
-        return getattr(self._device, self._device_attr_name, 0.0)
+    def native_value(self):
+        return getattr(self._device, self._device_attr_name, None)
 
 
 class HaierREFTemperatureSensor(HaierSensor):
-    _attr_device_class = TEMPERATURE
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
     def __init__(self, device: api.HaierREF):
         super().__init__(device)
         self._device_attr_name = "current_temperature"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_temperature"
-        self._attr_name = f"{device.device_name} Температура в помещении"
+        self._attr_name = "Температура в помещении"
 
 
 class HaierREFFridgeTemperatureSensor(HaierREFTemperatureSensor):
@@ -72,7 +44,7 @@ class HaierREFFridgeTemperatureSensor(HaierREFTemperatureSensor):
         super().__init__(device)
         self._device_attr_name = "current_fridge_temperature"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_fridge_temperature"
-        self._attr_name = f"{device.device_name} Температура холодильной камеры"
+        self._attr_name = "Температура холодильной камеры"
 
 
 class HaierREFFreezerTemperatureSensor(HaierREFTemperatureSensor):
@@ -81,7 +53,7 @@ class HaierREFFreezerTemperatureSensor(HaierREFTemperatureSensor):
         super().__init__(device)
         self._device_attr_name = "current_freezer_temperature"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_freezer_temperature"
-        self._attr_name = f"{device.device_name} Температура морозильной камеры"
+        self._attr_name = "Температура морозильной камеры"
 
 
 class HaierREFFridgeModeSensor(HaierREFTemperatureSensor):
@@ -90,11 +62,11 @@ class HaierREFFridgeModeSensor(HaierREFTemperatureSensor):
         super().__init__(device)
         self._device_attr_name = "fridge_mode"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_fridge_mode"
-        self._attr_name = f"{device.device_name} Режим холодильной камеры"
+        self._attr_name = "Режим холодильной камеры"
 
     @property
-    def native_value(self) -> float:
-        return float(getattr(self._device, self._device_attr_name, 0.0))
+    def native_value(self) -> float | None:
+        return api.parsefloat(getattr(self._device, self._device_attr_name, None))
 
 
 class HaierREFFreezerModeSensor(HaierREFFridgeModeSensor):
@@ -103,7 +75,7 @@ class HaierREFFreezerModeSensor(HaierREFFridgeModeSensor):
         super().__init__(device)
         self._device_attr_name = "freezer_mode"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_freezer_mode"
-        self._attr_name = f"{device.device_name} Режим морозильной камеры"
+        self._attr_name = "Режим морозильной камеры"
 
 
 class HaierWMRemainingTimeSensor(HaierSensor):
@@ -112,7 +84,7 @@ class HaierWMRemainingTimeSensor(HaierSensor):
         super().__init__(device)
         self._device_attr_name = "remaining_time"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_remaining_time"
-        self._attr_name = f"{device.device_name} Оставшееся время"
+        self._attr_name = "Оставшееся время"
         self._attr_native_unit_of_measurement = "мин"
 
 
@@ -122,89 +94,83 @@ class HaierWMStatusSensor(HaierSensor):
         super().__init__(device)
         self._device_attr_name = "status"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_status"
-        self._attr_name = f"{device.device_name} Статус"
+        self._attr_name = "Статус"
 
     @property
-    def native_value(self) -> str:
-        return str(getattr(self._device, self._device_attr_name, "unknown"))
-
-
-class HaierWHTemperatureSensor(HaierSensor):
-    _attr_device_class = SensorDeviceClass.TEMPERATURE
-    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, device: api.HaierWH):
-        super().__init__(device)
-        self._device_attr_name = "current_temperature"
-        self._attr_unique_id = f"{device.device_id}_{device.device_model}_temperature"
-        self._attr_name = f"{device.device_name} Температура воды"
-
-    @property
-    def native_value(self) -> float | None:
-        return self._device.current_temperature
+    def native_value(self) -> str | None:
+        value = getattr(self._device, self._device_attr_name, None)
+        return None if value is None else str(value)
 
 
 class HaierACTemperatureSensor(HaierSensor):
+    """The room temperature (sensors.indoorTemperature) as a sensor of its own (1.6)."""
+
     _attr_device_class = SensorDeviceClass.TEMPERATURE
-    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
     def __init__(self, device: api.HaierAC):
         super().__init__(device)
         self._device_attr_name = "current_temperature"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_temperature"
-        self._attr_name = f"{device.device_name} Температура в комнате"
+        self._attr_name = "Температура в комнате"  # as in 1.x
 
-    @property
-    def native_value(self) -> float | None:
-        return self._device.current_temperature
+
+class HaierWHTemperatureSensor(HaierSensor):
+    """The water temperature of a water heater (1.0)."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+
+    def __init__(self, device: api.HaierDevice):
+        super().__init__(device)
+        self._device_attr_name = "current_temperature"
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_temperature"
+        self._attr_name = "Температура воды"
 
 
 class HaierLaundrySensor(HaierSensor):
-    """A washer or dryer value; the device knows it under self._device_attr_name."""
+    """A value of a washer or dryer (1.6.4)."""
 
-    def __init__(self, device: api.HaierLaundry, attr: str, suffix: str, name: str) -> None:
+    def __init__(self, device: api.HaierDevice, attr: str, suffix: str, name: str) -> None:
         super().__init__(device)
-        self._laundry_attr = attr
+        self._device_attr_name = attr
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_{suffix}"
-        self._attr_name = f"{device.device_name} {name}"
-
-    @property
-    def native_value(self):
-        return getattr(self._device, self._laundry_attr, None)
+        self._attr_name = name
 
 
 class HaierLaundryStateSensor(HaierLaundrySensor):
     """off / idle / running / paused / finished / cancelled: an automation on
     "finished" tells that the washing is done."""
+
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = list(api.LAUNDRY_STATES)
+    _attr_options = list(LAUNDRY_STATES)
     _attr_translation_key = "laundry_state"
     _attr_icon = "mdi:washing-machine"
 
-    def __init__(self, device: api.HaierLaundry) -> None:
+    def __init__(self, device: api.HaierDevice) -> None:
         super().__init__(device, "state", "state", "Состояние")
 
 
 class HaierLaundryProgramSensor(HaierLaundrySensor):
     _attr_icon = "mdi:format-list-bulleted"
 
-    def __init__(self, device: api.HaierLaundry) -> None:
+    def __init__(self, device: api.HaierDevice) -> None:
         super().__init__(device, "program_title", "program", "Программа")
 
 
 class HaierLaundryPhaseSensor(HaierLaundrySensor):
     _attr_icon = "mdi:progress-clock"
 
-    def __init__(self, device: api.HaierLaundry) -> None:
+    def __init__(self, device: api.HaierDevice) -> None:
         super().__init__(device, "phase", "phase", "Этап")
 
 
 class HaierLaundryRemainingTimeSensor(HaierLaundrySensor):
     _attr_device_class = SensorDeviceClass.DURATION
-    _attr_native_unit_of_measurement = "min"
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_icon = "mdi:timer-sand"
 
-    def __init__(self, device: api.HaierLaundry) -> None:
+    def __init__(self, device: api.HaierDevice) -> None:
         super().__init__(device, "remaining_time", "remaining_time", "Осталось")

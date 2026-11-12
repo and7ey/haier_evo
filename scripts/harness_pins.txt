@@ -1,0 +1,10 @@
+# The test harness (pytest-homeassistant-custom-component) the tests run with,
+# per Home Assistant release: the runs are reproducible, a new harness release
+# does not change them. scripts/install_test_env.py reads this file; a release
+# that is not here (a new one, a beta, the nightly build) gets the newest
+# harness that fits from PyPI, with a warning, until it is added here.
+# Home Assistant   harness    the Home Assistant that harness pins
+2026.9.4           0.13.367   2026.9.4
+2026.10.4          0.13.375   2026.10.4
+2026.11.0          0.13.375   2026.10.4
+2026.11.1          0.13.375   2026.10.4

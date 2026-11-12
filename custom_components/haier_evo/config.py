@@ -1,18 +1,24 @@
 from __future__ import annotations
+
 import filecmp
 import os
 import re
 from os.path import dirname, exists, join
-from homeassistant.util.yaml import load_yaml
-from .logger import _LOGGER
-from . import devices as config_dir
+from typing import Any
 
+from homeassistant.util.yaml import load_yaml
+
+from . import devices as config_dir
+from .logger import _LOGGER
+
+# The model comes from the cloud and becomes a part of a file name (1.7).
 SAFE_MODEL = re.compile(r"[A-Za-z0-9()_.-]{1,32}")
 
 # The Haier app draws its louver screens from modes.itemsV2 of the device
-# config: groups (auto / direction / comfort flow) with the angle or the side
-# of every position. The flat attribute list only has firmware names such as
-# "Второе положение поворота", so the positions are named from these screens.
+# description: groups (auto / direction / comfort flow) with the angle or the
+# side of every position. The flat attribute list only has firmware names such
+# as "Второе положение поворота", so the positions are named from these
+# screens (1.3).
 LOUVER_SCREENS = {
     "windDirectionVertical": "swing_mode",
     "windDirectionHorizontal": "swing_horizontal_mode",
@@ -31,8 +37,8 @@ LOUVER_SIDES = {
 LOUVER_ANGLE = re.compile(r"\d{1,3}")
 
 
-def _louver_group(kind: str, body) -> list[tuple[str, str | None]]:
-    """(value code, key) of one group of a louver screen; key None = no name for it."""
+def _louver_group(kind: str, body: Any) -> list[tuple[str, str | None]]:
+    """(value code, key) of one group of a louver screen; key None: no name for it."""
     if not isinstance(body, dict):
         return []
     if body.get("value") not in (None, ""):
@@ -52,22 +58,25 @@ def _louver_group(kind: str, body) -> list[tuple[str, str | None]]:
     return [(code, f"angle_{angle}") for angle, code in sorted(angles)] + others
 
 
-def app_screens(data) -> dict[str, str]:
+def _screen_blocks(data: Any) -> list:
+    modes = data.get("modes") if isinstance(data, dict) and isinstance(data.get("modes"), dict) else {}
+    blocks = modes.get("itemsV2") or modes.get("items") or []
+    return list(blocks) if isinstance(blocks, list) else []
+
+
+def app_screens(data: Any) -> dict[str, str]:
     """Attributes the Haier app has a control for: {attribute code: the app's title}.
 
     The app builds its screens from modes.itemsV2 (louvers, cleaning, display
     light...) and top-level blocks such as muteStatus ("Тихий"). Empty when
-    the description has no screens (the integration then shows everything).
-    The flat attribute list sometimes names an attribute differently, e.g.
-    31 "Авто влажность" is "Самоочистка" in the app.
+    the description has no screens: then nothing is known to be missing, and
+    everything is shown. The flat attribute list sometimes names an attribute
+    otherwise, e.g. 31 "Авто влажность" is "Самоочистка" in the app.
     """
-    screens = {}
-    if not isinstance(data, dict):
-        return screens
-    modes = data.get("modes") if isinstance(data.get("modes"), dict) else {}
-    blocks = list(modes.get("itemsV2") or modes.get("items") or [])
+    screens: dict[str, str] = {}
+    blocks = _screen_blocks(data)
     if not blocks:
-        return screens  # no screens described: nothing is known to be missing
+        return screens
     blocks += [v for k, v in data.items() if k != "modes" and isinstance(v, dict)]
     for block in blocks:
         if not isinstance(block, dict) or not isinstance(block.get("value"), dict):
@@ -79,12 +88,10 @@ def app_screens(data) -> dict[str, str]:
     return screens
 
 
-def louver_layout(modes) -> dict[str, list[tuple[str, str | None]]]:
+def louver_layout(data: Any) -> dict[str, list[tuple[str, str | None]]]:
     """Louver positions the app offers: {attribute code: [(value code, key)]} in app order."""
-    layout = {}
-    if not isinstance(modes, dict):
-        return layout
-    for item in modes.get("itemsV2") or modes.get("items") or []:
+    layout: dict[str, list[tuple[str, str | None]]] = {}
+    for item in _screen_blocks(data):
         try:
             screen = item["value"]["description"]
             attr_code = str(item["value"]["name"])
@@ -109,7 +116,7 @@ def louver_layout(modes) -> dict[str, list[tuple[str, str | None]]]:
     return layout
 
 
-class HaierDeviceConfig(object):
+class HaierDeviceConfig:
 
     def __init__(self, model: str, userpath: str = "") -> None:
         self._model = model
@@ -134,28 +141,27 @@ class HaierDeviceConfig(object):
 
     def _find_config_file(self) -> str:
         _CONFIG_DIR = dirname(config_dir.__file__)
-        # the model name comes from the cloud and becomes part of file names
         if not SAFE_MODEL.fullmatch(self._model or "") or ".." in self._model:
             _LOGGER.warning("Unexpected device model %r, using the default profile", self._model)
             return join(_CONFIG_DIR, 'default') + '.yaml'
         fname = join(_CONFIG_DIR, self._model) + '.yaml'
         if not exists(fname):
             fname = join(_CONFIG_DIR, 'default') + '.yaml'
-        # /config/haier_evo.<MODEL>.yaml still overrides the bundled profile,
-        # but it is no longer made automatically: up to 1.5.2 every start
-        # copied the bundled one there, and the copy then won over every fix
-        # of the profile in later releases
+        # A user override (/config/haier_evo.<MODEL>.yaml) still wins, but it is
+        # no longer created automatically: the copy froze the bundled profile
+        # forever, so fixes in new releases never reached the user.
         userfname = f"{self._userpath}.{self._model}.yaml"
         if not self._userpath or not exists(userfname):
             return fname
         try:
             if filecmp.cmp(userfname, fname, shallow=False):
-                # such an automatic copy: nothing of the user's is lost
+                # Such an automatic copy of versions up to 0.3.15 / 1.5.2: nothing
+                # of the user's is lost, and the bundled profile gets its fixes.
                 os.remove(userfname)
                 _LOGGER.info("Removed %s, a copy of the bundled profile", userfname)
                 return fname
-        except OSError as e:
-            _LOGGER.warning("Failed to compare %s with the bundled profile: %s", userfname, e)
+        except OSError as err:
+            _LOGGER.warning("Failed to compare %s with the bundled profile: %s", userfname, err)
         _LOGGER.info("Using the profile %s instead of the bundled one", userfname)
         return userfname
 
@@ -164,7 +170,7 @@ class HaierDeviceConfig(object):
         try:
             self._config = load_yaml(fname) or {}
         except Exception as e:
-            _LOGGER.error(f"Failed to load config: {e}")
+            _LOGGER.error("Failed to load config %s: %s", fname, e)
             self._config = {}
         else:
             _LOGGER.debug("Loaded device config %s", fname)
@@ -182,8 +188,6 @@ class HaierDeviceConfig(object):
         ), None)
 
     def get_attrs_by_code(self, code: str | int) -> list[Attribute]:
-        """Every attribute with this code: an AC has "Тихий" twice (the
-        preset_mode_sleep preset and the quiet switch), "Турбо" too."""
         return [a for a in self.attrs if str(a.code) == str(code)]
 
     def get_attr_by_name(self, name: str) -> Attribute | None:
@@ -204,6 +208,7 @@ class HaierDeviceConfig(object):
 
     def get_values(self, name: str) -> list[str]:
         attr = self.get_attr_by_name(name)
+        # hidden: a position the app does not offer (louver_layout), still decoded
         return [i.name for i in attr.list if i.name != "unknown" and not i.hidden] if attr else []
 
     def get_code_by_name(self, name: str) -> str | None:
@@ -279,16 +284,51 @@ class HaierACConfig(HaierDeviceConfig):
         return bool(self.get_preset_modes())
 
     def get_custom_preset_modes(self) -> list[str]:
-        modes = self._config.get('preset_modes')
-        if isinstance(modes, list) and modes and all(m and isinstance(m, str) for m in modes):
+        try:
+            modes = self._config.get('preset_modes')
+            assert isinstance(modes, list)
+            assert len(modes) > 0
+            assert all((m and isinstance(m, str)) for m in modes)
             return modes
-        return []
+        except AssertionError:
+            return []
 
     def get_preset_modes(self) -> list[str]:
         return self.get_custom_preset_modes() + [
             a.name.replace("preset_mode_", "")
             for a in filter(lambda a: a.name.startswith("preset_mode"), self.attrs)
         ]
+
+    def apply_louver_layout(self, data: Any) -> None:
+        """Name louver positions as the app does and hide the ones it does not offer.
+
+        Positions of a model profile with its own mappings stay as the profile
+        sets them. A hidden position still decodes, so a unit left there (say,
+        by the IR remote) shows it.
+        """
+        profile = {a.name for a in self.get_config_attributes() if a.list}
+        for code, positions in louver_layout(data).items():
+            attr = self.get_attr_by_code(code)
+            if attr is None or attr.name not in LOUVER_SCREENS.values() or attr.name in profile:
+                continue
+            # copies: the cloud's description is kept (and saved) as it came
+            values = attr.get("list") if isinstance(attr.get("list"), dict) else {}
+            raw = {
+                str(i.get("data")): dict(i)
+                for i in values.get("data") or [] if isinstance(i, dict)
+            }
+            shown = []
+            for value, key in positions:
+                if (item := raw.pop(value, None)) is None:
+                    continue
+                if key:
+                    item["key"] = key
+                shown.append(item)
+            if not shown:
+                continue
+            for item in raw.values():
+                item["hidden"] = True
+            attr["list"] = dict(values, data=shown + list(raw.values()))
 
     def extend_attributes(self) -> None:
         if (attr := self.get_attr_by_name("preset_mode_sleep")) and not self["quiet"]:
@@ -307,33 +347,6 @@ class HaierACConfig(HaierDeviceConfig):
             attr_copy = attr.copy()
             attr_copy.update(attrname="preset_mode_boost")
             self.attrs.append(Attribute(attr_copy))
-
-    def apply_louver_layout(self, modes) -> None:
-        """Name louver positions as the app does and hide the ones it does not offer.
-
-        Positions of a model profile with its own mappings stay as the profile
-        sets them. A hidden position still decodes, so a unit left there (say,
-        by the IR remote) shows it.
-        """
-        profile = {a.name for a in self.get_config_attributes() if a.list}
-        for code, positions in louver_layout(modes).items():
-            attr = self.get_attr_by_code(code)
-            if attr is None or attr.name not in LOUVER_SCREENS.values() or attr.name in profile:
-                continue
-            # copies: the cloud's description is kept (and saved) as it came
-            raw = {str(i.get("data")): dict(i) for i in (attr.get("list") or {}).get("data") or []}
-            shown = []
-            for value, key in positions:
-                if (item := raw.pop(value, None)) is None:
-                    continue
-                if key:
-                    item["key"] = key
-                shown.append(item)
-            if not shown:
-                continue
-            for item in raw.values():
-                item["hidden"] = True
-            attr["list"] = dict(attr.get("list") or {}, data=shown + list(raw.values()))
 
 
 class HaierREFConfig(HaierDeviceConfig):
@@ -423,7 +436,7 @@ class Attribute(dict):
             "Температура": "temperature",
             "Скорость отжима": "spin_speed",
             "Оставшееся время": "remaining_time",
-            # Водонагреватели:
+            # Водонагреватели (1.0):
             "Текущая температура": "current_temperature",
             "Режим нагрева": "heating_mode",
             "Поддержка температуры/обогрев": "heating_status",
@@ -450,7 +463,7 @@ class Attribute(dict):
             "description": self.description,
             "current": self.current,
             "range": _range.to_dict() if _range else None,
-            "list": [l.to_dict() for l in self.list],
+            "list": [item.to_dict() for item in self.list],
         }
 
     @property
@@ -482,45 +495,71 @@ class Attribute(dict):
 
     @property
     def type(self) -> str:
-        return self.get("type", "").lower()
+        return str(self.get("type") or "").lower()
 
     @property
     def list(self) -> list[Item]:
-        data = self.get("list", {}).get("data")
-        return [Item.create(self.name, v) for v in data] if data else []
+        # "list": null and junk entries read as "no list".
+        values = self.get("list")
+        data = values.get("data") if isinstance(values, dict) else None
+        if not isinstance(data, list):
+            return []
+        # read for every value of every push: the items are made once per list
+        key = (id(data), len(data), self.name)
+        cached = self.__dict__.get("_items")
+        if cached is None or cached[0] != key or cached[1] is not data:
+            cached = (key, data, [Item.create(self.name, v) for v in data if isinstance(v, dict)])
+            self.__dict__["_items"] = cached
+        return list(cached[2])
 
     @list.setter
     def list(self, value) -> None:
-        self.setdefault("list", {})["data"] = value
+        if not isinstance(self.get("list"), dict):
+            self["list"] = {}
+        self["list"]["data"] = value
 
     @property
     def range(self) -> Range | None:
         value = self.get("range")
-        return Range(value) if value else None
+        return Range(value) if value and isinstance(value, dict) else None
 
     @range.setter
     def range(self, value: dict) -> None:
         self["range"] = value
 
-    def get_item_code(self, name: str, default=None) -> str | None:
-        """Code of a value by its name; default for a name the description does not list.
-
-        Up to 1.5.3 an unknown name became the string "None", which then went
-        to the device as a command value.
-        """
-        item = next(filter(lambda i: str(i.name) == str(name), self.list), None)
+    def get_item_code(self, name: str, default: str | None = None) -> str | None:
+        item = next((i for i in self.list if str(i.name) == str(name)), None)
         if item is None or item.value is None:
-            return None if default is None else str(default)
+            return default
         return str(item.value)
 
-    def get_item_name(self, code: str, default=None) -> str | None:
-        """Name of a value; default (None) for a code the description does not list.
+    def get_item_name(self, code: str, default: str | None = None) -> str | None:
+        """Name for a raw value; None for an unknown one.
 
-        Up to 1.5.0 an unknown code became the string "None", which reached
-        Home Assistant as a mode or option name.
+        It used to return the string "None", which ended up in HA as
+        `'None' is not a valid HVACMode` (#61, #73).
         """
-        item = next(filter(lambda i: str(i.value) == str(code), self.list), None)
-        return default if item is None else str(item.name)
+        items = self.list
+        if not items:
+            return str(code) if code is not None else default
+        item = next((i for i in items if str(i.value) == str(code)), None)
+        if item is None:
+            # Lists say "1"/"0" where some messages say "true"/"false".
+            norm = norm_value(code)
+            item = next((i for i in items if str(i.value) == norm), None)
+        if item is None or item.name in (None, "unknown"):
+            return default
+        return str(item.name)
+
+
+_BOOL_NAMES = {"true": "1", "on": "1", "false": "0", "off": "0"}
+
+
+def norm_value(value: Any) -> str:
+    """A raw value to compare with another: modifiers and some messages say
+    "true" or "on" where the lists and the unit say "1"."""
+    text = str(value).strip().lower()
+    return _BOOL_NAMES.get(text, text)
 
 
 class Range(dict):
@@ -547,7 +586,8 @@ class Range(dict):
 
     @property
     def data(self) -> dict:
-        return self.get("data", {})
+        data = self.get("data")
+        return data if isinstance(data, dict) else {}
 
     @property
     def min_value(self) -> int | float | str | None:
@@ -583,7 +623,6 @@ class Item(dict):
             f"{self.name}("
             f"{self.value},"
             f"desc={self.description!r}"
-            f"{',hidden' if self.hidden else ''}"
             f")"
         )
 
@@ -602,6 +641,8 @@ class Item(dict):
     @property
     def value(self) -> str | None:
         value = self.get("data")
+        if isinstance(value, dict | list):
+            return None  # junk in a list of values: it matches nothing
         return {
             "true": "1",
             "false": "0",
@@ -682,7 +723,7 @@ class EcoSensor(Item):
 
 class HeatingMode(Item):
     # Eco heats half of the tank, Max the whole tank (names as in the Evo app).
-    # The device reports "Не установлен" while sterilization (BPS) is running.
+    # The heater reports "Не установлен" while sterilization (BPS) runs.
     mappings = {
         "Не установлен": "none",
         "Половинка": "eco",
@@ -698,11 +739,19 @@ class HeatingStatus(Item):
 
 
 class Temperature(Item):
+    # Own dict: setdefault() below used to grow the shared Item.mappings.
+    # The two shared names stay: fridge zones list "Выключен" among temperatures.
+    mappings: dict[str, str] = {"Выключен": "off", "Активен": "on"}
+
     def __init__(self, data: dict) -> None:
         description = (data.get("name") or "").strip()
-        # a copy for this item: up to 1.7.0 the names came into Item.mappings,
-        # shared by every device of every entry, and piled up there
-        self.mappings = {description: description.replace("℃", "").strip(), **type(self).mappings}
+        # Per instance: the class dict grew with every description seen, and the
+        # next fridge in the process took them over.
+        self.mappings = dict(self.mappings)
+        self.mappings.setdefault(
+            description,
+            description.replace("℃", "").strip()
+        )
         super().__init__(data)
 
 
@@ -734,21 +783,21 @@ class Constraint(list):
         command_value = command.get("value")
         additionals = []
         for item in self:
-            cond = item.get("pendingCondition", {})
-            for cond_command in cond.get("commands", []):
+            cond = item.get("pendingCondition") or {}
+            for cond_command in cond.get("commands") or []:
                 if command_code != cond_command.get("commandName"):
                     continue
-                values = [self.value2code(x) for x in cond_command.get("values")]
+                values = [self.value2code(x) for x in cond_command.get("values") or []]
                 if command_value not in values:
                     continue
-                additionals.append(item.get("additionalCommands", {}))
+                additionals.append(item.get("additionalCommands") or {})
         return additionals
 
     def merge_commands(self, command: dict, additionals: list[dict]) -> list[dict]:
         commands = {"PREPEND": [], "APPEND": []}
         for additional in additionals:
             merge_type = additional.get("mergeType")
-            additional_commands = [self.format_command(x) for x in additional.get("commands", [])]
+            additional_commands = [self.format_command(x) for x in additional.get("commands") or []]
             target = commands.get(merge_type, [])
             target.extend(filter(
                 lambda c: c not in target,
@@ -758,108 +807,9 @@ class Constraint(list):
 
     @staticmethod
     def value2code(value: str) -> str:
+        # what is sent, not compared (not norm_value): the cloud's commands say
+        # "true"/"false" where the unit wants "1"/"0"; anything else goes as
+        # the cloud wrote it
+        if isinstance(value, dict | list):
+            return value
         return {"true": "1", "false": "0"}.get(value, value)
-
-
-class Modifiers(list):
-    """Cloud rules ("modifiers") that make attributes read-only for a while.
-
-    Every rule has a trigger (attribute values and/or active alarms) and
-    actions. An action with "W" in rewriteFields and writable=false means
-    the attribute must not be written while the trigger holds: the Evo app
-    greys such controls out and the device ignores commands for them.
-    Example (water heater): while it is off ("35" == false) the target
-    temperature, the mode and sterilization cannot be changed.
-    """
-
-    ALARM = "alarm"
-
-    def __init__(self, data: list | None) -> None:
-        # a rule the code cannot read is left out (up to 1.6.2 one such rule
-        # broke the locks, and with them every command, of its device)
-        rules = [r for r in (data if isinstance(data, list) else []) if isinstance(r, dict)]
-        super().__init__(sorted(rules, key=self._priority))
-
-    @staticmethod
-    def _priority(rule: dict) -> int:
-        try:
-            return int(rule.get("priority") or 0)
-        except (TypeError, ValueError):
-            return 0
-
-    @staticmethod
-    def _actions(rule: dict) -> list[dict]:
-        actions = rule.get("actions")
-        return [a for a in actions if isinstance(a, dict)] if isinstance(actions, list) else []
-
-    def locked(self, values: dict[str, str], alarms: set[str]) -> dict[str, str]:
-        """Return {attribute code: reason} for attributes that are read-only now.
-
-        The reason is either ALARM or the code of the attribute whose value
-        fired the rule. Rules are applied by ascending priority and the first
-        firing rule that rewrites a field decides it.
-        """
-        locked = {}
-        decided = set()
-        for rule in self:
-            reason = self._fired(rule.get("trigger"), values, alarms)
-            if reason is None:
-                continue
-            for action in self._actions(rule):
-                code = str(action.get("name"))
-                if "W" not in str(action.get("rewriteFields") or "") or code in decided:
-                    continue
-                decided.add(code)
-                if action.get("writable") is False:
-                    locked[code] = reason
-        return locked
-
-    def allowed(self, values: dict[str, str], alarms: set[str]) -> dict[str, tuple[set[str], list[str]]]:
-        """Return {attribute code: (allowed values, their cloud names)} restricted right now.
-
-        "V" actions narrow the value list, e.g. fan speed without "auto" in
-        fan-only mode. The first firing rule by priority decides a field.
-        """
-        allowed = {}
-        for rule in self:
-            if self._fired(rule.get("trigger"), values, alarms) is None:
-                continue
-            for action in self._actions(rule):
-                code = str(action.get("name"))
-                if "V" not in str(action.get("rewriteFields") or "") or code in allowed:
-                    continue
-                value_range = action.get("valueRange")
-                listed = value_range.get("list") if isinstance(value_range, dict) else None
-                items = listed.get("data") if isinstance(listed, dict) else None
-                items = [i for i in (items if isinstance(items, list) else []) if isinstance(i, dict) and i.get("data") is not None]
-                if items:
-                    allowed[code] = (
-                        {Constraint.value2code(str(i["data"])) for i in items},
-                        [str(i.get("name") or i["data"]) for i in items],
-                    )
-        return allowed
-
-    @classmethod
-    def _fired(cls, trigger, values: dict[str, str], alarms: set[str]) -> str | None:
-        if not isinstance(trigger, dict):
-            return None
-        conditions = trigger.get("conditions")
-        conditions = conditions.get("condition") if isinstance(conditions, dict) else None
-        results = []
-        for cond in conditions if isinstance(conditions, list) else []:
-            if not isinstance(cond, dict):
-                continue
-            code = str(cond.get("mode"))
-            listed = cond.get("values")
-            expected = {Constraint.value2code(str(v)) for v in (listed if isinstance(listed, list) else [])}
-            actual = values.get(code)
-            matched = actual is not None and Constraint.value2code(str(actual)) in expected
-            results.append((matched, code))
-        listed = trigger.get("alarms")
-        if trigger_alarms := {str(a) for a in (listed if isinstance(listed, list) else []) if isinstance(a, (str, int))}:
-            results.append((bool(trigger_alarms & alarms), cls.ALARM))
-        if not results:
-            return None
-        if str(trigger.get("operator") or "AND").upper() == "OR":
-            return next((reason for matched, reason in results if matched), None)
-        return results[0][1] if all(matched for matched, _ in results) else None
