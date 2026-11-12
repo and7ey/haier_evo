@@ -1,0 +1,37 @@
+{
+  "source": "Home Assistant history and cloud declaration; same-second entity writes coalesced, projected observations not raw push packets",
+  "model": "HW90B14367U",
+  "care": {
+    "freshAirSystemAttrValue": "16",
+    "title": "Fresh Air System",
+    "subtitle": "Этап «Fresh Air System» позволяет сохранить свежесть вещей после окончания стирки",
+    "approximateTime": "До 12 часов после стирки",
+    "hint": "Позволяет сохранить свежесть вещей после окончания стирки. Этап работы данной функции можно прервать в любой момент, отменив программу и отключив удалённое управление."
+  },
+  "observations": [
+    {
+      "seconds": 0,
+      "native_state": "running",
+      "phase": "11",
+      "remaining_minutes": 7
+    },
+    {
+      "seconds": 410,
+      "native_state": "running",
+      "phase": "16",
+      "remaining_minutes": 1
+    },
+    {
+      "seconds": 430,
+      "native_state": "paused",
+      "phase": "16",
+      "remaining_minutes": 1
+    },
+    {
+      "seconds": 570,
+      "native_state": "off",
+      "phase": "0",
+      "remaining_minutes": 0
+    }
+  ]
+}

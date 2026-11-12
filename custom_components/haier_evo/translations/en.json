@@ -131,6 +131,25 @@
                     "cancelled": "Cancelled"
                 }
             }
+        },
+        "event": {
+            "laundry": {
+                "name": "Laundry events",
+                "state_attributes": {
+                    "event_type": {
+                        "name": "Event",
+                        "state": {
+                            "program_finished": "Program finished",
+                            "cycle_ended": "Activity ended",
+                            "program_cancelled": "Program cancelled",
+                            "care_started": "Post-program care started",
+                            "care_finished": "Post-program care ended",
+                            "error": "Device fault",
+                            "error_cleared": "Device fault cleared"
+                        }
+                    }
+                }
+            }
         }
     },
     "exceptions": {

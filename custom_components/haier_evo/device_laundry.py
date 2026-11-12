@@ -20,6 +20,7 @@ from homeassistant.helpers.event import async_call_later
 from . import config as CFG  # noqa: N812
 from . import const as C  # noqa: N812
 from .device import HaierCommandLocked, HaierCommandRejected, HaierDevice, _norm, device_part, parsefloat
+from .laundry_events import LaundryEvents
 
 # washing machines, washer-dryers and dryers
 LAUNDRY_TYPES = ("WM", "WD", "DRY", "TD")
@@ -232,6 +233,7 @@ class HaierLaundry(HaierDevice):
         self._start_sent_at: float | None = None
         self._cancel_start_pending: Callable[[], None] | None = None
         self._get_status(backend_data or {})
+        self.laundry_events = LaundryEvents(self)
 
     @staticmethod
     def describes(data: Any) -> bool:
@@ -373,6 +375,10 @@ class HaierLaundry(HaierDevice):
             elif data.get("status") in ("PROGRAM_STARTED", "PROGRAM_FINISHED"):
                 self.program_status = str(data["status"]).removeprefix("PROGRAM_").replace("STARTED", "IN_PROGRESS")
             self.changed_at = time.monotonic()
+            if data.get("status") == "PROGRAM_STARTED":
+                self.laundry_events.observe(started=True)
+            elif data.get("status") in ("PROGRAM_CANCELLED", "PROGRAM_CANCELED"):
+                self.laundry_events.observe(cancelled=True)
             self.notify()
         elif event == "alarms":
             alarms = _d(message_dict.get("payload")).get("alarms")
