@@ -1,52 +1,33 @@
-import weakref
+from __future__ import annotations
+
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
-from .const import DOMAIN
+
 from . import api
-from .entity import HaierEntityMixin
+from .entity import HaierEntity, async_setup_platform
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> bool:
-    haier_object = hass.data[DOMAIN][config_entry.entry_id]
-    entities = []
-    for device in haier_object.devices:
-        entities.extend(device.create_entities_select())
-    from .button import remove_control_entities
-    remove_control_entities(hass, haier_object.devices, "select", ["laundry_program"])
-    if entities:
-        async_add_entities(entities)
-        haier_object.write_ha_state()
-    return True
+async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> None:
+    async_setup_platform(hass, config_entry, async_add_entities, "select")
 
 
-class HaierSelect(HaierEntityMixin, SelectEntity):
-    _attr_should_poll = False
+class HaierSelect(HaierEntity, SelectEntity):
     _attr_icon = "mdi:format-list-bulleted"
 
     def __init__(self, device: api.HaierDevice) -> None:
-        self._device = weakref.proxy(device)
-        self._device_attr_name = None
-        self._attr_options = []
+        super().__init__(device)
+        self._attr_options: list[str] = []
 
     @property
-    def device_info(self) -> dict:
-        return self._device.device_info
-
-    @property
-    def available(self) -> bool:
-        return self._device.available
-
-    @property
-    def current_option(self) -> str:
-        return getattr(self._device, self._device_attr_name, None)
+    def current_option(self) -> str | None:
+        value = getattr(self._device, self._device_attr_name, None)
+        return value if value in self.options else None
 
     async def async_select_option(self, option: str) -> None:
-        await self.hass.async_add_executor_job(self.set_option, option)
-
-    def set_option(self, value) -> None:
         method = getattr(self._device, f"set_{self._device_attr_name}", None)
         if method is not None:
-            method(value)
+            await method(option)
+            self.async_write_ha_state()
 
 
 class HaierACEcoSensorSelect(HaierSelect):
@@ -56,7 +37,7 @@ class HaierACEcoSensorSelect(HaierSelect):
         super().__init__(device)
         self._device_attr_name = "eco_sensor"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_eco_sensor"
-        self._attr_name = f"{device.device_name} Эко-датчик"
+        self._attr_name = "Эко-датчик"
         self._attr_options = device.get_eco_sensor_options()
 
 
@@ -66,7 +47,7 @@ class HaierREFFridgeModeSelect(HaierSelect):
         super().__init__(device)
         self._device_attr_name = "fridge_mode"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_fridge_mode_select"
-        self._attr_name = f"{device.device_name} Режим холодильной камеры"
+        self._attr_name = "Режим холодильной камеры"
         self._attr_options = device.get_fridge_mode_options()
 
 
@@ -76,7 +57,7 @@ class HaierREFFreezerModeSelect(HaierSelect):
         super().__init__(device)
         self._device_attr_name = "freezer_mode"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_freezer_mode_select"
-        self._attr_name = f"{device.device_name} Режим морозильной камеры"
+        self._attr_name = "Режим морозильной камеры"
         self._attr_options = device.get_freezer_mode_options()
 
 
@@ -86,7 +67,7 @@ class HaierREFMyZoneSelect(HaierSelect):
         super().__init__(device)
         self._device_attr_name = "my_zone"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_my_zone"
-        self._attr_name = f"{device.device_name} My Zone"
+        self._attr_name = "My Zone"
         self._attr_options = device.get_my_zone_options()
 
 
@@ -96,7 +77,7 @@ class HaierWMProgramSelect(HaierSelect):
         super().__init__(device)
         self._device_attr_name = "program"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_program"
-        self._attr_name = f"{device.device_name} Программа"
+        self._attr_name = "Программа"
         self._attr_options = device.get_program_options()
 
 
@@ -106,7 +87,7 @@ class HaierWMTemperatureSelect(HaierSelect):
         super().__init__(device)
         self._device_attr_name = "temperature"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_temperature"
-        self._attr_name = f"{device.device_name} Температура"
+        self._attr_name = "Температура"
         self._attr_options = device.get_temperature_options()
 
 
@@ -116,33 +97,28 @@ class HaierWMSpinSpeedSelect(HaierSelect):
         super().__init__(device)
         self._device_attr_name = "spin_speed"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_spin_speed"
-        self._attr_name = f"{device.device_name} Скорость отжима"
+        self._attr_name = "Скорость отжима"
         self._attr_options = device.get_spin_speed_options()
 
 
-class HaierLaundryProgramSelect(HaierEntityMixin, SelectEntity):
-    """The program the start button runs (beta, washers and dryers): choosing
-    one sends nothing, the program starts only with the button."""
-    _attr_should_poll = False
+class HaierLaundryProgramSelect(HaierSelect):
+    """The program the start button runs (beta, washers and dryers, 1.7).
+
+    Choosing one sends nothing: the program starts only with the button.
+    """
+
     _attr_icon = "mdi:washing-machine"
 
-    def __init__(self, device: api.HaierLaundry) -> None:
-        self._device = weakref.proxy(device)
+    def __init__(self, device: api.HaierDevice) -> None:
+        super().__init__(device)
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_laundry_program"
-        self._attr_name = f"{device.device_name} Программа для запуска"
+        self._attr_name = "Программа для запуска"
         self._attr_options = [p["title"] for p in device.programs]
-
-    @property
-    def device_info(self) -> dict:
-        return self._device.device_info
-
-    @property
-    def available(self) -> bool:
-        return self._device.available
 
     @property
     def current_option(self) -> str | None:
         return self._device.selected_program
 
     async def async_select_option(self, option: str) -> None:
-        self._device.set_selected_program(option)  # nothing is sent: no I/O here
+        self._device.set_selected_program(option)
+        self.async_write_ha_state()

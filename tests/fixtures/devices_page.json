@@ -1,0 +1,28 @@
+{
+  "data": {
+    "presentation": {
+      "layout": {
+        "scrollContainer": [
+          {
+            "trackingData": {
+              "component": {
+                "componentId": "banner-1",
+                "componentName": "banner"
+              }
+            },
+            "state": "{}"
+          },
+          {
+            "trackingData": {
+              "component": {
+                "componentId": "72a6d224-cb66-4e6d-b427-2e4609252684",
+                "componentName": "deviceList"
+              }
+            },
+            "state": "{\"items\": [{\"title\": \"Кабинет\", \"action\": {\"link\": \"evo://device?type=AC&deviceId=00%3A00%3A5e%3A00%3A53%3A01&serialNum=TESTSERIAL0001\"}}, {\"title\": \"Зал\", \"action\": {\"link\": \"evo://device?type=AC&deviceId=00%3A00%3A5e%3A00%3A53%3A02&serialNum=TESTSERIAL0002\"}}]}"
+          }
+        ]
+      }
+    }
+  }
+}

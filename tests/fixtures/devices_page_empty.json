@@ -1,0 +1,19 @@
+{
+  "data": {
+    "presentation": {
+      "layout": {
+        "scrollContainer": [
+          {
+            "trackingData": {
+              "component": {
+                "componentId": "banner-1",
+                "componentName": "banner"
+              }
+            },
+            "state": "{}"
+          }
+        ]
+      }
+    }
+  }
+}

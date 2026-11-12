@@ -1,0 +1,10 @@
+{
+  "data": {
+    "token": {
+      "accessToken": "test-access-token",
+      "expire": "2099-01-01T00:00:00+03:00",
+      "refreshToken": "test-refresh-token",
+      "refreshExpire": "2099-02-01T00:00:00+03:00"
+    }
+  }
+}

@@ -2,7 +2,7 @@
 """Results of the checks in CI: job summaries, annotations and the README badges.
 
 The reports come from scripts/run_checks.sh (CHECKS_REPORT, JSON lines, see
-tests/test_checks.py), one per version: <channel>.jsonl.
+tests/ci_report.py), one per version: <channel>.jsonl.
 
   ci_results.py job --report F --channel C --tag T --outcome O --summary-file S
       in the job of one version: adds the outcome of its checks step to the
@@ -37,7 +37,7 @@ RELEASE = re.compile(r"^(\d{4}\.\d{1,2})\.\d")     # 2026.9.4 -> 2026.9
 MINIMUM = re.compile(r"^\d{4}\.\d{1,2}\.\d+$")
 PASSED, FAILED, ERROR = "passed", "failed", "error"
 MAX_ANNOTATIONS = 10   # GitHub shows 10 errors and 10 warnings per step
-META = ("homeassistant", "python", "pytest", "websocket_client", "image", "digest")
+META = ("homeassistant", "python", "pytest", "plugin", "image", "digest")
 
 
 # ---------------------------------------------------------------- reports
@@ -254,7 +254,7 @@ def job_summary(e: dict) -> str:
     if meta.get("digest"):
         rows.append(f"| Digest | `{meta['digest']}` |")
     for key, name in (("homeassistant", "Home Assistant"), ("python", "Python"),
-                      ("pytest", "pytest"), ("websocket_client", "websocket-client")):
+                      ("pytest", "pytest"), ("plugin", "pytest-homeassistant-custom-component")):
         if meta.get(key):
             rows.append(f"| {name} | `{meta[key]}` |")
     rows += run_meta()
@@ -262,7 +262,7 @@ def job_summary(e: dict) -> str:
         rows.append(f"| Время проверок | {e['seconds']:.0f} с |")
     parts = [head, "", *rows] if len(rows) > 2 else [head]
     if e["scripts"]:
-        parts += ["", "| Скрипт | Пройдено | Не пройдено | Время, с |", "|---|---:|---:|---:|"]
+        parts += ["", "| Файл | Пройдено | Не пройдено | Время, с |", "|---|---:|---:|---:|"]
         for s in e["scripts"]:
             mark = "✅" if s["ok"] and not s["failed"] else "❌"
             parts.append(f"| {mark} `{s['script']}` | {s['passed']} | {s['failed']} | {s['seconds']:.1f} |")

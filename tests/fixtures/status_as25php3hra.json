@@ -1,0 +1,363 @@
+{
+  "info": {
+    "model": "AS25PHP3HRA",
+    "serialNumber": "TESTSERIAL0001"
+  },
+  "status": "ONLINE",
+  "settings": {
+    "name": {
+      "name": "Кабинет"
+    },
+    "firmware": {
+      "value": "TEST-FW-1.0"
+    }
+  },
+  "sensors": {
+    "items": [
+      {
+        "value": {
+          "name": "36",
+          "description": "indoorTemperature"
+        }
+      }
+    ]
+  },
+  "attributes": [
+    {
+      "name": "0",
+      "description": "Целевая температура",
+      "currentValue": "24",
+      "commandName": "4",
+      "range": {
+        "type": "INTERVAL",
+        "data": {
+          "minValue": 16,
+          "maxValue": 30,
+          "step": 1
+        }
+      }
+    },
+    {
+      "name": "2",
+      "description": "Режимы",
+      "currentValue": "1",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "0",
+            "name": "Авто"
+          },
+          {
+            "data": "1",
+            "name": "Охлаждение"
+          },
+          {
+            "data": "2",
+            "name": "Осушение"
+          },
+          {
+            "data": "4",
+            "name": "Нагрев"
+          },
+          {
+            "data": "6",
+            "name": "Вентилятор"
+          }
+        ]
+      }
+    },
+    {
+      "name": "4",
+      "description": "Скорость вентилятора",
+      "currentValue": "5",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "1",
+            "name": "Быстрый режим"
+          },
+          {
+            "data": "2",
+            "name": "Средний режим"
+          },
+          {
+            "data": "3",
+            "name": "Медленный режим"
+          },
+          {
+            "data": "5",
+            "name": "Автоматический режим"
+          }
+        ]
+      }
+    },
+    {
+      "name": "21",
+      "description": "Включение/выключение",
+      "currentValue": "1",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "0",
+            "name": "Выключен"
+          },
+          {
+            "data": "1",
+            "name": "Активен"
+          }
+        ]
+      }
+    },
+    {
+      "name": "36",
+      "description": "Температура в комнате",
+      "currentValue": "22.5"
+    },
+    {
+      "name": "8",
+      "description": "Подсветка блока",
+      "currentValue": "1",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "0",
+            "name": "Выключен"
+          },
+          {
+            "data": "1",
+            "name": "Активен"
+          }
+        ]
+      }
+    },
+    {
+      "name": "20",
+      "description": "Тихий",
+      "currentValue": "0",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "0",
+            "name": "Выключен"
+          },
+          {
+            "data": "1",
+            "name": "Активен"
+          }
+        ]
+      }
+    },
+    {
+      "name": "38",
+      "description": "Температура в комнате",
+      "currentValue": "11",
+      "type": "STEP"
+    },
+    {
+      "name": "1",
+      "description": "Вертикальные жалюзи",
+      "currentValue": "8",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "0",
+            "name": "Фиксированное верхнее и нижнее положение"
+          },
+          {
+            "data": "8",
+            "name": "Авто режим"
+          },
+          {
+            "data": "9",
+            "name": "Автоматический подъем и опускание (только для специальной модели)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "14",
+      "description": "Звуковой сигнал",
+      "currentValue": "0",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "false",
+            "name": "Выключен"
+          },
+          {
+            "data": "true",
+            "name": "Активен"
+          }
+        ]
+      }
+    }
+  ],
+  "constraint": [],
+  "modifiers": [
+    {
+      "priority": 0,
+      "trigger": {
+        "operator": "OR",
+        "conditions": {
+          "condition": [
+            {
+              "mode": "21",
+              "values": [
+                "false"
+              ]
+            }
+          ]
+        },
+        "alarms": []
+      },
+      "actions": [
+        {
+          "name": "0",
+          "rewriteFields": "W",
+          "writable": false
+        },
+        {
+          "name": "1",
+          "rewriteFields": "W",
+          "writable": false
+        },
+        {
+          "name": "2",
+          "rewriteFields": "W",
+          "writable": false
+        },
+        {
+          "name": "4",
+          "rewriteFields": "W",
+          "writable": false
+        },
+        {
+          "name": "8",
+          "rewriteFields": "W",
+          "writable": false
+        },
+        {
+          "name": "20",
+          "rewriteFields": "W",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "priority": 1,
+      "trigger": {
+        "operator": "OR",
+        "alarms": [
+          "indoorFanErr",
+          "outdoorFanErr"
+        ]
+      },
+      "actions": [
+        {
+          "name": "0",
+          "rewriteFields": "W",
+          "writable": false
+        },
+        {
+          "name": "2",
+          "rewriteFields": "W",
+          "writable": false
+        },
+        {
+          "name": "4",
+          "rewriteFields": "W",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "priority": 2,
+      "trigger": {
+        "operator": "AND",
+        "conditions": {
+          "condition": [
+            {
+              "mode": "2",
+              "values": [
+                "0"
+              ]
+            }
+          ]
+        }
+      },
+      "actions": [
+        {
+          "name": "20",
+          "rewriteFields": "W",
+          "writable": false
+        }
+      ]
+    },
+    {
+      "priority": 5,
+      "trigger": {
+        "operator": "AND",
+        "conditions": {
+          "condition": [
+            {
+              "mode": "2",
+              "values": [
+                "6"
+              ]
+            }
+          ]
+        }
+      },
+      "actions": [
+        {
+          "name": "0",
+          "rewriteFields": "W",
+          "writable": false
+        },
+        {
+          "name": "4",
+          "rewriteFields": "V",
+          "writable": false,
+          "valueRange": {
+            "list": {
+              "data": [
+                {
+                  "data": "1",
+                  "name": "Быстрый режим"
+                },
+                {
+                  "data": "2",
+                  "name": "Средний режим"
+                },
+                {
+                  "data": "3",
+                  "name": "Медленный режим"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "alarms": [],
+  "errors": {
+    "alarmToResult": {
+      "indoorFanErr": {
+        "text": "[E14] Ошибка вентилятора внутреннего блока.",
+        "description": "Обратитесь в сервис."
+      }
+    },
+    "undefinedAlarm": {
+      "text": "Неизвестная ошибка",
+      "description": "Обратитесь в сервис"
+    }
+  }
+}

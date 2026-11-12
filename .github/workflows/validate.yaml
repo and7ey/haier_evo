@@ -38,7 +38,7 @@ jobs:
       - name: Home Assistant hassfest
         uses: "home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361"  # master as of 2026-10-26
 
-  # ruff (ruff.toml: mistakes, not style) and mypy: no type error over those
+  # ruff (the rules of pyproject.toml) and mypy: no type error over those
   # of scripts/mypy-baseline.txt (scripts/check_types.py). Types are checked
   # against one fixed release, not the moving window: a new release would move
   # the baseline by itself. Raise LINT_HA together with the baseline.
@@ -53,25 +53,19 @@ jobs:
           persist-credentials: false
       - name: ruff and mypy
         run: scripts/run_lint.sh "$LINT_HA"
-
-  # The integration inside a real Home Assistant core (tests_ha/): config
-  # entries and flows, the entity and device registries, services, storage,
-  # diagnostics, and the checks of Home Assistant's own test harness after
-  # every test (no lingering tasks, timers or threads, no connection beyond
-  # 127.0.0.1). The harness, pytest-homeassistant-custom-component, pins one
-  # release: HA_CORE is that release, raised together with requirements_test_ha.txt.
-  ha-core:
-    name: "Home Assistant core"
-    runs-on: "ubuntu-latest"
-    timeout-minutes: 15
-    env:
-      HA_CORE: "2026.10.4"
-    steps:
-      - uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"  # v7.0.1
+      # the baseline the code has on this release, made in the same container:
+      # download it to update scripts/mypy-baseline.txt without Docker
+      - name: mypy baseline of the code as it is
+        if: ${{ !cancelled() }}
+        run: scripts/run_lint.sh "$LINT_HA" --update > "$RUNNER_TEMP/mypy-baseline.txt"
+      - name: Upload the baseline
+        if: ${{ !cancelled() }}
+        uses: "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9"  # v7.0.2
         with:
-          persist-credentials: false
-      - name: Tests on a real Home Assistant
-        run: scripts/run_ha_tests.sh "$HA_CORE"
+          name: mypy-baseline
+          path: ${{ runner.temp }}/mypy-baseline.txt
+          retention-days: 7
+          overwrite: true
 
   # The versions are worked out on every run (scripts/ha_versions.py): the two
   # previous releases, the current one, the next one (beta, else the nightly
@@ -97,11 +91,13 @@ jobs:
         run: python3 scripts/ha_versions.py --summary >> "$GITHUB_STEP_SUMMARY"
 
   # One job per version, all at the same time, each in the Home Assistant
-  # container of that version. A failing version does not stop the others;
-  # "next" may fail without failing its job. Every job writes its summary
-  # (the image and its digest, Python and the packages inside it, every
-  # script with its counts and time, what failed) and annotations, and
-  # uploads its report for the results job.
+  # container of that version: the tests (tests/) inside a real Home Assistant
+  # core with its own test harness, pytest-homeassistant-custom-component, of
+  # that release or the one before (scripts/install_test_env.py). A failing
+  # version does not stop the others; "next" may fail without failing its job.
+  # Every job writes its summary (the image and its digest, Python and the
+  # packages inside it, every test file with its counts and time, what failed)
+  # and annotations, and uploads its report for the results job.
   tests:
     name: "Home Assistant ${{ matrix.tag }} (${{ matrix.name }})"
     needs: ha-versions

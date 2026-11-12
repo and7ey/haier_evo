@@ -1,8 +1,6 @@
-# What the checks need besides Home Assistant itself. CI runs them inside the
-# Home Assistant container of every version it checks (scripts/run_checks.sh);
-# to run them without Docker, install the version you need first:
-#   python -m pip install homeassistant==<version> -r requirements_test.txt
-# the integration's own requirement (manifest.json); requests comes with Home Assistant
-websocket-client>=1.8.0,<2
-pytest>=8.4
-hypothesis>=6.100,<7
+# What the tests need besides Home Assistant and its test harness,
+# pytest-homeassistant-custom-component: scripts/install_test_env.py picks the
+# harness that fits the Home Assistant installed and installs this file with it.
+#   python3 scripts/install_test_env.py
+ruff==0.17.4
+mypy==2.4.1

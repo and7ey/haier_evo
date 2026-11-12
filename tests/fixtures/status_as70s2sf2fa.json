@@ -1,0 +1,157 @@
+{
+  "info": {
+    "model": "AS70S2SF2FA-B",
+    "serialNumber": "TESTSERIAL0002"
+  },
+  "status": "ONLINE",
+  "settings": {
+    "name": {
+      "name": "Зал"
+    },
+    "firmware": {
+      "value": "TEST-FW-1.0"
+    }
+  },
+  "sensors": {
+    "items": [
+      {
+        "value": {
+          "name": "36",
+          "description": "indoorTemperature"
+        }
+      }
+    ]
+  },
+  "attributes": [
+    {
+      "name": "0",
+      "description": "Целевая температура",
+      "currentValue": "24",
+      "commandName": "4",
+      "range": {
+        "type": "INTERVAL",
+        "data": {
+          "minValue": 16,
+          "maxValue": 30,
+          "step": 1
+        }
+      }
+    },
+    {
+      "name": "2",
+      "description": "Режимы",
+      "currentValue": "1",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "0",
+            "name": "Авто"
+          },
+          {
+            "data": "1",
+            "name": "Охлаждение"
+          },
+          {
+            "data": "2",
+            "name": "Осушение"
+          },
+          {
+            "data": "4",
+            "name": "Нагрев"
+          },
+          {
+            "data": "6",
+            "name": "Вентилятор"
+          }
+        ]
+      }
+    },
+    {
+      "name": "4",
+      "description": "Скорость вентилятора",
+      "currentValue": "5",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "1",
+            "name": "Быстрый режим"
+          },
+          {
+            "data": "2",
+            "name": "Средний режим"
+          },
+          {
+            "data": "3",
+            "name": "Медленный режим"
+          },
+          {
+            "data": "5",
+            "name": "Автоматический режим"
+          }
+        ]
+      }
+    },
+    {
+      "name": "21",
+      "description": "Включение/выключение",
+      "currentValue": "1",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "0",
+            "name": "Выключен"
+          },
+          {
+            "data": "1",
+            "name": "Активен"
+          }
+        ]
+      }
+    },
+    {
+      "name": "36",
+      "description": "Температура в комнате",
+      "currentValue": "22.5"
+    },
+    {
+      "name": "8",
+      "description": "Подсветка блока",
+      "currentValue": "1",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "0",
+            "name": "Выключен"
+          },
+          {
+            "data": "1",
+            "name": "Активен"
+          }
+        ]
+      }
+    },
+    {
+      "name": "20",
+      "description": "Тихий",
+      "currentValue": "0",
+      "commandName": "4",
+      "list": {
+        "data": [
+          {
+            "data": "0",
+            "name": "Выключен"
+          },
+          {
+            "data": "1",
+            "name": "Активен"
+          }
+        ]
+      }
+    }
+  ],
+  "constraint": []
+}

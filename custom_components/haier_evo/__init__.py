@@ -1,28 +1,40 @@
 from __future__ import annotations
-import asyncio
+
+import json
 import os
 import re
-import threading
-from datetime import timedelta
-from homeassistant.config_entries import ConfigEntry
+import uuid
+from collections.abc import Callable
+
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
-from homeassistant.loader import async_get_integration
-from .logger import _LOGGER, mask_ids
-from .const import (
-    CONF_LAUNDRY_CONTROL,
-    DOMAIN, SETUP_INCOMPLETE_RETRIES, STORAGE_VERSION, LEGACY_TOKENS_FILE,
-    CACHE_VERSION, CACHE_RETRY_FIRST, CACHE_RETRY_MAX, CACHE_REFRESH_HOURS,
-    STATE_REFRESH_MINUTES,
-)
+
 from . import api
+from .client import (
+    STORAGE_VERSION,
+    HaierAuthError,
+    HaierClient,
+    HaierError,
+    HaierRateLimitError,
+    read_tokens,
+)
+from .const import (
+    CACHE_SAVE_DELAY,
+    CACHE_VERSION,
+    CONF_LAUNDRY_CONTROL,
+    CONF_REGION,
+    CONF_TOKENS,
+    DOMAIN,
+    SETUP_INCOMPLETE_RETRIES,
+)
+from .logger import _LOGGER, mask_macs
 
-
-PLATFORMS: list[str] = [
+PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.CLIMATE,
     Platform.SWITCH,
@@ -32,15 +44,35 @@ PLATFORMS: list[str] = [
     Platform.WATER_HEATER,
 ]
 
+type HaierConfigEntry = ConfigEntry[api.Haier]
+
+_MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
+# The device of the debug switches, removed in 1.2.0.
+_HTTP_DEVICE = (DOMAIN, f"{DOMAIN}_http_switch")
 # entry_id -> setups in a row that got fewer devices than the registry knows
 _INCOMPLETE_SETUPS: dict[str, int] = {}
 
-_MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
-_HTTP_DEVICE = (DOMAIN, f"{DOMAIN}_http_switch")  # debug switches, removed in 1.2.0
+
+def token_store(hass: HomeAssistant, entry_id: str) -> Store:
+    """Tokens live in .storage, not in /config (they used to be /config/haier_evo)."""
+    # atomic: a power cut in the middle of a write must not leave a broken file (1.2)
+    return Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}", private=True, atomic_writes=True)
 
 
-def _known_device_ids(hass: HomeAssistant, entry: ConfigEntry) -> set[str]:
-    """MACs of the Haier devices this entry created before (not the service HTTP device)."""
+def devices_store(hass: HomeAssistant, entry_id: str) -> Store:
+    """Device descriptions of the last good start (MACs, serials: private too).
+
+    Written up to once a minute while pushes come, so the writes are atomic: a
+    power cut in the middle of one must not leave a broken file for the very
+    start that needs it.
+    """
+    return Store(
+        hass, CACHE_VERSION, f"{DOMAIN}.{entry_id}.devices", private=True, atomic_writes=True
+    )
+
+
+def _known_macs(hass: HomeAssistant, entry: ConfigEntry) -> set[str]:
+    """MACs of the Haier devices this entry created before."""
     registry = dr.async_get(hass)
     return {
         identifier.lower()
@@ -50,311 +82,279 @@ def _known_device_ids(hass: HomeAssistant, entry: ConfigEntry) -> set[str]:
     }
 
 
-def _find_device(registry: dr.DeviceRegistry, identifier: tuple[str, str], entry_id: str):
-    """Device of this entry by identifier; async_get_device is deprecated from HA 2026.x."""
-    if (by_identifier := getattr(registry, "async_get_device_by_identifier", None)) is not None:
-        return by_identifier(identifier, entry_id)
-    return registry.async_get_device(identifiers={identifier})
+def entry_device_id(entry_id: str) -> str:
+    """Stable Device-Id per entry; 0.3.x sent a new random one on every start."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"{DOMAIN}:{entry_id}"))
 
 
-async def _stop(hass: HomeAssistant, haier_object: api.Haier) -> None:
-    """Stop the client off the event loop, as the fork JampireX/haier_evo does:
-    it closes sockets (up to 1.6.4 it also waited there for the cloud's answer
-    to the websocket close, freezing Home Assistant for up to 3 s). A failure
-    must not mask the setup error being raised or fail the unload."""
-    try:
-        await hass.async_add_executor_job(haier_object.stop)
-    except Exception as e:
-        _LOGGER.warning(f"Haier Evo: stopping the connection failed: {e!r}")
+def _take_legacy_token_file(path: str) -> dict | None:
+    """Versions up to 1.1 kept live tokens as plain JSON in /config/haier_evo.
 
-
-def _token_store(hass: HomeAssistant, entry_id: str) -> Store:
-    # private: 0600, atomic: a crash never leaves a half-written token file
-    return Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}", private=True, atomic_writes=True)
-
-
-def _devices_store(hass: HomeAssistant, entry_id: str) -> Store:
-    # device descriptions of the last good start (MACs, serials: private too)
-    return Store(hass, CACHE_VERSION, f"{DOMAIN}.{entry_id}.devices", private=True, atomic_writes=True)
-
-
-def _cached_devices(data) -> list[dict] | None:
-    devices = data.get("devices") if isinstance(data, dict) else None
-    if isinstance(devices, list) and devices and all(isinstance(d, dict) for d in devices):
-        return devices
-    return None
-
-
-async def _save_devices(hass: HomeAssistant, store: Store, haier_object: api.Haier) -> None:
-    try:
-        await store.async_save(await hass.async_add_executor_job(haier_object.cache_dict))
-    except Exception as e:
-        _LOGGER.warning(f"Failed to save the device descriptions: {e!r}")
-
-
-async def _refresh(hass: HomeAssistant, entry: ConfigEntry, haier_object: api.Haier, store: Store,
-                   until_synced: bool) -> None:
-    """Read the real state of the devices, then save their descriptions.
-
-    until_synced: after a start from the saved descriptions keep retrying
-    (with a growing pause) until every device has been read; a periodic
-    refresh tries once. A device the app did not list before, or one the
-    cloud now describes differently, reloads the integration.
+    The file is removed; its tokens are returned for an entry that has none
+    (with no password kept, they are the only way in without reauth).
     """
-    async def rebuild(reason: str) -> None:
-        # the saved list is out of date: the next start reads everything from the cloud
-        _LOGGER.info(f"Haier Evo: {reason}, reloading")
-        await store.async_remove()
-        hass.config_entries.async_schedule_reload(entry.entry_id)
-
-    delay = CACHE_RETRY_FIRST
-    result = None
     try:
-        while not haier_object.disconnect_requested:
-            try:
-                result = await hass.async_add_executor_job(haier_object.refresh_devices)
-            except Exception as e:
-                if isinstance(e, (api.ReauthRequired, api.AuthUserError)):
-                    raise
-                _LOGGER.warning(f"Haier Evo: reading the devices failed: {e!r}")
-                result = None
-            if result is not None and not result["failed"]:
-                break
-            if result is not None:
-                # a device the app no longer lists will never answer: drop it
-                listed = await hass.async_add_executor_job(haier_object.list_device_ids)
-                if listed is not None and set(result["failed"]) - listed:
-                    await rebuild("a device was removed in the app")
-                    return
-            if not until_synced:
-                break
-            _LOGGER.info(f"Haier Evo: no fresh state yet for {len(result['failed']) if result else 'all'} "
-                         f"device(s), next try in {delay} s")
-            await asyncio.sleep(delay)
-            delay = min(delay * 2, CACHE_RETRY_MAX)
-        if haier_object.disconnect_requested or result is None:
-            return
-        listed = await hass.async_add_executor_job(haier_object.list_device_ids)
-    except (api.ReauthRequired, api.AuthUserError) as e:
-        _LOGGER.error(f"Haier Evo rejected the saved sign-in, re-authentication is needed: {e!r}")
-        await _stop(hass, haier_object)
-        entry.async_start_reauth(hass)
-        return
-    known = {d.device_id.lower() for d in haier_object.devices}
-    if listed is not None and (new := listed - known):
-        try:
-            # a device skipped at the start because the cloud refuses it
-            # (HTTP 403/404) is not new: rebuild once the cloud describes it
-            denied = await hass.async_add_executor_job(haier_object.denied_devices, new)
-        except (api.ReauthRequired, api.AuthUserError) as e:
-            _LOGGER.error(f"Haier Evo rejected the saved sign-in, re-authentication is needed: {e!r}")
-            await _stop(hass, haier_object)
-            entry.async_start_reauth(hass)
-            return
-        if new - denied:
-            await rebuild(f"the app lists {len(new - denied)} new device(s)")
-            return
-    await _save_devices(hass, store, haier_object)
-    if result["changed"]:
-        hass.config_entries.async_schedule_reload(entry.entry_id)
-
-
-async def _refresh_state(hass: HomeAssistant, entry: ConfigEntry, haier_object: api.Haier, store: Store) -> None:
-    """Read the state of every device again (between the full refreshes).
-
-    Only the values: the device list and the saved descriptions are left to
-    _refresh, unless the cloud now describes a device differently.
-    """
-    if haier_object.disconnect_requested:
-        return
-    try:
-        result = await hass.async_add_executor_job(haier_object.refresh_devices)
-    except (api.ReauthRequired, api.AuthUserError) as e:
-        _LOGGER.error(f"Haier Evo rejected the saved sign-in, re-authentication is needed: {e!r}")
-        await _stop(hass, haier_object)
-        entry.async_start_reauth(hass)
-        return
-    except Exception as e:
-        _LOGGER.debug(f"Haier Evo: reading the state failed: {e!r}")
-        return
-    if result["changed"]:
-        await _save_devices(hass, store, haier_object)
-        hass.config_entries.async_schedule_reload(entry.entry_id)
-
-
-def _token_saver(hass: HomeAssistant, store: Store):
-    """Save rotated tokens from any thread, waiting for the write when possible."""
-    def save(tokens: dict) -> None:
-        if threading.get_ident() == hass.loop_thread_id:
-            hass.async_create_task(store.async_save(tokens))
-            return
-        asyncio.run_coroutine_threadsafe(store.async_save(tokens), hass.loop).result(timeout=30)
-    return save
-
-
-def _only_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    return all(e.entry_id == entry.entry_id for e in hass.config_entries.async_entries(DOMAIN))
-
-
-def _read_legacy_tokens(path: str) -> dict | None:
-    import json
-    try:
-        with open(path, "r") as f:
-            data = json.load(f)
-    except FileNotFoundError:
+        with open(path, encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, ValueError):
         return None
-    except Exception as e:
-        _LOGGER.warning(f"Failed to read the old tokens file: {e!r}")
+    if not isinstance(data, dict) or not {"token", "refreshtoken", "refresh_token"} & data.keys():
         return None
-    return data if isinstance(data, dict) and data.get("refreshtoken") else None
-
-
-def _remove_legacy_tokens(path: str) -> None:
     try:
         os.remove(path)
-    except FileNotFoundError:
-        pass
-    except Exception as e:
-        _LOGGER.warning(f"Failed to remove the old tokens file {path}: {e!r}")
+    except OSError as err:
+        # read-only or no rights: the tokens are still good, the setup goes on
+        _LOGGER.warning("Failed to remove the old Haier Evo token file: %s", err)
+    else:
+        _LOGGER.info("Removed the token file of the old integration")
+    return data if read_tokens(data)["refresh_token"] else None
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    integration = await async_get_integration(hass, DOMAIN)
-    _LOGGER.debug(f'Integration version: {integration.version}')
-    email = entry.data.get("email") or ""
-    region = entry.data.get("region") or "ru"
-    store = _token_store(hass, entry.entry_id)
-    legacy_path = hass.config.path(LEGACY_TOKENS_FILE)
+async def _async_take_handed_tokens(
+    hass: HomeAssistant, entry: ConfigEntry, client: HaierClient
+) -> None:
+    """Tokens come to the entry once, then live in .storage only.
 
-    tokens = await store.async_load()
-    if isinstance(entry.data.get("tokens"), dict):
-        # handed over by the config flow / re-authentication
-        tokens = entry.data["tokens"]
-        await store.async_save(tokens)
+    The config flow hands the tokens of its sign-in over in the entry data
+    (no second sign-in right after it: the endpoint is quick to answer 429,
+    #87); they are moved to the token store and dropped from the
+    entry. Entries of versions up to 1.1 had them in /config/haier_evo.
+    """
+    tokens = entry.data.get(CONF_TOKENS)
+    if isinstance(tokens, dict):
+        await client.async_import_tokens(tokens)
         hass.config_entries.async_update_entry(
-            entry, data={k: v for k, v in entry.data.items() if k != "tokens"}
+            entry, data={k: v for k, v in entry.data.items() if k != CONF_TOKENS}
         )
-    if not tokens and _only_entry(hass, entry):
-        # up to 1.1.x the tokens of all entries lived in /config/haier_evo
-        tokens = await hass.async_add_executor_job(_read_legacy_tokens, legacy_path)
-        if tokens:
-            await store.async_save(tokens)
-            _LOGGER.info("Moved the Haier Evo tokens to Home Assistant storage")
+    if len(hass.config_entries.async_entries(DOMAIN)) != 1:
+        # The file had no owner: with more entries there is no telling whose
+        # it is, so it is neither used nor deleted (as in 1.7).
+        return
+    old = await hass.async_add_executor_job(_take_legacy_token_file, hass.config.path(DOMAIN))
+    if old and not client.has_refresh_token:
+        await client.async_import_tokens(old)
+        _LOGGER.info("Moved the Haier Evo tokens to Home Assistant storage")
 
-    if entry.unique_id is None and email:
-        unique_id = f"{email.lower()}_{region}"
-        if not any(e.unique_id == unique_id for e in hass.config_entries.async_entries(DOMAIN)):
+
+def _forget_password(hass: HomeAssistant, entry: ConfigEntry, client: HaierClient) -> None:
+    """The password is not kept once the cloud took the saved tokens.
+
+    Entries of versions up to 1.1 and of the temandroid/haier_evo_2 fork (0.x)
+    have it in the entry data (as plain text in core.config_entries). A refresh token the cloud rejects
+    later asks the user for it (reauth), as 1.2+ does.
+    """
+    if CONF_PASSWORD in entry.data and client.has_refresh_token:
+        hass.config_entries.async_update_entry(
+            entry, data={k: v for k, v in entry.data.items() if k != CONF_PASSWORD}
+        )
+        _LOGGER.info("Haier Evo password removed from the configuration, the saved sign-in is used instead")
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> bool:
+    if entry.unique_id is None:
+        # Entries made by earlier versions have no unique_id.
+        unique_id = f"{str(entry.data[CONF_EMAIL]).strip().lower()}_{entry.data.get(CONF_REGION) or 'ru'}"
+        if hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, unique_id) is None:
             hass.config_entries.async_update_entry(entry, unique_id=unique_id)
-
-    haier_object = api.Haier(
-        hass,
-        email,
-        entry.data.get("password"),  # only entries created before 1.2.0 have it
-        region,
-        tokens=tokens,
-        token_saver=_token_saver(hass, store),
-        on_auth_failed=lambda: hass.loop.call_soon_threadsafe(entry.async_start_reauth, hass),
-        device_id=api.entry_device_id(entry.entry_id),
+        else:
+            _LOGGER.warning("Another Haier Evo entry already uses this account, leaving this one as is")
+    session = async_get_clientsession(hass)
+    client = HaierClient(
+        session,
+        entry.data[CONF_EMAIL],
+        entry.data.get(CONF_PASSWORD),  # only entries of earlier versions have it
+        entry.data.get(CONF_REGION) or "ru",
+        store=token_store(hass, entry.entry_id),
+        device_id=entry_device_id(entry.entry_id),
     )
+    await client.async_load_tokens()
+    await _async_take_handed_tokens(hass, entry, client)
+    haier = api.Haier(hass, client, session)
     # the control of washers and dryers (beta) is an option of the entry, off by default
-    haier_object.laundry_control = bool(entry.options.get(CONF_LAUNDRY_CONTROL, False))
-    devices_store = _devices_store(hass, entry.entry_id)
-    cached = _cached_devices(await devices_store.async_load())
-    from_cache = False
-    if cached:
-        # start at once from the last good start; the real state is read in the background
+    haier.laundry_control = bool(entry.options.get(CONF_LAUNDRY_CONTROL, False))
+    cache = devices_store(hass, entry.entry_id)
+    # As 1.4+: a start builds the devices from the descriptions of the last
+    # good one at once, and the real state is read in the background (an HA
+    # start does not wait for a slow cloud). A reload that is there because
+    # those descriptions are out of date reads the cloud.
+    from_cloud = entry.entry_id in api.RELOAD_FROM_CLOUD
+    api.RELOAD_FROM_CLOUD.discard(entry.entry_id)
+    if from_cloud or not await _async_setup_from_cache(haier, cache, None):
         try:
-            await hass.async_add_executor_job(haier_object.load_cached, cached)
-            from_cache = True
-        except Exception as e:
-            _LOGGER.warning(f"Saved device descriptions are not usable ({e!r}), reading them from the cloud")
-            haier_object.devices.clear()
-            await devices_store.async_remove()
+            await haier.async_setup()
+        except HaierAuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+        except HaierError as err:
+            # #105 (an empty list right after a restart), 429, network,
+            # a token the cloud keeps refusing: the cloud is not usable right now.
+            if not from_cloud or not await _async_setup_from_cache(haier, cache, err):
+                if isinstance(err, api.HaierEmptyDeviceList):
+                    raise ConfigEntryNotReady("Haier Evo returned no devices, will retry") from err
+                if isinstance(err, HaierRateLimitError):
+                    raise ConfigEntryNotReady(str(err)) from err
+                raise ConfigEntryNotReady(f"Haier Evo cloud is unavailable: {err}") from err
+        else:
+            await _async_check_complete(hass, entry, haier, cache)
+            await cache.async_save(haier.cache_dict())
+            _forget_password(hass, entry, client)
+    haier.on_synced = lambda: _forget_password(hass, entry, client)
 
-    if not from_cache:
-        try:
-            await hass.async_add_executor_job(haier_object.pull_data)
-        except (api.ReauthRequired, api.AuthUserError) as e:
-            await _stop(hass, haier_object)
-            raise ConfigEntryAuthFailed(mask_ids(f"Haier Evo needs signing in again: {e!r}")) from e
-        except Exception as e:
-            await _stop(hass, haier_object)
-            # network problems, cloud errors, timeouts: let Home Assistant retry the setup
-            # HA logs these texts itself, past the filter of logger.py: MACs masked here
-            raise ConfigEntryNotReady(mask_ids(f"Haier Evo is not available: {e!r}")) from e
-
-        found = {str(device.device_id).lower() for device in haier_object.devices}
-        missing = _known_device_ids(hass, entry) - found
-        if not found:
-            await _stop(hass, haier_object)
-            raise ConfigEntryNotReady("Haier Evo returned an empty device list")
-        if missing:
-            attempts = _INCOMPLETE_SETUPS.get(entry.entry_id, 0) + 1
-            if attempts <= SETUP_INCOMPLETE_RETRIES:
-                _INCOMPLETE_SETUPS[entry.entry_id] = attempts
-                await _stop(hass, haier_object)
-                raise ConfigEntryNotReady(mask_ids(
-                    f"Haier Evo did not return {len(missing)} known device(s): "
-                    f"{', '.join(sorted(missing))} (attempt {attempts}/{SETUP_INCOMPLETE_RETRIES})"
-                ))
-            _LOGGER.warning(
-                f"Haier Evo still does not return {', '.join(sorted(missing))}, "
-                f"starting with the {len(found)} device(s) it returned"
-            )
-        _INCOMPLETE_SETUPS.pop(entry.entry_id, None)
-        await _save_devices(hass, devices_store, haier_object)
-
-    # the cloud accepted the saved tokens: the password is not kept any more
-    if not from_cache and "password" in entry.data and haier_object.refreshtoken:
-        hass.config_entries.async_update_entry(
-            entry, data={k: v for k, v in entry.data.items() if k != "password"}
-        )
-        _LOGGER.info("Haier Evo password removed from the configuration, tokens are used instead")
-    if _only_entry(hass, entry):
-        await hass.async_add_executor_job(_remove_legacy_tokens, legacy_path)
-
+    haier.cache_store = cache
+    haier.on_refreshed = _cache_saver(haier, cache)
     registry = dr.async_get(hass)
-    if http_device := _find_device(registry, _HTTP_DEVICE, entry.entry_id):
+    if (http_device := registry.async_get_device(identifiers={_HTTP_DEVICE})) is not None and (
+        entry.entry_id in http_device.config_entries
+    ):
         registry.async_remove_device(http_device.id)
-
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = haier_object
+    entry.runtime_data = haier
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    if from_cache:
-        haier_object.connect_in_thread()
-        entry.async_create_background_task(
-            hass, _refresh(hass, entry, haier_object, devices_store, until_synced=True),
-            f"{DOMAIN} initial refresh",
-        )
-
-    async def periodic(_now) -> None:
-        await _refresh(hass, entry, haier_object, devices_store, until_synced=False)
-
-    entry.async_on_unload(async_track_time_interval(
-        hass, periodic, timedelta(hours=CACHE_REFRESH_HOURS), cancel_on_shutdown=True,
-    ))
-
-    async def state(_now) -> None:
-        await _refresh_state(hass, entry, haier_object, devices_store)
-
-    entry.async_on_unload(async_track_time_interval(
-        hass, state, timedelta(minutes=STATE_REFRESH_MINUTES), cancel_on_shutdown=True,
-    ))
+    haier.start(entry)
+    _LOGGER.debug("Haier Evo set up with %d device(s)", len(haier.devices))
+    # A boolean: Home Assistant up to 2026.10 requires one; 2026.11 takes it
+    # from custom integrations as well (it wants None from core ones only).
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        haier_object = hass.data[DOMAIN].pop(entry.entry_id)
-        _LOGGER.debug(f'Integration {haier_object} unload...')
-        await _stop(hass, haier_object)
-    return unload_ok
+async def _async_setup_from_cache(haier: api.Haier, cache: Store, err: Exception | None) -> bool:
+    """Build the devices from the descriptions of the last good start.
+
+    The entities come up at once instead of waiting for the cloud (or in
+    "setup retry" when it does not answer: the power cut of 2026-11-04, the
+    cloud came back later than HA); the WebSocket and a background read bring
+    the real state. err: why the cloud was not used, None for a normal start.
+    """
+    try:
+        cached = await cache.async_load()
+    except Exception as load_err:  # noqa: BLE001 - a broken file is no reason to fail
+        _LOGGER.warning("Saved Haier Evo device descriptions are not readable: %s", load_err)
+        return False
+    if cached is None:
+        return False
+    try:
+        await haier.async_setup_from_cache(cached)
+    except (ValueError, TypeError, KeyError, AttributeError) as build_err:
+        _LOGGER.warning("Saved Haier Evo device descriptions are not usable: %s", build_err)
+        await cache.async_remove()
+        return False
+    if err is None:
+        _LOGGER.debug("Started %d device(s) from the last good start, reading the cloud", len(haier.devices))
+    else:
+        _LOGGER.warning(
+            "Haier Evo cloud is not available (%s): started %d device(s) from the last "
+            "good start, the real state follows once the cloud answers",
+            err, len(haier.devices),
+        )
+    return True
+
+
+def _cache_saver(haier: api.Haier, cache: Store) -> Callable[[], None]:
+    """Schedules a write of the saved descriptions CACHE_SAVE_DELAY s from now.
+
+    Called after a REST refresh and after every push. A call while a write is
+    already scheduled does nothing: Store.async_delay_save restarts its timer
+    on every call, and pushes coming more often than the delay would put the
+    write off for ever.
+    """
+    pending = False
+
+    def data() -> dict:
+        nonlocal pending
+        pending = False
+        return haier.cache_dict()
+
+    def schedule() -> None:
+        nonlocal pending
+        if pending:
+            return
+        pending = True
+        cache.async_delay_save(data, CACHE_SAVE_DELAY)
+
+    return schedule
+
+
+async def _async_check_complete(
+    hass: HomeAssistant, entry: ConfigEntry, haier: api.Haier, cache: Store
+) -> None:
+    """Fewer devices than the registry knows: retry the setup a few times.
+
+    The cloud sometimes leaves a unit out of the list or does not describe it
+    right after an outage; starting without it would make its entities
+    disappear until the next restart.
+
+    A unit that stays away is waited for once, not at every start: the ones a
+    setup gave up on are kept with the saved descriptions.
+    """
+    found = {str(device.device_id).lower() for device in haier.devices}
+    # A unit the cloud returned but this code could not read is not missing:
+    # a retry reads the same description, and it is not gone from the account.
+    missing = _known_macs(hass, entry) - found - haier.unreadable
+    if not missing:
+        _INCOMPLETE_SETUPS.pop(entry.entry_id, None)
+        return
+    try:
+        given_up = api.saved_missing(await cache.async_load())
+    except Exception:  # noqa: BLE001 - an unreadable file only costs the retries
+        given_up = set()
+    if missing <= given_up:
+        _INCOMPLETE_SETUPS.pop(entry.entry_id, None)
+        haier.missing = missing
+        _LOGGER.info(
+            "Haier Evo does not return %s, as at the last start; "
+            "delete the device in Home Assistant if it is gone from the Evo app",
+            ", ".join(sorted(missing)),
+        )
+        return
+    attempts = _INCOMPLETE_SETUPS.get(entry.entry_id, 0) + 1
+    if attempts <= SETUP_INCOMPLETE_RETRIES:
+        _INCOMPLETE_SETUPS[entry.entry_id] = attempts
+        raise ConfigEntryNotReady(mask_macs(
+            f"Haier Evo did not return {len(missing)} known device(s): {', '.join(sorted(missing))} "
+            f"(attempt {attempts}/{SETUP_INCOMPLETE_RETRIES})"
+        ))
+    _INCOMPLETE_SETUPS.pop(entry.entry_id, None)
+    haier.missing = missing
+    _LOGGER.warning(
+        "Haier Evo still does not return %s, starting with the %d device(s) it returned; "
+        "delete the device in Home Assistant (its page, the menu, Delete) if it is gone from the Evo app",
+        ", ".join(sorted(missing)), len(found),
+    )
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: HaierConfigEntry, device_entry: dr.DeviceEntry
+) -> bool:
+    """A device may be deleted in the UI once the cloud no longer returns it.
+
+    Without this hook Home Assistant offers no way to delete a device, and a
+    unit removed from the Evo account stayed in the registry for good.
+    """
+    haier = getattr(entry, "runtime_data", None)
+    if entry.state is not ConfigEntryState.LOADED or haier is None:
+        # Not loaded: there is no telling which units the cloud still has, and
+        # deleting a live one loses its name, area and disabled entities.
+        return False
+    live = {str(device.device_id).lower() for device in haier.devices} | haier.unreadable
+    return not any(
+        domain == DOMAIN and str(identifier).lower() in live
+        for domain, identifier in device_entry.identifiers
+    )
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> bool:
+    # A boolean, as async_setup_entry: async_unload_platforms_or_raise is 2026.11+.
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
+    haier = entry.runtime_data
+    await haier.async_stop()
+    if haier.cache_store is not None:
+        # Written now: a delayed write left pending would outlive the entry
+        # and could bring the file back after the integration is deleted.
+        haier.on_refreshed = None
+        await haier.cache_store.async_save(haier.cache_dict())
+    return True
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Deleting the integration also deletes its tokens and saved device descriptions."""
-    await _token_store(hass, entry.entry_id).async_remove()
-    await _devices_store(hass, entry.entry_id).async_remove()
-    if not hass.config_entries.async_entries(DOMAIN):
-        await hass.async_add_executor_job(_remove_legacy_tokens, hass.config.path(LEGACY_TOKENS_FILE))
+    await token_store(hass, entry.entry_id).async_remove()
+    await devices_store(hass, entry.entry_id).async_remove()
+    _INCOMPLETE_SETUPS.pop(entry.entry_id, None)

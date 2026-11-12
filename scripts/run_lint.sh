@@ -1,9 +1,9 @@
 #!/bin/sh
-# ruff (ruff.toml: mistakes, not style) and mypy against its baseline
-# (scripts/check_types.py), inside the Home Assistant container of one version:
-# mypy reads the types of the Home Assistant installed there.
-#   scripts/run_lint.sh 2026.11.0
-#   scripts/run_lint.sh 2026.11.0 --update > scripts/mypy-baseline.txt
+# ruff (the rules of pyproject.toml) and mypy against its baseline
+# (scripts/check_types.py), inside the Home Assistant container of one
+# version: mypy reads the types of the Home Assistant installed there.
+#   scripts/run_lint.sh 2026.11.1
+#   scripts/run_lint.sh 2026.11.1 --update > scripts/mypy-baseline.txt
 set -eu
 
 tag="${1:?usage: scripts/run_lint.sh <Home Assistant container tag> [--update]}"
@@ -19,14 +19,14 @@ image="ghcr.io/home-assistant/home-assistant:$tag"
 cd "$(dirname "$0")/.."
 
 docker pull --quiet "$image" >/dev/null
-# the versions are pinned: a new ruff or mypy finds new things by itself
+# the versions are pinned (requirements_test.txt): a new ruff or mypy finds new things by itself
 docker run --rm --entrypoint sh \
   -v "$PWD:/repo:ro" -w /repo \
   -e PYTHONDONTWRITEBYTECODE=1 -e RUFF_CACHE_DIR=/tmp/ruff -e MYPY_CACHE_DIR=/tmp/mypy \
   -e GITHUB_ACTIONS="${GITHUB_ACTIONS:-}" -e MODE="$mode" \
   "$image" -c '
     set -u
-    deps="ruff==0.17.4 mypy==2.4.1 types-requests==2.33.0.20261030"
+    deps=$(grep -E "^(ruff|mypy)==" requirements_test.txt)
     python3 -m pip install --quiet --disable-pip-version-check $deps >/dev/null 2>&1 \
       || uv pip install --system --quiet $deps >/dev/null
     if [ "$MODE" = --update ]; then
