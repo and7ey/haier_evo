@@ -53,7 +53,7 @@ def locked_key(fn):
     except api.HaierCommandLocked as e:
         return e.translation_key
 
-for model in ("ES80V-F7", "ES30V-F7"):   # with model yaml / description-only mapping (no ES30VF7.yaml)
+for model in ("ES80V-F7", "ES100V-F7", "ES30V-F7"):   # with model yaml (two) / description-only mapping (no ES30VF7.yaml)
     print("=== model", model)
     h, d = make(api.HaierWH, "5c:01", model)
     print(d.config)
@@ -66,7 +66,7 @@ for model in ("ES80V-F7", "ES30V-F7"):   # with model yaml / description-only ma
     check("heating", d.heating, False)
     check("steril", d.sterilization_on, False)
     check("alarms", d.alarms, [])
-    check("command_name", d.config.command_name, None if model == "ES80V-F7" else "")
+    check("command_name", d.config.command_name, "" if model == "ES30V-F7" else None)
     d.set_temperature(60.4); check("set_temp", sent(h), [("1", "60")]); check("target opt", d.target_temperature, 60.0)
     d.set_temperature(99); check("set_temp clamp", sent(h), [("1", "75")])
     d.set_heating_mode("eco"); check("mode eco", sent(h), [("41", "1")]); check("mode opt", d.heating_mode, "eco")
