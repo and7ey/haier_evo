@@ -10,6 +10,6 @@
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/and7ey/haier_evo/issues",
   "requirements": ["websocket-client>=1.8.0,<2"],
-  "version": "1.7.2",
+  "version": "1.7.3",
   "zeroconf": []
 }
