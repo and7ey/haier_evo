@@ -196,6 +196,11 @@ class Haier:
         self.device_list: list[dict[str, str]] = []
         # Built from the saved descriptions: the cloud did not answer at start.
         self.from_cache = False
+        # The start read the cloud and fell back to the saved descriptions: the
+        # background read waits CACHE_RETRY_FIRST s first. Without the pause a
+        # cloud that fails such a start and answers the check right after it
+        # reloads the entry again and again (a unit added in the app).
+        self.sync_delayed = False
         # MACs (lower case) of units Home Assistant knows and the cloud no
         # longer returns, which a setup has already stopped waiting for. Kept
         # with the saved descriptions, so the next start does not wait again.
@@ -237,6 +242,9 @@ class Haier:
         self.reconnects = 0
         self.lost_commands = 0
         self._rebuild_scheduled = False
+        # The saved sign-in was rejected and the reauth flow started: once per
+        # start, the next start comes with the new sign-in (1.7 stopped as well).
+        self._reauth_started = False
         # Entry option: washers and dryers take commands (beta, 1.7).
         self.laundry_control = False
 
@@ -405,9 +413,11 @@ class Haier:
         entry, and that start reads the cloud (RELOAD_FROM_CLOUD).
         """
         delay = C.CACHE_RETRY_FIRST
+        if self.sync_delayed:
+            await asyncio.sleep(delay)
         while not self._stopping:
             failed = await self._async_resync()
-            if self._stopping or self._rebuild_scheduled:
+            if self._stopping or self._rebuild_scheduled or self._reauth_started:
                 return
             if not failed:
                 break
@@ -422,6 +432,10 @@ class Haier:
             self.on_synced()
 
     def _start_reauth(self) -> None:
+        """Once per start: every later request only finds the same dead sign-in."""
+        if self._reauth_started:
+            return
+        self._reauth_started = True
         _LOGGER.error("Haier Evo rejected the saved sign-in, re-authentication is required")
         if self._entry is not None and not self._stopping:
             self._entry.async_start_reauth(self.hass)

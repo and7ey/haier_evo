@@ -1,5 +1,4 @@
 # mypy errors the code already has (scripts/check_types.py); a new one fails CI
-custom_components/haier_evo/api.py: [assignment] Incompatible types in assignment (expression has type "float", variable has type "int")
 custom_components/haier_evo/api.py: [dict-item] Dict entry 3 has incompatible type "str": "Any | str | None"; expected "str": "str"
 custom_components/haier_evo/api.py: [union-attr] Item "None" of "Any | dict[Any, Any] | None" has no attribute "get"
 custom_components/haier_evo/api.py: [union-attr] Item "None" of "Any | dict[Any, Any] | None" has no attribute "get"

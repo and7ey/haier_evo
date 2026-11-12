@@ -187,6 +187,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> boo
         except HaierError as err:
             # #105 (an empty list right after a restart), 429, network,
             # a token the cloud keeps refusing: the cloud is not usable right now.
+            haier.sync_delayed = from_cloud
             if not from_cloud or not await _async_setup_from_cache(haier, cache, err):
                 if isinstance(err, api.HaierEmptyDeviceList):
                     raise ConfigEntryNotReady("Haier Evo returned no devices, will retry") from err

@@ -4,6 +4,8 @@ no redirects."""
 from __future__ import annotations
 
 import asyncio
+import copy
+import json
 import logging
 from unittest.mock import patch
 
@@ -193,6 +195,96 @@ async def test_wrong_password_after_a_start_from_saved_devices_asks_the_user(
     assert [f["context"]["source"] for f in flows] == ["reauth"]
     assert climate_state(hass).state == "unavailable"
     await unload(hass, config_entry)
+
+
+async def test_background_read_stops_after_the_reauth(
+    hass, config_entry, mock_cloud, ws_factory, aioclient_mock, hass_storage, caplog
+):
+    """A dead refresh token found by the background read: one reauth, then it stops (1.7)."""
+    mock_cloud()
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    await unload(hass, config_entry)
+    assert "password" not in config_entry.data
+
+    # the access token has expired, the refresh token is dead
+    hass_storage[f"{C.DOMAIN}.{config_entry.entry_id}"]["data"]["tokenexpire"] = "2000-01-01T00:00:00+00:00"
+    aioclient_mock.clear_requests()
+    aioclient_mock.post(REFRESH_URL, status=400, json={"error": {"validation": {"refreshToken": "expired"}}})
+
+    caplog.set_level(logging.ERROR)
+    with patch.object(C, "CACHE_RETRY_FIRST", 0.02), patch.object(C, "CACHE_RETRY_MAX", 0.02):
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await asyncio.sleep(0.5)
+        await hass.async_block_till_done()
+    await unload(hass, config_entry)
+    flows = hass.config_entries.flow.async_progress()
+    assert [f["context"]["source"] for f in flows] == ["reauth"]
+    assert sum("re-authentication is required" in r.getMessage() for r in caplog.records) == 1
+    assert refresh_calls(aioclient_mock) == 1
+
+
+def _devices_page_of_mac_1() -> dict:
+    """The device list before MAC_2 was added in the app."""
+    page = copy.deepcopy(load_fixture("devices_page.json"))
+    for item in page["data"]["presentation"]["layout"]["scrollContainer"]:
+        if item["trackingData"]["component"]["componentName"] == "deviceList":
+            state = json.loads(item["state"])
+            state["items"] = state["items"][:1]
+            item["state"] = json.dumps(state)
+    return page["data"]
+
+
+async def test_failed_reload_from_the_cloud_waits_before_reading_it_again(
+    hass, config_entry, mock_cloud, ws_factory, aioclient_mock
+):
+    """A unit added in the app reloads the entry from the cloud. A cloud that
+    fails that start and answers the check right after it must not reload the
+    entry again and again: the fallback to the saved descriptions waits
+    CACHE_RETRY_FIRST s before reading the cloud."""
+    mock_cloud()
+    one_unit = _devices_page_of_mac_1()
+    real_page = HaierClient.async_get_devices_page
+    real_status = HaierClient.async_get_device_status
+    real_setup = api.Haier.async_setup
+    state = {"added": False, "in_setup": False, "setups": 0}
+
+    async def page(self):
+        return await real_page(self) if state["added"] else copy.deepcopy(one_unit)
+
+    async def status(self, mac):
+        if state["in_setup"]:
+            raise HaierConnectionError("the start from the cloud fails")
+        return await real_status(self, mac)
+
+    async def setup(self):
+        state["setups"] += 1
+        state["in_setup"] = state["added"]
+        try:
+            return await real_setup(self)
+        finally:
+            state["in_setup"] = False
+
+    with (
+        patch.object(HaierClient, "async_get_devices_page", page),
+        patch.object(HaierClient, "async_get_device_status", status),
+        patch.object(api.Haier, "async_setup", setup),
+        patch.object(C, "CACHE_RETRY_FIRST", 5),
+    ):
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+        assert len(config_entry.runtime_data.devices) == 1
+        state["added"], state["setups"] = True, 0
+        await config_entry.runtime_data._async_check_device_list()
+        await asyncio.sleep(1)
+        reloads = state["setups"]
+        state["added"] = False  # ends a loop, if there is one, before the unload
+        await asyncio.sleep(0.5)
+        await hass.async_block_till_done()
+        assert config_entry.state is ConfigEntryState.LOADED
+    await unload(hass, config_entry)
+    # one reload from the cloud, then the saved descriptions and a pause
+    assert reloads == 1
 
 
 # --- п.6: fewer devices than the registry knows ---
