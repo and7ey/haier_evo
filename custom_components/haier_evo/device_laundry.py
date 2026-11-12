@@ -245,6 +245,8 @@ class HaierLaundry(HaierDevice):
         self._cancel_start_pending: Callable[[], None] | None = None
         self._program_parameters: dict = {}
         self._active_program_values: dict = {}
+        self.laundry_updated_at = 0.0  # last useful cycle feedback, separate from link traffic
+        self.refresh_requested: bool | None = None
         self._get_status(backend_data or {})
         self.laundry_events = LaundryEvents(self)
 
@@ -259,6 +261,7 @@ class HaierLaundry(HaierDevice):
         for attr in config.attrs:
             self._apply_value(attr.code, attr.current)
         self.codes = laundry_codes(data)
+        self._observe_laundry_properties({str(attr.code): attr.current for attr in config.attrs})
         self.phase_titles = laundry_phase_titles(data)
         self.is_dryer = isinstance(data.get("device"), dict)
         self._apply_program(self._program_block(data))
@@ -304,15 +307,38 @@ class HaierLaundry(HaierDevice):
                 if isinstance(value, dict) and value.get("attrName") is not None and value.get("attrValue") is not None
             }
 
+        if self.program_status in LAUNDRY_PROGRAM_STATES:
+            self.laundry_updated_at = self._haier._now()
+
+    def _observe_laundry_properties(self, properties: dict) -> None:
+        for meaning in ("cyclePhase", "remainingDryTime", "remainingTimeHH", "remainingTimeMM"):
+            code = self.codes.get(meaning)
+            value = properties.get(code) if code is not None else None
+            number = parsefloat(value)
+            if (not isinstance(value, bool) and number is not None
+                    and number == number and abs(number) != float("inf")):
+                self.laundry_updated_at = self._haier._now()
+                return
+
     def update_from_backend(self, data: dict, *, requested_at: float | None = None) -> None:
         if isinstance(data, dict):
             self._apply_program(self._program_block(data))
         super().update_from_backend(data)
+        self._observe_laundry_properties({
+            str(attr.get("name")): attr.get("currentValue")
+            for attr in device_part(data).get("attributes") or [] if isinstance(attr, dict)
+        })
         if (self.state in ("running", "paused") or (
                 requested_at is not None and self._start_sent_at is not None
                 and requested_at >= self._start_sent_at and self.state in LAUNDRY_ACTION_STATES["start"]
         )):
             self.clear_start_pending()
+
+    def _handle_status_update(self, received_message: dict) -> None:
+        statuses = _d(received_message.get("payload")).get("statuses")
+        for status in statuses if isinstance(statuses, list) else []:
+            self._observe_laundry_properties(_d(_d(status).get("properties")))
+        super()._handle_status_update(received_message)
 
     def _value(self, meaning: str) -> str | None:
         code = self.codes.get(meaning)
@@ -393,14 +419,21 @@ class HaierLaundry(HaierDevice):
         return data
 
     def on_message(self, message_dict: dict) -> None:
+        was_connected, previous_link, previous_power = self.connected, self.link_status, self.power
+        self.refresh_requested = None
+        active_without_power = False
         event = message_dict.get("event")
         if event in ("ProgramWasherBaseEvent", "ProgramDryerBaseEvent"):
             # the program changed: started, paused, finished, cancelled
             data = _d(message_dict.get("data"))
+            program = data["program"] if isinstance(data.get("program"), dict) else data
+            active_without_power = (self.connected and self.power is False
+                                    and program.get("status") in ("PROGRAM_STARTED", "IN_PROGRESS", "STARTED", "PAUSED"))
             if isinstance(data.get("program"), dict):
                 self._apply_program(data["program"])
             elif data.get("status") in ("PROGRAM_STARTED", "PROGRAM_FINISHED"):
                 self.program_status = str(data["status"]).removeprefix("PROGRAM_").replace("STARTED", "IN_PROGRESS")
+                self.laundry_updated_at = self._haier._now()
             self.changed_at = time.monotonic()
             if data.get("status") == "PROGRAM_STARTED":
                 self.laundry_events.observe(started=True)
@@ -416,6 +449,13 @@ class HaierLaundry(HaierDevice):
             super().on_message(message_dict)
         if self.state in ("running", "paused"):
             self.clear_start_pending()
+        if event == "deviceStatusEvent" and _d(message_dict.get("payload")).get("status") is not None and not self.connected:
+            self.refresh_requested = False
+        elif (not was_connected and self.connected
+              or event == "deviceConnectionStatusEvent" and self.link_status == "GOOD" and previous_link != "GOOD"
+              or self.connected and previous_power is False and self.power is True
+              or active_without_power):
+            self.refresh_requested = True
 
     def create_entities_sensor(self) -> list:
         from . import sensor

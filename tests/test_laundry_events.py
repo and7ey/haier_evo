@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import timedelta
+from time import monotonic
 from types import SimpleNamespace
 
 import pytest
@@ -21,7 +22,7 @@ from .test_devices import LAUNDRY, eid, start, stop
 @pytest.fixture(params=[0, 1, 2], ids=["HW60", "HW90", "HD80"])
 def machine(hass, request):
     row = load_fixture("laundry_dump.json")["devices"][request.param]
-    hub = SimpleNamespace(hass=hass, cloud_available=True)
+    hub = SimpleNamespace(hass=hass, cloud_available=True, _now=monotonic)
     device = HaierLaundry(haier=hub, device_mac=row["device_id"], backend_data=deepcopy(row["backend_data"]))
     device._apply_value(device.codes["onOffStatus"], "1")
     device._apply_value(device.codes["cyclePhase"], "0")

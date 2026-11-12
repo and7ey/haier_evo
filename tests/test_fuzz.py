@@ -10,6 +10,7 @@ import copy
 import json
 import random
 import re
+from time import monotonic
 from types import SimpleNamespace
 from typing import Any
 
@@ -59,7 +60,7 @@ def _mutated(data: dict, rng: random.Random) -> dict:
 
 
 def _hub(hass) -> Any:
-    return SimpleNamespace(hass=hass, cloud_available=True, laundry_control=True)
+    return SimpleNamespace(hass=hass, cloud_available=True, laundry_control=True, _now=monotonic)
 
 
 def _sane(device: HaierDevice) -> None:
