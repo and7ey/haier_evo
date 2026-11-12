@@ -1,0 +1,433 @@
+{
+ "_": "Water heater ES100V-F7 (type WH, firmware 1.6.0) from the diagnostics in and7ey/haier_evo#101, November 2026, anonymized: MAC, serial number, IP and links replaced (tests/check_water_heater.py)",
+ "backend_data": null,
+ "devices": [
+  {
+   "device_id": "5c:01:3b:00:00:09",
+   "device_mac": "5c:01:3b:00:00:09",
+   "device_name": "Water Heater ES100V-F7",
+   "device_serial": "SNWH0000000000000009",
+   "sw_version": "1.6.0",
+   "backend_data": {
+    "info": {
+     "macAddress": "5c:01:3b:00:00:09",
+     "model": "ES100V-F7",
+     "serialNumber": "SNWH0000000000000009"
+    },
+    "status": "ONLINE",
+    "settings": {
+     "name": {
+      "title": "Имя устройства",
+      "actionTitle": "Изменить имя устройства",
+      "actionDescription": "Имя отображается на дашборде",
+      "name": "Water Heater ES100V-F7"
+     },
+     "firmware": {
+      "title": "Версия прошивки",
+      "value": "1.6.0",
+      "action": {
+       "link": "haierevo://hiHome/device/firmware-update?macAddress=5c:01:3b:00:00:09",
+       "params": {},
+       "type": "ACTION_TYPE_REDIRECT"
+      },
+      "updateRequired": true,
+      "autoUpdate": {
+       "description": "Автообновление прошивки",
+       "enabled": true
+      },
+      "isDeepOtaSupport": false
+     },
+     "notifications": {
+      "title": "Уведомления",
+      "isEnabled": true
+     },
+     "about": {
+      "title": "Об устройстве",
+      "action": {
+       "link": "haierevo://iot/device?serialNum=SNWH0000000000000009&macAddress=5c:01:3b:00:00:09&iotDeviceId=656269&ip=192.0.2.9",
+       "params": {},
+       "type": "ACTION_TYPE_REDIRECT"
+      }
+     },
+     "removeDevice": {
+      "title": "Удалить устройство"
+     }
+    },
+    "attributes": [
+     {
+      "type": "STEP",
+      "name": "0",
+      "description": "Текущая температура",
+      "currentValue": "72",
+      "readable": true,
+      "writable": false,
+      "invisible": false,
+      "range": {
+       "type": "STEP",
+       "data": {
+        "dataType": "Integer",
+        "step": "1",
+        "minValue": "1",
+        "maxValue": "75"
+       }
+      }
+     },
+     {
+      "type": "LIST",
+      "name": "38",
+      "description": "Дезинфекция",
+      "currentValue": "0",
+      "operationType": "I",
+      "readable": true,
+      "writable": true,
+      "invisible": false,
+      "list": {
+       "type": "LIST",
+       "data": [
+        {
+         "data": "false",
+         "name": "Выключен"
+        },
+        {
+         "data": "true",
+         "name": "Активен"
+        }
+       ]
+      }
+     },
+     {
+      "type": "LIST",
+      "name": "43",
+      "description": "Поддержка температуры/обогрев",
+      "currentValue": "1",
+      "readable": true,
+      "writable": false,
+      "invisible": false,
+      "list": {
+       "type": "LIST",
+       "data": [
+        {
+         "data": "1",
+         "name": "В режиме сохранения тепла"
+        },
+        {
+         "data": "2",
+         "name": "Режим нагрева"
+        }
+       ]
+      }
+     },
+     {
+      "type": "STEP",
+      "name": "1",
+      "description": "Целевая температура",
+      "currentValue": "75",
+      "operationType": "I",
+      "readable": true,
+      "writable": true,
+      "invisible": false,
+      "range": {
+       "type": "STEP",
+       "data": {
+        "dataType": "Integer",
+        "step": "1",
+        "minValue": "35",
+        "maxValue": "75"
+       }
+      }
+     },
+     {
+      "type": "LIST",
+      "name": "41",
+      "description": "Режим нагрева",
+      "currentValue": "1",
+      "operationType": "I",
+      "readable": true,
+      "writable": true,
+      "invisible": false,
+      "list": {
+       "type": "LIST",
+       "data": [
+        {
+         "data": "0",
+         "name": "Не установлен"
+        },
+        {
+         "data": "1",
+         "name": "Половинка"
+        },
+        {
+         "data": "2",
+         "name": "Вся емкость"
+        }
+       ]
+      }
+     },
+     {
+      "type": "LIST",
+      "name": "35",
+      "description": "Включение/выключение",
+      "currentValue": "1",
+      "operationType": "I",
+      "readable": true,
+      "writable": true,
+      "invisible": false,
+      "list": {
+       "type": "LIST",
+       "data": [
+        {
+         "data": "false",
+         "name": "Выключен"
+        },
+        {
+         "data": "true",
+         "name": "Активен"
+        }
+       ]
+      }
+     }
+    ],
+    "errors": {
+     "alarmToResult": {
+      "middleTempSensorErr": {
+       "text": "[E3] Отсутствует связь с датчиком температуры бойлера (средний резервуар).",
+       "description": "Отключите устройство от электропитания и обратитесь в отдел послепродажного обслуживания."
+      },
+      "alarmCancel": {
+       "text": "Ошибка устройства.",
+       "description": "Обратитесь в отдел послепродажного обслуживания."
+      },
+      "dryHeatingAlarm": {
+       "text": "[H0] Датчик температуры воды зафиксировал перегрев.",
+       "description": "Отключите устройство от электропитания и обратитесь в отдел послепродажного обслуживания."
+      },
+      "upperTempSensorErr": {
+       "text": "[E6] Отсутствует связь с датчиком температуры бойлера (верхний резервуар).",
+       "description": "Отключите устройство от электропитания и обратитесь в отдел послепродажного обслуживания."
+      }
+     },
+     "detailsText": "Подробнее",
+     "alarmTitleText": "Ошибки устройства",
+     "multipleAlarmTitle": "Обнаружены ошибки работы устройства",
+     "undefinedAlarm": {
+      "text": "Неизвестная ошибка",
+      "description": "Обратитесь в отдел послепродажного обслуживания"
+     },
+     "chatSupportBtn": {
+      "text": "Чат поддержки",
+      "deeplink": "haierevo://chat"
+     },
+     "serviceRequestBtn": {
+      "text": "Заявка на ремонт",
+      "deeplink": "haierevo://support/repair"
+     }
+    },
+    "constraint": [],
+    "modifiers": [
+     {
+      "priority": 5,
+      "trigger": {
+       "operator": "OR",
+       "alarms": [
+        "middleTempSensorErr",
+        "dryHeatingAlarm",
+        "upperTempSensorErr"
+       ]
+      },
+      "actions": [
+       {
+        "name": "1",
+        "rewriteFields": "W",
+        "writable": false
+       },
+       {
+        "name": "35",
+        "rewriteFields": "W",
+        "writable": false
+       },
+       {
+        "name": "38",
+        "rewriteFields": "W",
+        "writable": false
+       },
+       {
+        "name": "41",
+        "rewriteFields": "W",
+        "writable": false
+       }
+      ]
+     },
+     {
+      "priority": 4,
+      "trigger": {
+       "operator": "AND",
+       "conditions": {
+        "condition": [
+         {
+          "mode": "35",
+          "values": [
+           "false"
+          ]
+         }
+        ]
+       },
+       "alarms": []
+      },
+      "actions": [
+       {
+        "name": "1",
+        "rewriteFields": "W",
+        "writable": false
+       },
+       {
+        "name": "38",
+        "rewriteFields": "W",
+        "writable": false
+       },
+       {
+        "name": "41",
+        "rewriteFields": "W",
+        "writable": false
+       }
+      ]
+     },
+     {
+      "priority": 3,
+      "trigger": {
+       "operator": "AND",
+       "conditions": {
+        "condition": [
+         {
+          "mode": "38",
+          "values": [
+           "true"
+          ]
+         }
+        ]
+       },
+       "alarms": []
+      },
+      "actions": [
+       {
+        "name": "1",
+        "rewriteFields": "W",
+        "writable": false
+       }
+      ]
+     }
+    ],
+    "alarms": [],
+    "groupCommands": [],
+    "pairingInfo": {
+     "info": {
+      "title": "Повторное подключение «%s»",
+      "subtitle": "На вашем устройстве было запущено повторное подключение к умному дому, если это действие активировано случайно, то нажмите «Отменить подключение»",
+      "continuePairingBtn": "Продолжить подключение",
+      "cancelPairingBtn": "Отменить подключение"
+     },
+     "progress": {
+      "title": "Отмена повторного подключения",
+      "subtitle": "Это может занять некоторое время, прежде чем устройство вернется в рабочее состояние"
+     },
+     "error": {
+      "title": "Не удалось отменить повторное подключение",
+      "subtitle": "Во время отмены повторного подключения «%s» возникла ошибка, из-за которой не удалось завершить процесс отмены",
+      "repeatBtn": "Повторить попытку"
+     }
+    },
+    "control": {
+     "value": {
+      "type": "STEP",
+      "name": "1",
+      "description": "targetTemperature"
+     },
+     "statusValue": {
+      "type": "LIST",
+      "name": "43",
+      "description": "heatingStatus"
+     }
+    },
+    "power": {
+     "value": {
+      "type": "LIST",
+      "name": "35",
+      "description": "onOffStatus"
+     },
+     "title": "Питание",
+     "offTitle": ""
+    },
+    "sterilizationStatus": {
+     "value": {
+      "type": "LIST",
+      "name": "38",
+      "description": "sterilizationStatus"
+     },
+     "title": "Дезинфекция"
+    },
+    "workingMode": {
+     "value": {
+      "type": "LIST",
+      "name": "41",
+      "description": "heatingMode"
+     },
+     "title": "Режим работы",
+     "hint": "ECO – функция энергосбережения, которая снижает потребление энергии, автоматически оптимизируя работу устройства. Это помогает экономить электричество и продлевает срок службы устройства.\n MAX – режим быстрого нагрева воды. В этом режиме оба бака будут нагреваться до установленной температуры, диапазон регулировки температуры 35–75°C. После нагрева до установленной температуры она будет поддерживаться.\n Дезинфекция (BPS) - режим устранения вредных бактерий и микроорганизмов. Данный режим нагревает оба бака до 75°С после чего водонагреватель возвращается в предыдущий установленный режим работы.",
+     "descriptions": [
+      {
+       "data": "1",
+       "desc": "Экономичный нагрев",
+       "title": "Eco"
+      },
+      {
+       "data": "2",
+       "desc": "Быстрый нагрев",
+       "title": "Max"
+      }
+     ]
+    },
+    "connectionStatus": {
+     "status": "UNDEFINED",
+     "connections": {
+      "GOOD": {
+       "title": "Подключение восстановлено",
+       "bottomSheetContent": {
+        "title": "",
+        "description": ""
+       }
+      },
+      "BAD": {
+       "title": "Плохое подключение к интернету",
+       "bottomSheetContent": {
+        "title": "Плохое подключение «${deviceName}» к интернету",
+        "description": "Команды на устройстве могут обрабатываться с задержкой. Проверьте качество связи сети Wi-Fi, к которой подключено устройство, или смените точку подключения"
+       }
+      },
+      "LOST": {
+       "title": "Потеряно подключение к интернету",
+       "bottomSheetContent": {
+        "title": "",
+        "description": ""
+       }
+      }
+     },
+     "confirmBtnText": "Закрыть",
+     "detailsText": "Подробнее"
+    },
+    "scenarios": {
+     "default": {
+      "icon": "https://example.invalid/3317df97-b60b-4db0-9458-e128adec4dfd",
+      "title": "Сценарии",
+      "count": 2,
+      "deeplink": "haierevo://hiHome/device/scenario?macAddress=5c:01:3b:00:00:09",
+      "trackingData": {
+       "data": {
+        "type": "WH"
+       },
+       "items": []
+      }
+     }
+    }
+   }
+  }
+ ]
+}

@@ -15,7 +15,7 @@ def check(name, got, want=True):
 
 LEVELS = {"устройство": "device", "данные облака": "data", "профиль": "profile", "сообщение": "report"}
 KINDS = {"AC": "Кондиционер", "REF": "Холодильник", "WH": "Водонагреватель", "WM": "Стиральная машина", "DRY": "Сушильная машина"}
-FIXTURES = ("evo_dump.json", "ref_dump.json", "laundry_dump.json")
+FIXTURES = ("evo_dump.json", "ref_dump.json", "laundry_dump.json", "wh_dump.json")
 
 def key(model: str) -> str:
     """What the integration looks a profile up by: no maker's note in brackets, no - / or spaces."""
