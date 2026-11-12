@@ -203,6 +203,114 @@
         },
         "laundry_start_pending": {
             "message": "{device}: старт ещё не подтверждён. Проверьте машину перед повтором; новый запуск станет доступен после свежего статуса ожидания или через две минуты"
+        },
+        "laundry_parameters_invalid_value": {
+            "message": "{device}: Некорректное значение настройки"
+        },
+        "laundry_parameters_number_expected": {
+            "message": "{device}: Ожидалось число"
+        },
+        "laundry_parameters_finite_number": {
+            "message": "{device}: Ожидалось конечное число"
+        },
+        "laundry_parameters_ambiguous_program": {
+            "message": "{device}: Программа не найдена или неоднозначна"
+        },
+        "laundry_parameters_missing_schema": {
+            "message": "{device}: Отсутствует схема программы"
+        },
+        "laundry_parameters_invalid_schema": {
+            "message": "{device}: Некорректная схема программы"
+        },
+        "laundry_parameters_unknown_choices": {
+            "message": "{device}: Неизвестный список значений настройки"
+        },
+        "laundry_parameters_invalid_choices": {
+            "message": "{device}: Некорректный список значений настройки"
+        },
+        "laundry_parameters_ambiguous_range": {
+            "message": "{device}: Неоднозначный диапазон настройки"
+        },
+        "laundry_parameters_unknown_range": {
+            "message": "{device}: Неизвестный диапазон настройки"
+        },
+        "laundry_parameters_invalid_range": {
+            "message": "{device}: Некорректный диапазон настройки"
+        },
+        "laundry_parameters_large_range": {
+            "message": "{device}: Диапазон настройки слишком велик"
+        },
+        "laundry_parameters_missing_range": {
+            "message": "{device}: Отсутствует диапазон настройки"
+        },
+        "laundry_parameters_invalid_dependencies": {
+            "message": "{device}: Некорректные зависимости настроек"
+        },
+        "laundry_parameters_unknown_condition": {
+            "message": "{device}: Неизвестное условие зависимости настроек"
+        },
+        "laundry_parameters_unknown_dependency_action": {
+            "message": "{device}: Неизвестное действие зависимости настроек"
+        },
+        "laundry_parameters_conflicting_dependencies": {
+            "message": "{device}: Противоречивые зависимости настроек"
+        },
+        "laundry_parameters_cyclic_dependencies": {
+            "message": "{device}: Зависимости настроек не удалось согласовать"
+        },
+        "laundry_parameters_invalid_program": {
+            "message": "{device}: Некорректная программа"
+        },
+        "laundry_parameters_invalid_parameters": {
+            "message": "{device}: Некорректные настройки программы"
+        },
+        "laundry_parameters_invalid_device_values": {
+            "message": "{device}: Некорректные данные устройства"
+        },
+        "laundry_parameters_invalid_alarms": {
+            "message": "{device}: Некорректные данные ошибок устройства"
+        },
+        "laundry_parameters_incomplete_command": {
+            "message": "{device}: Неполная команда программы"
+        },
+        "laundry_parameters_invalid_defaults": {
+            "message": "{device}: Начальные настройки программы вне допустимых значений"
+        },
+        "laundry_parameters_unknown_soil": {
+            "message": "{device}: Неизвестные уровни загрязнения"
+        },
+        "laundry_parameters_unavailable_value": {
+            "message": "{device}: Настройка недоступна или значение выходит за допустимые пределы"
+        },
+        "laundry_parameters_invalid_choice": {
+            "message": "{device}: Недопустимый вариант настройки"
+        },
+        "laundry_parameters_invalid_forced_value": {
+            "message": "{device}: Некорректное принудительное значение настройки"
+        },
+        "laundry_parameters_schedule_unavailable": {
+            "message": "{device}: Запланировать программу с этими параметрами нельзя"
+        },
+        "laundry_parameters_schedule_conflict": {
+            "message": "{device}: Противоречивое время запуска программы"
+        },
+        "laundry_parameters_missing_default_option": {
+            "message": "{device}: Начальное значение настройки отсутствует в списке"
+        },
+        "laundry_parameters_missing_soil": {
+            "message": "{device}: Начальный уровень загрязнения отсутствует в описании"
+        },
+        "laundry_parameters_program_changed": {
+            "message": "{device}: Выбранная программа изменилась; откройте параметры заново"
+        },
+        "laundry_parameters_active": {
+            "message": "{device}: Параметры можно изменить только до запуска программы"
+        },
+        "laundry_parameters_unavailable": {
+            "message": "{device}: Параметр недоступен для выбранной программы"
+        },
+        "laundry_parameters_target": {
+            "message": "Выберите объект «Программа для запуска» стиральной или сушильной машины Haier"
         }
     },
     "options": {
@@ -215,6 +323,22 @@
                 },
                 "data_description": {
                     "laundry_control": "Выключено: машины только показываются, им ничего не отправляется."
+                }
+            }
+        }
+    },
+    "services": {
+        "configure_program": {
+            "name": "Настроить программу",
+            "description": "Изменить параметры выбранной программы для следующего запуска. Команды машине не отправляются.",
+            "fields": {
+                "program": {
+                    "name": "Программа",
+                    "description": "Точное значение объекта «Программа для запуска»."
+                },
+                "parameters": {
+                    "name": "Параметры",
+                    "description": "Коды параметров и значения из атрибута program_settings выбранного объекта."
                 }
             }
         }

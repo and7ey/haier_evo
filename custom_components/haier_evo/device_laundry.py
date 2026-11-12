@@ -15,12 +15,14 @@ from collections.abc import Callable
 from typing import Any
 
 from homeassistant.core import callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.event import async_call_later
 
 from . import config as CFG  # noqa: N812
 from . import const as C  # noqa: N812
 from .device import HaierCommandLocked, HaierCommandRejected, HaierDevice, _norm, device_part, parsefloat
 from .laundry_events import LaundryEvents
+from .programs import ProgramValidationError, active_program_details, build_catalogue, program_settings
 
 # washing machines, washer-dryers and dryers
 LAUNDRY_TYPES = ("WM", "WD", "DRY", "TD")
@@ -226,12 +228,15 @@ class HaierLaundry(HaierDevice):
         self.program_status: str | None = None  # IN_PROGRESS, PAUSED, FINISHED... as the cloud says
         self.is_dryer = False
         self.programs: list[dict] = []
+        self._program_catalog: list = []
         self.actions: dict[str, dict] = {}
         self.selected_program: str | None = None  # what the start button runs
         self._control_lock = asyncio.Lock()  # one command at a time
         self._start_pending = False
         self._start_sent_at: float | None = None
         self._cancel_start_pending: Callable[[], None] | None = None
+        self._program_parameters: dict = {}
+        self._active_program_values: dict = {}
         self._get_status(backend_data or {})
         self.laundry_events = LaundryEvents(self)
 
@@ -250,6 +255,7 @@ class HaierLaundry(HaierDevice):
         self.is_dryer = isinstance(data.get("device"), dict)
         self._apply_program(self._program_block(data))
         self.programs = laundry_programs(data)
+        self._program_catalog = build_catalogue(data, self._settings_programs, plain_titles=True)
         self.actions = laundry_actions(data)
         if self.selected_program not in {p["title"] for p in self.programs}:
             # the last program of the machine, as the app suggests it
@@ -257,6 +263,7 @@ class HaierLaundry(HaierDevice):
             self.selected_program = next(
                 (p["title"] for p in self.programs if p["link"] == _d(link).get("name")), None
             )
+            self._program_parameters = {}
 
     @staticmethod
     def _program_block(data: Any) -> dict | None:
@@ -269,13 +276,25 @@ class HaierLaundry(HaierDevice):
     def _apply_program(self, program: dict | None) -> None:
         if program is None:
             self.program_title = self.program_status = None
+            self._active_program_values = {}
             return
         title = program.get("title")
-        self.program_title = title.strip() if isinstance(title, str) and title.strip() else None
+        title = title.strip() if isinstance(title, str) and title.strip() else None
+        if title != self.program_title:
+            self._active_program_values = {}
+        self.program_title = title
         status = program.get("status")
         self.program_status = (
             str(status).upper().removeprefix("PROGRAM_") if isinstance(status, str) and status else None
         )
+        selected = _d(program.get("config")).get("selectedValues")
+        if not isinstance(selected, list):
+            selected = program.get("selectedValues")
+        if isinstance(selected, list):
+            self._active_program_values = {
+                str(value["attrName"]): value["attrValue"] for value in selected
+                if isinstance(value, dict) and value.get("attrName") is not None and value.get("attrValue") is not None
+            }
 
     def update_from_backend(self, data: dict, *, requested_at: float | None = None) -> None:
         if isinstance(data, dict):
@@ -436,6 +455,8 @@ class HaierLaundry(HaierDevice):
         """Choose what the start button runs; nothing is sent."""
         if title not in {p["title"] for p in self.programs}:
             raise self._control_error("laundry_unknown_program", program=str(title))
+        if self.selected_program != title:
+            self._program_parameters = {}
         self.selected_program = title
         self.notify()
 
@@ -463,6 +484,7 @@ class HaierLaundry(HaierDevice):
         program = next((p for p in self.programs if p["title"] == self.selected_program), None)
         if program is None:
             raise self._control_error("laundry_no_program")
+        commands = self._start_commands(program)
         self._start_pending = True
         self._start_sent_at = None
         self._cancel_start_pending = async_call_later(self.hass, START_PENDING_TIMEOUT, self.clear_start_pending)
@@ -471,7 +493,7 @@ class HaierLaundry(HaierDevice):
                 "action": "operation",
                 "macAddress": self.device_id,
                 "commandName": program["group"],
-                "commands": [dict(c) for c in program["commands"]],
+                "commands": commands,
             })
         except HaierCommandRejected:
             self.clear_start_pending()
@@ -514,3 +536,79 @@ class HaierLaundry(HaierDevice):
         from . import button
         actions = (["start"] if self.programs else []) + [a for a in ("pause", "resume", "cancel") if a in self.actions]
         return [button.HaierLaundryButton(self, action) for action in actions]
+
+    @property
+    def _settings_programs(self) -> dict:
+        return {p["title"]: {"commandName": p["group"], "commands": p["commands"]} for p in self.programs}
+
+    @property
+    def program_catalog(self) -> list:
+        return self._program_catalog
+
+    @property
+    def program_settings(self) -> dict:
+        if self.selected_program not in self._settings_programs:
+            return {}
+        try:
+            settings = program_settings(
+                self.status_data, self.selected_program, self._settings_programs[self.selected_program],
+                self._program_parameters, self._raw, self.alarms,
+            )
+        except ProgramValidationError as err:
+            return {
+                "program": self.selected_program, "fields": [],
+                "error": {"translation_key": err.translation_key,
+                          "translation_placeholders": {"device": str(self.device_name)}},
+            }
+        return {key: value for key, value in settings.items() if key != "commands"}
+
+    @property
+    def active_program_details(self) -> dict:
+        if not self.available or not self.program_title:
+            return {}
+        result = active_program_details(
+            self.status_data, self.program_title, self._settings_programs, self._raw, self._active_program_values,
+        )
+        result["remaining_minutes"] = self.remaining_time
+        return result
+
+    def _parameter_error(self, translation_key: str) -> ServiceValidationError:
+        return ServiceValidationError(
+            translation_domain=C.DOMAIN, translation_key=translation_key,
+            translation_placeholders={"device": str(self.device_name)},
+        )
+
+    def configure_program(self, program: str, parameters: dict) -> None:
+        """Stage validated preferences; sending is reserved for the native start button."""
+        if not self.control_enabled:
+            raise self._parameter_error("laundry_control_off")
+        if program != self.selected_program or program not in self._settings_programs:
+            raise self._parameter_error("laundry_parameters_program_changed")
+        if self.state in ("running", "paused"):
+            raise self._parameter_error("laundry_parameters_active")
+        if self._start_pending or self._control_lock.locked():
+            raise self._parameter_error("laundry_busy")
+        settings = self.program_settings
+        if error := settings.get("error"):
+            raise self._parameter_error(error["translation_key"])
+        editable = {field["key"] for field in settings.get("fields", []) if not field.get("disabled")}
+        if not isinstance(parameters, dict) or not parameters or not set(parameters) <= editable:
+            raise self._parameter_error("laundry_parameters_unavailable")
+        updated = {**self._program_parameters, **parameters}
+        try:
+            program_settings(self.status_data, program, self._settings_programs[program], updated, self._raw, self.alarms)
+        except ProgramValidationError as err:
+            raise self._parameter_error(err.translation_key) from err
+        self._program_parameters = updated
+        self.notify()
+
+    def _start_commands(self, program: dict) -> list:
+        if not self._program_parameters:
+            return [dict(command) for command in program["commands"]]
+        try:
+            return program_settings(
+                self.status_data, self.selected_program, self._settings_programs[self.selected_program],
+                self._program_parameters, self._raw, self.alarms,
+            )["commands"]
+        except ProgramValidationError as err:
+            raise self._parameter_error(err.translation_key) from err

@@ -203,6 +203,114 @@
         },
         "laundry_start_pending": {
             "message": "{device}: start is not confirmed yet. Check the machine before retrying; a fresh idle status or two minutes will allow another start"
+        },
+        "laundry_parameters_invalid_value": {
+            "message": "{device}: Invalid parameter value"
+        },
+        "laundry_parameters_number_expected": {
+            "message": "{device}: A number is required"
+        },
+        "laundry_parameters_finite_number": {
+            "message": "{device}: A finite number is required"
+        },
+        "laundry_parameters_ambiguous_program": {
+            "message": "{device}: The program was not found or its description is ambiguous"
+        },
+        "laundry_parameters_missing_schema": {
+            "message": "{device}: The cloud did not provide a parameter schema for this program"
+        },
+        "laundry_parameters_invalid_schema": {
+            "message": "{device}: The cloud provided an invalid parameter schema"
+        },
+        "laundry_parameters_unknown_choices": {
+            "message": "{device}: The parameter has no supported list of values"
+        },
+        "laundry_parameters_invalid_choices": {
+            "message": "{device}: The cloud provided an invalid list of parameter values"
+        },
+        "laundry_parameters_ambiguous_range": {
+            "message": "{device}: The parameter range is ambiguous"
+        },
+        "laundry_parameters_unknown_range": {
+            "message": "{device}: The parameter has no supported range"
+        },
+        "laundry_parameters_invalid_range": {
+            "message": "{device}: The cloud provided an invalid parameter range"
+        },
+        "laundry_parameters_large_range": {
+            "message": "{device}: The parameter range is too large"
+        },
+        "laundry_parameters_missing_range": {
+            "message": "{device}: The cloud did not provide a parameter range"
+        },
+        "laundry_parameters_invalid_dependencies": {
+            "message": "{device}: The cloud provided invalid parameter dependencies"
+        },
+        "laundry_parameters_unknown_condition": {
+            "message": "{device}: A parameter dependency has an unsupported condition"
+        },
+        "laundry_parameters_unknown_dependency_action": {
+            "message": "{device}: A parameter dependency has an unsupported action"
+        },
+        "laundry_parameters_conflicting_dependencies": {
+            "message": "{device}: The parameter dependencies conflict"
+        },
+        "laundry_parameters_cyclic_dependencies": {
+            "message": "{device}: The parameter dependencies could not be resolved"
+        },
+        "laundry_parameters_invalid_program": {
+            "message": "{device}: The program description is invalid"
+        },
+        "laundry_parameters_invalid_parameters": {
+            "message": "{device}: The program parameters must be an object"
+        },
+        "laundry_parameters_invalid_device_values": {
+            "message": "{device}: The reported device values are invalid"
+        },
+        "laundry_parameters_invalid_alarms": {
+            "message": "{device}: The reported device alarms are invalid"
+        },
+        "laundry_parameters_incomplete_command": {
+            "message": "{device}: The cloud provided an incomplete program command"
+        },
+        "laundry_parameters_invalid_defaults": {
+            "message": "{device}: The default program parameters are outside the allowed values"
+        },
+        "laundry_parameters_unknown_soil": {
+            "message": "{device}: The cloud did not provide supported soil levels"
+        },
+        "laundry_parameters_unavailable_value": {
+            "message": "{device}: The parameter is unavailable or its value is outside the allowed range"
+        },
+        "laundry_parameters_invalid_choice": {
+            "message": "{device}: The parameter value is not an available option"
+        },
+        "laundry_parameters_invalid_forced_value": {
+            "message": "{device}: A parameter dependency provided an invalid forced value"
+        },
+        "laundry_parameters_schedule_unavailable": {
+            "message": "{device}: The program cannot be scheduled with these parameters"
+        },
+        "laundry_parameters_schedule_conflict": {
+            "message": "{device}: The requested schedule conflicts with a program dependency"
+        },
+        "laundry_parameters_missing_default_option": {
+            "message": "{device}: The default parameter value is not in its list of options"
+        },
+        "laundry_parameters_missing_soil": {
+            "message": "{device}: The default soil level is missing from the cloud description"
+        },
+        "laundry_parameters_program_changed": {
+            "message": "{device}: The selected program changed; open its parameters again"
+        },
+        "laundry_parameters_active": {
+            "message": "{device}: Program parameters can only be changed before a program starts"
+        },
+        "laundry_parameters_unavailable": {
+            "message": "{device}: The parameter is unavailable for the selected program"
+        },
+        "laundry_parameters_target": {
+            "message": "Choose the Program to start entity of a Haier washer or dryer"
         }
     },
     "options": {
@@ -215,6 +323,22 @@
                 },
                 "data_description": {
                     "laundry_control": "Off: the machines are only shown, nothing is sent to them."
+                }
+            }
+        }
+    },
+    "services": {
+        "configure_program": {
+            "name": "Configure program",
+            "description": "Stage parameters of the selected program for its next start. No appliance command is sent.",
+            "fields": {
+                "program": {
+                    "name": "Program",
+                    "description": "The exact option of the Program to start entity."
+                },
+                "parameters": {
+                    "name": "Parameters",
+                    "description": "Parameter keys and values from the selected entity’s program_settings attribute."
                 }
             }
         }
