@@ -42,6 +42,7 @@ from .device import (  # noqa: F401
     parsefloat,
 )
 from .device_ac import HaierAC  # noqa: F401
+from .device_laundry import HaierLaundry
 from .device_ref import HaierREF  # noqa: F401
 from .device_wm import HaierWM  # noqa: F401
 from .logger import _LOGGER
@@ -387,6 +388,9 @@ class Haier:
 
     def start(self, entry: ConfigEntry) -> None:
         self._entry = entry
+        for device in self.devices:
+            if isinstance(device, HaierLaundry):
+                entry.async_on_unload(device.clear_start_pending)
         self._task = entry.async_create_background_task(
             self.hass, self._async_ws_loop(), f"{C.DOMAIN} websocket"
         )
@@ -698,13 +702,13 @@ class Haier:
                 # New firmware, attributes or rules: the entities and the
                 # profile were built from the old description (1.6).
                 self._schedule_rebuild(f"the cloud describes {device.device_name} differently")
-            if devices is None and device.synced and device.changed_at > started:
+            if (devices is None or not device.absolute_commands) and device.synced and device.changed_at > started:
                 # A push or a command came in while the request was in flight:
                 # the REST snapshot is older than what the entity already shows.
-                # A targeted resync (lost or rejected command) applies anyway:
-                # it exists to undo an optimistic value.
+                # Only absolute commands need a targeted read-back to undo an
+                # optimistic value; laundry actions never override a newer push.
                 continue
-            device.update_from_backend(status)
+            device.update_from_backend(status, requested_at=started)
             device.notify()
         if devices is None and refused:
             # A refused description may be a unit removed in the app: the
@@ -793,6 +797,7 @@ class Haier:
         True when the unit already has every value of the command: the cloud
         answers so for values that are set already, no refusal.
         """
+        started = self._now()
         try:
             status = await self.client.async_get_device_status(device.device_id)
         except HaierError as error:
@@ -800,13 +805,15 @@ class Haier:
                 _LOGGER.warning("Haier Evo rejected a command, errNo=%s", err)
             _LOGGER.debug("Resync of %s failed: %s", device.device_name, error)
             return False
-        applied = command is not None and command_applied(command, status)
+        applied = device.absolute_commands and command is not None and command_applied(command, status)
         if command is not None:
             if applied:
                 _LOGGER.debug("errNo=%s, but %s already has the requested values", err, device.device_name)
             else:
                 _LOGGER.warning("Haier Evo rejected a command, errNo=%s", err)
-        device.update_from_backend(status)
+        if not device.absolute_commands and device.synced and device.changed_at > started:
+            return applied
+        device.update_from_backend(status, requested_at=started)
         device.notify()
         return applied
 
@@ -845,11 +852,11 @@ class Haier:
     async def _async_ack_watchdog(
         self, trace: str, payload: dict, sent_ws: ClientWebSocketResponse
     ) -> None:
-        """No command_response in time: re-send once on a fresh connection.
+        """No command_response in time: recover the socket and read back a start.
 
         Catches the session that accepts writes but no longer delivers them,
         which a heartbeat cannot see (#89, idea from the JampireX fork).
-        Commands are absolute values, so a duplicate is harmless.
+        Other commands are safe to repeat once on the fresh connection.
         """
         await asyncio.sleep(C.WS_ACK_TIMEOUT)
         if trace not in self._pending:
@@ -864,18 +871,23 @@ class Haier:
             _LOGGER.debug("An unconfirmed command was superseded by a newer one, not re-sending it")
             return
         self._sent_number.pop(trace, None)
-        _LOGGER.warning("Haier Evo did not confirm a command in %s s, re-sending it", C.WS_ACK_TIMEOUT)
+        start = self._is_laundry_start(payload)
+        if start:
+            _LOGGER.warning("Haier Evo did not confirm a start in %s s, reading state without repeating it", C.WS_ACK_TIMEOUT)
+        else:
+            _LOGGER.warning("Haier Evo did not confirm a command in %s s, re-sending it", C.WS_ACK_TIMEOUT)
         # Only the socket the command went out on is suspect: commands sent
         # together must not tear down the fresh connection one after another.
         if sent_ws is self._ws and not sent_ws.closed:
             self._connected.clear()
             await sent_ws.close()
-        try:
-            await self.async_send(payload, retry=True)
-        except HomeAssistantError:
-            pass
-        else:
-            await asyncio.sleep(C.WS_ACK_TIMEOUT)
+        if not start:
+            try:
+                await self.async_send(payload, retry=True)
+            except HomeAssistantError:
+                pass
+            else:
+                await asyncio.sleep(C.WS_ACK_TIMEOUT)
         if self._pending.pop(trace, None) is None:
             return
         self.lost_commands += 1
@@ -907,6 +919,10 @@ class Haier:
         self._last_sent[(mac, "")] = self._sent_count
         for name in command_names(payload):
             self._last_sent[(mac, name)] = self._sent_count
+
+    def _is_laundry_start(self, payload: dict) -> bool:
+        device = self.get_device_by_id(payload.get("macAddress") or "")
+        return device is not None and device.absolute_commands is False and payload.get("action") == "operation"
 
     async def _async_wait_connected(self, wait: float) -> ClientWebSocketResponse | None:
         if self.connected:
@@ -951,6 +967,8 @@ class Haier:
                 self._connected.clear()
                 with suppress(Exception):
                     await ws.close()
+                if self._is_laundry_start(payload):
+                    break  # A failed write may already have started the machine.
                 continue
             except BaseException:
                 # Cancelled mid-write: no watchdog will ever clear the entry.

@@ -11,11 +11,15 @@ import asyncio
 import re
 import time
 import uuid
+from collections.abc import Callable
 from typing import Any
+
+from homeassistant.core import callback
+from homeassistant.helpers.event import async_call_later
 
 from . import config as CFG  # noqa: N812
 from . import const as C  # noqa: N812
-from .device import HaierCommandLocked, HaierDevice, _norm, device_part, parsefloat
+from .device import HaierCommandLocked, HaierCommandRejected, HaierDevice, _norm, device_part, parsefloat
 
 # washing machines, washer-dryers and dryers
 LAUNDRY_TYPES = ("WM", "WD", "DRY", "TD")
@@ -33,6 +37,7 @@ LAUNDRY_ACTION_STATES = {
     "cancel": ("running", "paused"),
 }
 LAUNDRY_ACTIONS = ("start", "pause", "resume", "cancel")
+START_PENDING_TIMEOUT = 120
 _MEANING = re.compile(r"[A-Za-z][A-Za-z0-9]{2,40}")
 
 
@@ -209,8 +214,7 @@ class HaierLaundry(HaierDevice):
     action in. It has not been checked on a real machine.
     """
 
-    # Start, pause, cancel are actions: an unconfirmed "start" is not re-sent
-    # once anything newer (a cancel) went to the machine.
+    # A newer action supersedes an older one; start is never replayed automatically.
     absolute_commands = False
 
     def __init__(self, backend_data: dict | None = None, **kwargs) -> None:
@@ -224,6 +228,9 @@ class HaierLaundry(HaierDevice):
         self.actions: dict[str, dict] = {}
         self.selected_program: str | None = None  # what the start button runs
         self._control_lock = asyncio.Lock()  # one command at a time
+        self._start_pending = False
+        self._start_sent_at: float | None = None
+        self._cancel_start_pending: Callable[[], None] | None = None
         self._get_status(backend_data or {})
 
     @staticmethod
@@ -268,10 +275,15 @@ class HaierLaundry(HaierDevice):
             str(status).upper().removeprefix("PROGRAM_") if isinstance(status, str) and status else None
         )
 
-    def update_from_backend(self, data: dict) -> None:
+    def update_from_backend(self, data: dict, *, requested_at: float | None = None) -> None:
         if isinstance(data, dict):
             self._apply_program(self._program_block(data))
         super().update_from_backend(data)
+        if (self.state in ("running", "paused") or (
+                requested_at is not None and self._start_sent_at is not None
+                and requested_at >= self._start_sent_at and self.state in LAUNDRY_ACTION_STATES["start"]
+        )):
+            self.clear_start_pending()
 
     def _value(self, meaning: str) -> str | None:
         code = self.codes.get(meaning)
@@ -369,6 +381,8 @@ class HaierLaundry(HaierDevice):
                 self.notify()
         else:
             super().on_message(message_dict)
+        if self.state in ("running", "paused"):
+            self.clear_start_pending()
 
     def create_entities_sensor(self) -> list:
         from . import sensor
@@ -421,6 +435,8 @@ class HaierLaundry(HaierDevice):
 
     def _check_control(self, action: str, translation_key: str) -> None:
         """translation_key: the error when the state does not allow the action."""
+        if action == "start" and self._start_pending:
+            raise self._control_error("laundry_start_pending")
         if not self.control_enabled:
             raise self._control_error("laundry_control_off")
         if self.remote_control is not True:
@@ -441,12 +457,31 @@ class HaierLaundry(HaierDevice):
         program = next((p for p in self.programs if p["title"] == self.selected_program), None)
         if program is None:
             raise self._control_error("laundry_no_program")
-        await self._send_control({
-            "action": "operation",
-            "macAddress": self.device_id,
-            "commandName": program["group"],
-            "commands": [dict(c) for c in program["commands"]],
-        })
+        self._start_pending = True
+        self._start_sent_at = None
+        self._cancel_start_pending = async_call_later(self.hass, START_PENDING_TIMEOUT, self.clear_start_pending)
+        try:
+            await self._send_control({
+                "action": "operation",
+                "macAddress": self.device_id,
+                "commandName": program["group"],
+                "commands": [dict(c) for c in program["commands"]],
+            })
+        except HaierCommandRejected:
+            self.clear_start_pending()
+            raise
+        if self._start_pending:
+            self._start_sent_at = time.monotonic()
+
+    @callback
+    def clear_start_pending(self, _now: Any = None) -> None:
+        if self._cancel_start_pending is not None:
+            self._cancel_start_pending()
+            self._cancel_start_pending = None
+        if self._start_pending:
+            self._start_pending = False
+            self._start_sent_at = None
+            self.notify()
 
     async def _act(self, action: str, translation_key: str) -> None:
         self._check_control(action, translation_key)
