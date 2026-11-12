@@ -13,10 +13,11 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.haier_evo import api
+from custom_components.haier_evo import _CLOUD_FALLBACKS, api
 from custom_components.haier_evo import const as C
 from custom_components.haier_evo.api import command_applied
 from custom_components.haier_evo.client import HaierClient, HaierConnectionError
+from custom_components.haier_evo.device_ac import HaierAC
 from custom_components.haier_evo.logger import mask_macs
 
 from .conftest import (
@@ -213,15 +214,68 @@ async def test_background_read_stops_after_the_reauth(
     aioclient_mock.post(REFRESH_URL, status=400, json={"error": {"validation": {"refreshToken": "expired"}}})
 
     caplog.set_level(logging.ERROR)
-    with patch.object(C, "CACHE_RETRY_FIRST", 0.02), patch.object(C, "CACHE_RETRY_MAX", 0.02):
+    reads = 0
+    real = HaierClient.async_get_device_status
+
+    async def counted(self, mac):
+        nonlocal reads
+        reads += 1
+        return await real(self, mac)
+
+    with (
+        patch.object(C, "CACHE_RETRY_FIRST", 0.02),
+        patch.object(C, "CACHE_RETRY_MAX", 0.02),
+        patch.object(HaierClient, "async_get_device_status", counted),
+    ):
         assert await hass.config_entries.async_setup(config_entry.entry_id)
-        await asyncio.sleep(0.5)
+        haier = config_entry.runtime_data
+        async with asyncio.timeout(3):  # an event, not a time: a slow runner gets there later
+            while not haier._reauth_started:
+                await asyncio.sleep(0.01)
+        await asyncio.sleep(0.02)
+        after_reauth = reads
+        await asyncio.sleep(0.3)
         await hass.async_block_till_done()
     await unload(hass, config_entry)
     flows = hass.config_entries.flow.async_progress()
     assert [f["context"]["source"] for f in flows] == ["reauth"]
     assert sum("re-authentication is required" in r.getMessage() for r in caplog.records) == 1
     assert refresh_calls(aioclient_mock) == 1
+    assert reads == after_reauth  # the loop stopped, the status is not read every 0.02 s
+
+
+async def test_no_on_synced_after_a_reauth_in_the_device_list_check(
+    hass, config_entry, mock_cloud, ws_factory, aioclient_mock
+):
+    """Every status read, then the list check finds the sign-in dead: no "synced" for a dead entry."""
+    from unittest.mock import MagicMock
+
+    mock_cloud()
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    await unload(hass, config_entry)
+    aioclient_mock.clear_requests()
+    aioclient_mock.post(REFRESH_URL, status=400, json={"error": {"validation": {"refreshToken": "expired"}}})
+    aioclient_mock.get(DEVICES_URL, status=401, text="")
+    aioclient_mock.get(status_url(MAC_1), json=load_fixture("status_as25php3hra.json"))
+    aioclient_mock.get(status_url(MAC_2), json=load_fixture("status_as70s2sf2fa.json"))
+    synced = MagicMock()
+    real_start = api.Haier.start
+
+    def start(self, entry):
+        self.on_synced = synced
+        real_start(self, entry)
+
+    with patch.object(api.Haier, "start", start):
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        haier = config_entry.runtime_data
+        async with asyncio.timeout(3):
+            while not haier._reauth_started:
+                await asyncio.sleep(0.01)
+        await hass.async_block_till_done()
+    assert not haier.from_cache  # every unit was read
+    synced.assert_not_called()
+    await unload(hass, config_entry)
 
 
 def _devices_page_of_mac_1() -> dict:
@@ -304,16 +358,17 @@ async def test_incomplete_device_list_retries_then_starts(
     await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
     assert config_entry.state is ConfigEntryState.SETUP_RETRY
+    # a retry of a setup that read the cloud reads it again: the mark stays until one succeeds
     for _ in range(C.SETUP_INCOMPLETE_RETRIES - 1):
-        api.RELOAD_FROM_CLOUD.add(config_entry.entry_id)
+        assert config_entry.entry_id in api.RELOAD_FROM_CLOUD
         await hass.config_entries.async_reload(config_entry.entry_id)
         await hass.async_block_till_done()
         assert config_entry.state is ConfigEntryState.SETUP_RETRY
-    api.RELOAD_FROM_CLOUD.add(config_entry.entry_id)
     await hass.config_entries.async_reload(config_entry.entry_id)
     await hass.async_block_till_done()
     assert config_entry.state is ConfigEntryState.LOADED
     assert len(config_entry.runtime_data.devices) == 1
+    assert config_entry.entry_id not in api.RELOAD_FROM_CLOUD
     assert "still does not return" in caplog.text
     ours = [r.getMessage() for r in caplog.records if r.name.startswith("custom_components.haier_evo")]
     assert not [m for m in ours if MAC_2 in m]  # masked
@@ -441,3 +496,164 @@ async def test_saved_devices_go_with_the_entry(hass, config_entry, mock_cloud, w
     assert await hass.config_entries.async_remove(config_entry.entry_id)
     await hass.async_block_till_done()
     assert cache_key(config_entry) not in hass_storage
+
+
+# --- a cloud that answers every other time (AGrigorii, #106, 2026-11-12) ---
+
+
+async def test_reload_that_fell_back_to_the_cache_waits_before_reading_the_cloud(
+    hass, config_entry, mock_cloud, ws_factory, aioclient_mock
+):
+    """Reload from the cloud → no answer → cache: the first background read waits, longer every time."""
+    mock_cloud()
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    await unload(hass, config_entry)
+
+    def status_calls() -> int:
+        return sum(1 for c in aioclient_mock.mock_calls if status_url(MAC_1) in str(c[1]))
+
+    # wide margins: the pause starts inside the setup, a slow runner must not eat it
+    with patch.object(C, "CACHE_RETRY_FIRST", 1.0), patch.object(C, "CACHE_RETRY_MAX", 2.0):
+        # the first fallback: nothing is read before the pause, then the cloud answers
+        cloud(aioclient_mock, devices=502)
+        api.RELOAD_FROM_CLOUD.add(config_entry.entry_id)
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+        haier = config_entry.runtime_data
+        assert haier.from_cache
+        assert haier.first_sync_delay == 1.0
+        assert config_entry.entry_id not in api.RELOAD_FROM_CLOUD
+        await asyncio.sleep(0.1)
+        assert status_calls() == 0  # nothing read before the pause is over
+        cloud(aioclient_mock)
+        # every unit was read: the next fallback starts from the first pause again
+        async with asyncio.timeout(3):
+            while config_entry.entry_id in _CLOUD_FALLBACKS:
+                await asyncio.sleep(0.02)
+        assert status_calls() >= 1
+        assert not haier.from_cache
+        await unload(hass, config_entry)
+
+        # fallbacks in a row: the pause doubles, up to CACHE_RETRY_MAX
+        for expected in (1.0, 2.0, 2.0):
+            cloud(aioclient_mock, devices=502)
+            api.RELOAD_FROM_CLOUD.add(config_entry.entry_id)
+            assert await hass.config_entries.async_setup(config_entry.entry_id)
+            await hass.async_block_till_done()
+            assert config_entry.runtime_data.first_sync_delay == expected
+            await unload(hass, config_entry)
+
+
+async def test_normal_start_from_the_cache_reads_the_cloud_at_once(hass, config_entry, mock_cloud, ws_factory):
+    mock_cloud()
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    await unload(hass, config_entry)
+    _CLOUD_FALLBACKS[config_entry.entry_id] = 2  # earlier fallbacks do not delay a normal start
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    haier = config_entry.runtime_data
+    assert haier.first_sync_delay == 0
+    async with asyncio.timeout(1):
+        while haier.from_cache:
+            await asyncio.sleep(0.02)
+    await unload(hass, config_entry)
+
+
+async def test_status_that_cannot_be_applied_does_not_keep_the_others_stale(
+    hass, config_entry, mock_cloud, ws_factory, caplog
+):
+    """As _async_build_devices: one odd status counts as not read, the others are read; one traceback."""
+    mock_cloud()
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    await unload(hass, config_entry)
+    real = HaierAC.update_from_backend
+
+    def broken_for_mac_1(self, data, *args, **kwargs):
+        if str(self.device_id).lower() == MAC_1:
+            raise ValueError("a value the profile cannot apply")
+        return real(self, data, *args, **kwargs)
+
+    with (
+        patch.object(C, "CACHE_RETRY_FIRST", 0.01),
+        patch.object(C, "CACHE_RETRY_MAX", 0.01),
+        patch.object(HaierAC, "update_from_backend", broken_for_mac_1),
+    ):
+        # MAC_1 is listed first: before, it took MAC_2 down with it
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        haier = config_entry.runtime_data
+        mac_1, mac_2 = haier.get_device_by_id(MAC_1), haier.get_device_by_id(MAC_2)
+        async with asyncio.timeout(3):
+            while not mac_2.synced or caplog.text.count("still cannot be applied") < 2:
+                await asyncio.sleep(0.01)
+    assert not mac_1.synced and haier.from_cache
+    assert sum(1 for r in caplog.records if r.exc_info and "cannot be applied" in r.getMessage()) == 1
+    await unload(hass, config_entry)
+
+
+async def test_no_resync_of_a_reconnect_during_the_pause(hass, config_entry, mock_cloud, ws_factory, aioclient_mock):
+    """A WebSocket that drops for > 30 s during the pause after a fallback must not read the cloud early."""
+    mock_cloud()
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    await unload(hass, config_entry)
+    cloud(aioclient_mock, devices=502)
+    api.RELOAD_FROM_CLOUD.add(config_entry.entry_id)
+    with patch.object(C, "CACHE_RETRY_FIRST", 60), patch.object(C, "WS_RESYNC_AFTER", 0):
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+        haier = config_entry.runtime_data
+        await ws_factory.wait_for(1)
+        assert haier._sync_paused
+        with patch.object(haier, "_async_resync") as resync:
+            ws_factory.current.server_close()
+            await ws_factory.wait_for(2)
+            await asyncio.sleep(0.05)
+            await haier._async_periodic_refresh()
+        resync.assert_not_called()
+    await unload(hass, config_entry)
+
+
+async def test_reconnect_resyncs_a_start_from_the_cache_without_a_pause(
+    hass, config_entry, mock_cloud, ws_factory, aioclient_mock
+):
+    """Only the pause holds the resync back: a normal start from the cache waiting for REST keeps it."""
+    mock_cloud()
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    await unload(hass, config_entry)
+    cloud(aioclient_mock, devices=502)
+    with patch.object(C, "CACHE_RETRY_FIRST", 60), patch.object(C, "WS_RESYNC_AFTER", 0):
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+        haier = config_entry.runtime_data
+        assert haier.from_cache and not haier._sync_paused
+        await ws_factory.wait_for(1)
+        with patch.object(haier, "_async_resync", return_value=set()) as resync:
+            ws_factory.current.server_close()
+            await ws_factory.wait_for(2)
+            async with asyncio.timeout(2):
+                while not resync.called:
+                    await asyncio.sleep(0.01)
+    await unload(hass, config_entry)
+
+
+async def test_fallback_counter_is_reset_by_a_cloud_start_and_by_removal(
+    hass, config_entry, mock_cloud, ws_factory
+):
+    mock_cloud()
+    _CLOUD_FALLBACKS[config_entry.entry_id] = 3
+    api.RELOAD_FROM_CLOUD.add(config_entry.entry_id)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert config_entry.entry_id not in _CLOUD_FALLBACKS  # the cloud answered the start
+    assert config_entry.entry_id not in api.RELOAD_FROM_CLOUD
+    _CLOUD_FALLBACKS[config_entry.entry_id] = 3
+    api.RELOAD_FROM_CLOUD.add(config_entry.entry_id)
+    assert await hass.config_entries.async_remove(config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert config_entry.entry_id not in _CLOUD_FALLBACKS
+    assert config_entry.entry_id not in api.RELOAD_FROM_CLOUD
+

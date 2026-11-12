@@ -15,6 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 
 from . import api
+from . import const as C  # noqa: N812
 from .client import (
     STORAGE_VERSION,
     HaierAuthError,
@@ -53,6 +54,11 @@ _MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 _HTTP_DEVICE = (DOMAIN, f"{DOMAIN}_http_switch")
 # entry_id -> setups in a row that got fewer devices than the registry knows
 _INCOMPLETE_SETUPS: dict[str, int] = {}
+# entry_id -> reloads from the cloud in a row that fell back to the saved
+# descriptions: the first background read of such a start waits, longer every
+# time, so a cloud that answers every other time does not rebuild the entities
+# in a loop (in 1.7 such a start went to setup retry, with HA's backoff).
+_CLOUD_FALLBACKS: dict[str, int] = {}
 
 
 def token_store(hass: HomeAssistant, entry_id: str) -> Store:
@@ -179,8 +185,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> boo
     # good one at once, and the real state is read in the background (an HA
     # start does not wait for a slow cloud). A reload that is there because
     # those descriptions are out of date reads the cloud.
+    # Left set until a setup succeeds: a retry of a setup that read the cloud
+    # (fewer devices than known, a cloud error) reads it again.
     from_cloud = entry.entry_id in api.RELOAD_FROM_CLOUD
-    api.RELOAD_FROM_CLOUD.discard(entry.entry_id)
     if from_cloud or not await _async_setup_from_cache(haier, cache, None):
         try:
             await haier.async_setup()
@@ -189,8 +196,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> boo
         except HaierError as err:
             # #105 (an empty list right after a restart), 429, network,
             # a token the cloud keeps refusing: the cloud is not usable right now.
-            haier.sync_delayed = from_cloud
-            if not from_cloud or not await _async_setup_from_cache(haier, cache, err):
+            if from_cloud and await _async_setup_from_cache(haier, cache, err):
+                # A cloud that answers every other time must not rebuild the
+                # entities in a loop: the background read waits, longer each time.
+                fallbacks = _CLOUD_FALLBACKS.get(entry.entry_id, 0) + 1
+                _CLOUD_FALLBACKS[entry.entry_id] = fallbacks
+                haier.first_sync_delay = min(C.CACHE_RETRY_FIRST * 2 ** (fallbacks - 1), C.CACHE_RETRY_MAX)
+            else:
                 if isinstance(err, api.HaierEmptyDeviceList):
                     raise ConfigEntryNotReady("Haier Evo returned no devices, will retry") from err
                 if isinstance(err, HaierRateLimitError):
@@ -200,7 +212,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> boo
             await _async_check_complete(hass, entry, haier, cache)
             await cache.async_save(haier.cache_dict())
             _forget_password(hass, entry, client)
-    haier.on_synced = lambda: _forget_password(hass, entry, client)
+            _CLOUD_FALLBACKS.pop(entry.entry_id, None)
+    api.RELOAD_FROM_CLOUD.discard(entry.entry_id)
+
+    def synced() -> None:
+        # the cloud answered every unit and nothing needed a rebuild
+        _CLOUD_FALLBACKS.pop(entry.entry_id, None)
+        _forget_password(hass, entry, client)
+
+    haier.on_synced = synced
 
     haier.cache_store = cache
     haier.on_refreshed = _cache_saver(haier, cache)
@@ -364,3 +384,5 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await token_store(hass, entry.entry_id).async_remove()
     await devices_store(hass, entry.entry_id).async_remove()
     _INCOMPLETE_SETUPS.pop(entry.entry_id, None)
+    _CLOUD_FALLBACKS.pop(entry.entry_id, None)
+    api.RELOAD_FROM_CLOUD.discard(entry.entry_id)
