@@ -5,16 +5,31 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfTemperature, UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 from . import api
-from .device_laundry import LAUNDRY_STATES
+from .const import DOMAIN
+from .device_laundry import LAUNDRY_STATES, HaierLaundry
 from .entity import HaierEntity, async_setup_platform
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities) -> None:
     async_setup_platform(hass, config_entry, async_add_entities, "sensor")
+    registry = er.async_get(hass)
+    legacy_entities = []
+    for device in config_entry.runtime_data.devices:
+        if not isinstance(device, HaierLaundry):
+            continue
+        legacy_id = registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{device.device_id}_{device.device_model}_fault"
+        )
+        legacy = registry.async_get(legacy_id) if legacy_id is not None else None
+        if legacy is not None and legacy.config_entry_id == config_entry.entry_id:
+            legacy_entities.append(HaierLaundryErrorSensor(device))
+    if legacy_entities:
+        async_add_entities(legacy_entities)
 
 
 class HaierSensor(HaierEntity, SensorEntity):
@@ -174,3 +189,23 @@ class HaierLaundryRemainingTimeSensor(HaierLaundrySensor):
 
     def __init__(self, device: api.HaierDevice) -> None:
         super().__init__(device, "remaining_time", "remaining_time", "Осталось")
+
+
+class HaierLaundryErrorSensor(HaierLaundrySensor):
+    """Keep the previous text diagnostic for installations that already use it."""
+
+    _device: HaierLaundry
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:alert-circle-outline"
+
+    def __init__(self, device: HaierLaundry) -> None:
+        super().__init__(device, "laundry_errors", "fault", "Ошибка устройства")
+
+    @property
+    def native_value(self) -> str:
+        errors = self._device.laundry_errors
+        return "; ".join(error["text"] for error in errors)[:255] if errors else "Нет активных ошибок"
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"errors": self._device.laundry_errors}

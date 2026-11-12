@@ -8,6 +8,7 @@ action in).
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 
 from .device_laundry import HaierLaundry
@@ -27,6 +28,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 
 
 class HaierLaundryButton(HaierEntity, ButtonEntity):
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, device: HaierLaundry, action: str) -> None:
         super().__init__(device)

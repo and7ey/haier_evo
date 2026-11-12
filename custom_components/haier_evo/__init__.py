@@ -5,11 +5,15 @@ import os
 import re
 import uuid
 from collections.abc import Callable
+from pathlib import Path
 
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
@@ -32,7 +36,11 @@ from .const import (
     DOMAIN,
     SETUP_INCOMPLETE_RETRIES,
 )
+from .device_laundry import HaierLaundry
 from .logger import _LOGGER, mask_macs
+from .migration import async_migrate_laundry_entities
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
@@ -150,6 +158,16 @@ def _forget_password(hass: HomeAssistant, entry: ConfigEntry, client: HaierClien
         _LOGGER.info("Haier Evo password removed from the configuration, the saved sign-in is used instead")
 
 
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    if hass.http is None:
+        return True
+    url = "/haier_evo_frontend/haier-laundry-card.js"
+    path = Path(__file__).parent / "haier-laundry-card.js"
+    await hass.http.async_register_static_paths([StaticPathConfig(url, str(path), False)])
+    add_extra_js_url(hass, url)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> bool:
     if entry.unique_id is None:
         # Entries made by earlier versions have no unique_id.
@@ -208,7 +226,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> boo
     ):
         registry.async_remove_device(http_device.id)
     entry.runtime_data = haier
+    async_migrate_laundry_entities(hass, entry, haier.devices)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    if any(isinstance(device, HaierLaundry) for device in haier.devices):
+        from .coordinator import HaierLaundryCoordinator, LaundryPollingState
+        from .machine import async_setup_machines
+        platform = await async_setup_machines(hass, entry)
+        hass.data.setdefault(DOMAIN, {})[entry.entry_id] = platform
+        polling = LaundryPollingState()
+        for device in haier.devices:
+            if isinstance(device, HaierLaundry):
+                coordinator = HaierLaundryCoordinator(hass, entry, device, polling)
+                entry.async_on_unload(coordinator.async_add_listener(lambda: None))
+                entry.async_on_unload(device.events.close)
+                device.events.observe()
     haier.start(entry)
     _LOGGER.debug("Haier Evo set up with %d device(s)", len(haier.devices))
     # A boolean: Home Assistant up to 2026.10 requires one; 2026.11 takes it
@@ -346,6 +377,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> bo
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
     haier = entry.runtime_data
+    for device in haier.devices:
+        if isinstance(device, HaierLaundry):
+            device.events.close()
+            if device.recovery is not None:
+                await device.recovery.async_shutdown()
+    if platform := hass.data.get(DOMAIN, {}).pop(entry.entry_id, None):
+        await platform.async_destroy()
     await haier.async_stop()
     if haier.cache_store is not None:
         # Written now: a delayed write left pending would outlive the entry

@@ -224,7 +224,7 @@ async def test_laundry_read_only_by_default(hass, aioclient_mock, ws_factory):
         prefix = f"{device.device_id}_{device.device_model}"
         state = hass.states.get(eid(hass, "sensor", f"{prefix}_state"))
         assert state.state == (device.state or "unknown")
-        assert state.attributes["options"] == ["off", "idle", "running", "paused", "finished", "cancelled"]
+        assert state.attributes["options"] == ["off", "idle", "running", "paused", "finished", "cancelled", "care"]
         assert eid(hass, "sensor", f"{prefix}_program")
         assert eid(hass, "binary_sensor", f"{prefix}_problem")
         # no control without the option

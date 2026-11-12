@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 
 from . import api
@@ -106,6 +107,7 @@ class HaierLaundryProgramSelect(HaierSelect):
 
     Choosing one sends nothing: the program starts only with the button.
     """
+    _attr_entity_category = EntityCategory.CONFIG
 
     _attr_icon = "mdi:washing-machine"
 

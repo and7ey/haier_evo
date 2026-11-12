@@ -1,6 +1,7 @@
 {
   "domain": "haier_evo",
   "name": "Haier Evo",
+  "after_dependencies": ["frontend", "http"],
   "categories": ["climate.heat_pumps_air_conditioning", "climate.water_heaters", "appliances_cleaning"],
   "codeowners": ["@and7ey", "@AGrigorii", "@temandroid"],
   "config_flow": true,

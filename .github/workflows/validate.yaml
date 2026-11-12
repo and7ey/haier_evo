@@ -42,6 +42,20 @@ jobs:
   # of scripts/mypy-baseline.txt (scripts/check_types.py). Types are checked
   # against one fixed release, not the moving window: a new release would move
   # the baseline by itself. Raise LINT_HA together with the baseline.
+  frontend:
+    name: Laundry control window
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38  # v6
+        with:
+          node-version: '24'
+      - run: node --test tests/test_laundry_card.cjs
+
+
   lint:
     runs-on: "ubuntu-latest"
     timeout-minutes: 10

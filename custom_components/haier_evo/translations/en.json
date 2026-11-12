@@ -128,7 +128,22 @@
                     "running": "Running",
                     "paused": "Paused",
                     "finished": "Finished",
-                    "cancelled": "Cancelled"
+                    "cancelled": "Cancelled",
+                    "care": "Post-program care"
+                }
+            }
+        },
+        "haier_evo": {
+            "laundry_machine": {
+                "state": {
+                    "idle": "Idle",
+                    "running": "Running",
+                    "care": "Post-cycle care",
+                    "finished": "Finished",
+                    "paused": "Paused",
+                    "cancelled": "Cancelled",
+                    "not_reported": "Cycle data unavailable",
+                    "off": "Off"
                 }
             }
         }
@@ -181,6 +196,9 @@
         },
         "laundry_busy": {
             "message": "{device}: the previous command is still on its way"
+        },
+        "laundry_start_pending": {
+            "message": "{device}: the start command was sent, but the cloud has not confirmed the start yet. Check the machine before trying again"
         }
     },
     "options": {
@@ -193,6 +211,18 @@
                 },
                 "data_description": {
                     "laundry_control": "Off: the machines are only shown, nothing is sent to them."
+                }
+            }
+        }
+    },
+    "services": {
+        "execute_action": {
+            "name": "Control laundry machine",
+            "description": "Send an explicit command to a washer or dryer.",
+            "fields": {
+                "action": {
+                    "name": "Action",
+                    "description": "Start, pause, resume or cancel the program."
                 }
             }
         }

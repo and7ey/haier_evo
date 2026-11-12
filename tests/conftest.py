@@ -41,6 +41,12 @@ def status_url(mac: str) -> str:
     return C.API_STATUS.format(mac=mac).split("?")[0]
 
 
+@pytest.fixture
+def hass_config_dir(hass_tmp_config_dir):
+    """Keep file-writing tests isolated across parallel workers."""
+    return hass_tmp_config_dir
+
+
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     yield

@@ -171,7 +171,7 @@ def test_en_and_ru_say_the_same():
 
 def test_entity_keys_of_the_code_are_translated():
     keys = {
-        (Path(f).stem, k) for f, text in CODE.items()
+        ("haier_evo" if Path(f).stem == "machine" else Path(f).stem, k) for f, text in CODE.items()
         for k in re.findall(r"""_attr_translation_key = ["'](\w+)["']""", text)
     }
     assert keys

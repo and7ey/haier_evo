@@ -800,7 +800,7 @@ class Haier:
                 _LOGGER.warning("Haier Evo rejected a command, errNo=%s", err)
             _LOGGER.debug("Resync of %s failed: %s", device.device_name, error)
             return False
-        applied = command is not None and command_applied(command, status)
+        applied = command is not None and device.absolute_commands and command_applied(command, status)
         if command is not None:
             if applied:
                 _LOGGER.debug("errNo=%s, but %s already has the requested values", err, device.device_name)
@@ -816,7 +816,7 @@ class Haier:
         A refusal (non-zero errNo, and the unit does not have the values)
         raises: the user sees an error instead of a value sliding back a
         second later (idea of 1.4, without its blocking threads). No
-        answer in time is no error: the watchdog re-sends and reads back.
+        answer in time is no error: the watchdog reads back, repeating only absolute commands.
         """
         waiter = self._waiters.get(trace)
         if waiter is None:
@@ -849,7 +849,7 @@ class Haier:
 
         Catches the session that accepts writes but no longer delivers them,
         which a heartbeat cannot see (#89, idea from the JampireX fork).
-        Commands are absolute values, so a duplicate is harmless.
+        Absolute values can be repeated; laundry actions are only read back.
         """
         await asyncio.sleep(C.WS_ACK_TIMEOUT)
         if trace not in self._pending:
@@ -864,6 +864,16 @@ class Haier:
             _LOGGER.debug("An unconfirmed command was superseded by a newer one, not re-sending it")
             return
         self._sent_number.pop(trace, None)
+        device = self.get_device_by_id(payload.get("macAddress") or "")
+        if device is not None and not device.absolute_commands:
+            self._pending.pop(trace, None)
+            self.lost_commands += 1
+            _LOGGER.warning(
+                "Haier Evo did not confirm an action for %s; reading state without repeating the action",
+                device.device_name,
+            )
+            await self._async_resync([device])
+            return
         _LOGGER.warning("Haier Evo did not confirm a command in %s s, re-sending it", C.WS_ACK_TIMEOUT)
         # Only the socket the command went out on is suspect: commands sent
         # together must not tear down the fresh connection one after another.
@@ -933,7 +943,9 @@ class Haier:
         """
         data = json.dumps(payload)
         trace = payload.get("trace") if not retry and self._entry is not None else None
-        for _attempt in range(2):
+        device = self.get_device_by_id(payload.get("macAddress") or "")
+        attempts = 1 if device is not None and not device.absolute_commands else 2
+        for _attempt in range(attempts):
             ws = await self._async_wait_connected(C.WS_SEND_TIMEOUT)
             if ws is None:
                 break
