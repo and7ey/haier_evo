@@ -318,3 +318,88 @@ async def test_program_event_updates_the_state(hass, aioclient_mock, ws_factory)
     assert hass.states.get(eid(hass, "sensor", f"{prefix}_state")).state == "finished"
     assert hass.states.get(eid(hass, "sensor", f"{prefix}_program")).state == "Хлопок"
     await stop(hass, entry)
+
+
+# --- the program's parameters of washers, named as in the app (and7ey/haier_evo#114) ---
+
+HW60 = next(d for d in LAUNDRY["devices"] if "HW60" in d["device_name"])
+
+
+def laundry_machine(hass, item: dict, kind: str = "WM", data: dict | None = None) -> HaierLaundry:
+    from types import SimpleNamespace
+
+    async def send(message: dict) -> None:
+        raise AssertionError(f"nothing is sent: {message}")
+
+    hub = SimpleNamespace(hass=hass, cloud_available=True, laundry_control=False, async_send=send)
+    machine = HaierLaundry(haier=hub, device_mac=item["device_id"], device_serial="x", device_title=item["device_name"],
+                           backend_data=copy.deepcopy(item["backend_data"] if data is None else data))
+    machine.device_type = kind
+    return machine
+
+
+def parameter_sensors(machine: HaierLaundry) -> dict:
+    return {e.unique_id.rsplit("_", 1)[-1]: e for e in machine.create_entities_sensor() if "_parameter_" in e.unique_id}
+
+
+async def test_laundry_parameters_in_the_apps_words(hass):
+    hw60, hw90 = laundry_machine(hass, HW60), laundry_machine(hass, HW90)
+    p60, p90 = parameter_sensors(hw60), parameter_sensors(hw90)
+    # other models, other codes: temperature 48 on HW60, 50 on HW90
+    assert [(e.name, e.native_value) for e in (p60["48"], p60["61"], p90["50"], p90["63"], p90["61"], p90["121"])] == [
+        ("Температура", "30"), ("Отжим", "1200"), ("Температура", "40"), ("Отжим", "1000"),
+        ("Удаление пятен", "Выкл."), ("Fresh Air System", "Включен"),
+    ]
+    assert sorted(p60) == sorted(["48", "17", "57", "11", "7", "2", "61", "118"])
+    # on/off parameters are disabled at first
+    assert {c for c, e in p90.items() if e.entity_registry_enabled_default} == {"50", "61", "63"}
+    # a washer (WM) gets no drying parameters, a washer-dryer (WD) does
+    assert not {"95", "96", "97"} & set(p90)
+    assert {"95", "96", "97"} <= set(parameter_sensors(laundry_machine(hass, HW90, kind="WD")))
+    # the dryer's description names none
+    assert parameter_sensors(laundry_machine(hass, HD80, kind="DRY")) == {}
+
+
+async def test_laundry_parameter_values(hass):
+    washer = laundry_machine(hass, HW90)
+    for code, value in {"50": "60", "63": "0", "7": "true", "61": "4", "97": "0.0", "135": "2", "205": "1.5"}.items():
+        washer._apply_value(code, value)
+    assert [washer.parameter_value(c) for c in ("50", "63", "7", "61", "97", "135", "205")] == [
+        "60", "Выкл", "Включен", "Кровь", "Не установлено", "2", "1.5",
+    ]
+    washer._apply_value("61", "99")
+    assert washer.parameter_value("61") == "99"  # a value the app has no word for: as it is
+    assert (washer.parameter_value("25"), washer.parameter_value("nope")) == (None, None)
+    assert washer.to_dict()["parameters"]["50"] == {"title": "Температура", "value": "60"}
+
+
+async def test_laundry_parameters_of_a_broken_description(hass):
+    data = copy.deepcopy(HW90["backend_data"])
+    data["enrichAttributes"]["attrs"].update({
+        "999": {"title": "Нет такого кода"}, "63": {"title": ""}, "7": "x",
+        "50": {"title": "Температура", "list": {"valueToIcon": {"40": None, "60": {"name": 5}}}},
+    })
+    washer = laundry_machine(hass, HW90, data=data)
+    assert ("999" in washer.parameters, "63" in washer.parameters, "7" in washer.parameters) == (False, False, False)
+    assert washer.parameter_value("50") == "40"
+    data.pop("enrichAttributes")
+    assert laundry_machine(hass, HW90, data=data).parameters == {}
+
+
+async def test_laundry_parameter_sensors_in_home_assistant(hass, aioclient_mock, ws_factory):
+    entry = await start(hass, aioclient_mock, ws_factory, LAUNDRY)
+    washer = device_by_mac(entry, HW90["device_id"])
+    prefix = f"{washer.device_id}_{washer.device_model}"
+    registry = er.async_get(hass)
+    temperature = eid(hass, "sensor", f"{prefix}_parameter_50")
+    assert hass.states.get(temperature).state == "40"
+    steam = registry.async_get(eid(hass, "sensor", f"{prefix}_parameter_7"))
+    assert steam.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert eid(hass, "sensor", f"{prefix}_parameter_97") is None  # drying time of a washer
+    ws_factory.current.feed({
+        "event": "status", "macAddress": washer.device_id,
+        "payload": {"statuses": [{"properties": {"50": "60"}}]},
+    })
+    await hass.async_block_till_done()
+    assert hass.states.get(temperature).state == "60"
+    await stop(hass, entry)
