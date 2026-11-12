@@ -198,11 +198,6 @@ class Haier:
         self.device_list: list[dict[str, str]] = []
         # Built from the saved descriptions: the cloud did not answer at start.
         self.from_cache = False
-        # The start read the cloud and fell back to the saved descriptions: the
-        # background read waits CACHE_RETRY_FIRST s first. Without the pause a
-        # cloud that fails such a start and answers the check right after it
-        # reloads the entry again and again (a unit added in the app).
-        self.sync_delayed = False
         # MACs (lower case) of units Home Assistant knows and the cloud no
         # longer returns, which a setup has already stopped waiting for. Kept
         # with the saved descriptions, so the next start does not wait again.
@@ -247,6 +242,13 @@ class Haier:
         # The saved sign-in was rejected and the reauth flow started: once per
         # start, the next start comes with the new sign-in (1.7 stopped as well).
         self._reauth_started = False
+        # Seconds the first background read of a start from the saved
+        # descriptions waits (set by the entry setup, see _CLOUD_FALLBACKS).
+        self.first_sync_delay = 0.0
+        # True while that pause runs: a reconnect or the periodic refresh does
+        # not read the cloud early (only then; a start from the cache that
+        # simply waits for REST keeps them)
+        self._sync_paused = False
         # MACs whose fresh state could not be applied (a bug in the device's
         # code): the traceback is logged once, see _async_resync.
         self._apply_failed: set[str] = set()
@@ -421,10 +423,25 @@ class Haier:
         entry, and that start reads the cloud (RELOAD_FROM_CLOUD).
         """
         delay = C.CACHE_RETRY_FIRST
-        if self.sync_delayed:
-            await asyncio.sleep(delay)
+        if self.first_sync_delay:
+            self._sync_paused = True
+            try:
+                await asyncio.sleep(self.first_sync_delay)
+            finally:
+                self._sync_paused = False
+        logged = False
         while not self._stopping:
-            failed = await self._async_resync()
+            try:
+                failed = await self._async_resync()
+            except Exception:  # noqa: BLE001 - the loop must not die
+                # a device is isolated in _async_resync; this is anything else:
+                # the traceback once, then a line
+                if logged:
+                    _LOGGER.warning("Haier Evo: reading the devices still fails")
+                else:
+                    logged = True
+                    _LOGGER.exception("Haier Evo: reading the devices failed")
+                failed = {str(d.device_id).lower() for d in self.devices}
             if self._stopping or self._rebuild_scheduled or self._reauth_started:
                 return
             if not failed:
@@ -436,7 +453,7 @@ class Haier:
             return
         self.from_cache = False
         await self._async_check_device_list()
-        if self.on_synced is not None and not self._rebuild_scheduled:
+        if self.on_synced is not None and not self._rebuild_scheduled and not self._reauth_started:
             self.on_synced()
 
     def _start_reauth(self) -> None:
@@ -590,7 +607,9 @@ class Haier:
             self._outage_causes.clear()
             _LOGGER.info("Haier Evo cloud connection is back")
         _LOGGER.debug("WebSocket connected")
-        if self._ever_connected and outage is not None and outage > C.WS_RESYNC_AFTER:
+        if self._ever_connected and outage is not None and outage > C.WS_RESYNC_AFTER and not self._sync_paused:
+            # not during the pause after a fallback to the saved descriptions:
+            # it is there so that the cloud is not read early
             self._create_task(self._async_resync(), "resync")
         self._ever_connected = True
         self._notify_all()
@@ -618,6 +637,8 @@ class Haier:
             self.client.token_rejected(token)
 
     async def _async_periodic_refresh(self, _now: Any = None) -> None:
+        if self._sync_paused:
+            return  # the pause after a fallback to the saved descriptions
         await self._async_resync()
 
     def _schedule_rebuild(self, reason: str) -> None:
