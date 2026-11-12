@@ -441,7 +441,7 @@ class HaierDevice:
         signature = self.description_signature(data)
         return bool(signature) and bool(self._signature) and signature != self._signature
 
-    def update_from_backend(self, data: dict) -> None:
+    def update_from_backend(self, data: dict, *, requested_at: float | None = None) -> None:
         """Apply a fresh REST status without rebuilding the config."""
         if not isinstance(data, dict) or self.config is None:
             return

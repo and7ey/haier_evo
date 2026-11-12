@@ -46,6 +46,12 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     yield
 
 
+@pytest.fixture
+def hass_config_dir(hass_tmp_config_dir):
+    """Keep file-writing tests isolated across parallel workers."""
+    return hass_tmp_config_dir
+
+
 @pytest.fixture(autouse=True)
 def fast_timings():
     """Short backoff/timeouts so reconnect tests run in milliseconds."""

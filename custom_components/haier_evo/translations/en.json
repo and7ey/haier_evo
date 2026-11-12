@@ -181,6 +181,9 @@
         },
         "laundry_busy": {
             "message": "{device}: the previous command is still on its way"
+        },
+        "laundry_start_pending": {
+            "message": "{device}: start is not confirmed yet. Check the machine before retrying; a fresh idle status or two minutes will allow another start"
         }
     },
     "options": {
