@@ -27,10 +27,17 @@ from .device import (
     HaierDevice,
     _norm,
     device_part,
+    format_number,
     parsefloat,
 )
 from .laundry_events import LaundryEvents
-from .programs import ProgramValidationError, active_program_details, build_catalogue, program_settings
+from .programs import (
+    ProgramValidationError,
+    active_program_details,
+    build_catalogue,
+    enrich_label,
+    program_settings,
+)
 
 # washing machines, washer-dryers and dryers
 LAUNDRY_TYPES = ("WM", "WD", "DRY", "TD")
@@ -112,6 +119,38 @@ def laundry_phase_titles(data: Any) -> dict[str, str]:
             if isinstance(part, dict) and part.get(key) not in (None, "") and isinstance(part.get("title"), str):
                 out.setdefault(str(part[key]), part["title"])
     return out
+
+
+def laundry_parameters(data: Any) -> dict[str, dict]:
+    """The program's parameters as the app names them: {code: {"title",
+    "metadata", "flag"}} from enrichAttributes (temperature, spin, rinses,
+    steam, anti-crease...; upstream issue #114): a washer has it at the top of
+    its description, a dryer in "device".
+
+    metadata is the app's entry of the parameter, its values are named with
+    programs.enrich_label, as the program's details of the "Программа для
+    запуска" select name them. flag: the parameter is only on or off. A code
+    the device has no attribute of is left out; models number them
+    differently (temperature: 48 on HW60, 50 on HW90 and HW70).
+    """
+    data = _d(data)
+    known = {str(a.get("name")) for a in device_part(data).get("attributes") or [] if isinstance(a, dict)}
+    enrich = _d(data.get("enrichAttributes") or _d(data.get("device")).get("enrichAttributes"))
+    out: dict[str, dict] = {}
+    for code, item in _d(enrich.get("attrs")).items():
+        item = _d(item)
+        title = item.get("title")
+        if str(code) not in known or not isinstance(title, str) or not title.strip():
+            continue
+        names = {_norm(value) for value, option in _d(_d(item.get("list")).get("valueToIcon")).items()
+                 if isinstance(_d(option).get("name"), str) and _d(option)["name"].strip()}
+        out[str(code)] = {"title": title.strip(), "metadata": item, "flag": bool(names) and names <= {"0", "1"}}
+    return out
+
+
+def _drying(title: str) -> bool:
+    title = title.lower()
+    return "суш" in title or "dry" in title
 
 
 def _value_allowed(field: dict, value: Any) -> bool:
@@ -232,6 +271,7 @@ class HaierLaundry(HaierDevice):
         super().__init__(**kwargs)
         self.codes: dict[str, str] = {}
         self.phase_titles: dict[str, str] = {}
+        self.parameters: dict[str, dict] = {}  # the program's parameters the app names (laundry_parameters)
         self.program_title: str | None = None
         self.program_status: str | None = None  # IN_PROGRESS, PAUSED, FINISHED... as the cloud says
         self.is_dryer = False
@@ -263,6 +303,7 @@ class HaierLaundry(HaierDevice):
         self.codes = laundry_codes(data)
         self._observe_laundry_properties({str(attr.code): attr.current for attr in config.attrs})
         self.phase_titles = laundry_phase_titles(data)
+        self.parameters = laundry_parameters(data)
         self.is_dryer = isinstance(data.get("device"), dict)
         self._apply_program(self._program_block(data))
         self.programs = laundry_programs(data)
@@ -356,6 +397,35 @@ class HaierLaundry(HaierDevice):
     def power(self) -> bool | None:
         return self._flag("onOffStatus")
 
+    def parameter_value(self, code: str) -> str | None:
+        """A program parameter in the app's words ("Выкл", "800", "Включен"),
+        as the program's details name it (programs.enrich_label); a value the
+        app gives no word for as it is ("3" rinses, "1.5" h)."""
+        raw = self._raw.get(code)
+        parameter = self.parameters.get(code)
+        if raw is None or parameter is None:
+            return None
+        try:
+            label = enrich_label(parameter["metadata"], raw)
+        except ProgramValidationError:
+            label = ""
+        if label:
+            return label
+        number = parsefloat(raw)
+        if number is not None and number == number and abs(number) != float("inf"):
+            return format_number(number)
+        return raw
+
+    def shown_parameters(self) -> dict[str, dict]:
+        """The parameters worth a sensor: the machine reports a value (a code
+        it leaves empty, rinses 135 on HW70, would never show one), and a
+        washer without a dryer (type WM) skips the drying ones the cloud
+        describes to every washer."""
+        return {
+            code: p for code, p in self.parameters.items()
+            if self._raw.get(code) is not None and not (self.device_type == "WM" and _drying(p["title"]))
+        }
+
     @property
     def remote_control(self) -> bool | None:
         return self._flag("remoteCtrValid")
@@ -409,6 +479,9 @@ class HaierLaundry(HaierDevice):
             "remote_control": self.remote_control,
             "child_lock": self.child_lock,
             "codes": dict(self.codes),
+            "parameters": {
+                code: {"title": p["title"], "value": self.parameter_value(code)} for code, p in self.parameters.items()
+            },
             "control": {
                 "enabled": self.control_enabled,
                 "programs": [p["title"] for p in self.programs],
@@ -464,6 +537,10 @@ class HaierLaundry(HaierDevice):
             entities.append(sensor.HaierLaundryPhaseSensor(self))
         if {"remainingDryTime", "remainingTimeHH", "remainingTimeMM"} & set(self.codes):
             entities.append(sensor.HaierLaundryRemainingTimeSensor(self))
+        entities.extend(
+            sensor.HaierLaundryParameterSensor(self, code, p["title"], p["flag"])
+            for code, p in self.shown_parameters().items()
+        )
         return entities
 
     def create_entities_binary_sensor(self) -> list:

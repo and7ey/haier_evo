@@ -80,9 +80,6 @@ custom_components/haier_evo/device_wm.py: [assignment] Incompatible types in ass
 custom_components/haier_evo/device_wm.py: [assignment] Incompatible types in assignment (expression has type "str", variable has type "None")
 custom_components/haier_evo/device_wm.py: [return-value] Incompatible return value type (got "None", expected "HaierWMConfig")
 custom_components/haier_evo/select.py: [arg-type] Argument 2 to "getattr" has incompatible type "str | None"; expected "str"
-custom_components/haier_evo/select.py: [attr-defined] "HaierDevice" has no attribute "programs"
-custom_components/haier_evo/select.py: [attr-defined] "HaierDevice" has no attribute "selected_program"
-custom_components/haier_evo/select.py: [attr-defined] "HaierDevice" has no attribute "set_selected_program"
 custom_components/haier_evo/sensor.py: [arg-type] Argument 2 to "getattr" has incompatible type "str | None"; expected "str"
 custom_components/haier_evo/sensor.py: [arg-type] Argument 2 to "getattr" has incompatible type "str | None"; expected "str"
 custom_components/haier_evo/switch.py: [arg-type] Argument 2 to "getattr" has incompatible type "str | None"; expected "str"

@@ -167,6 +167,24 @@ class HaierLaundryPhaseSensor(HaierLaundrySensor):
         super().__init__(device, "phase", "phase", "Этап")
 
 
+class HaierLaundryParameterSensor(HaierSensor):
+    """A program parameter (temperature, spin, steam...) named as in the app.
+    On/off ones are disabled at first: a machine has a dozen of them."""
+
+    _attr_icon = "mdi:tune-variant"
+
+    def __init__(self, device: api.HaierDevice, code: str, title: str, flag: bool) -> None:
+        super().__init__(device)
+        self._code = code
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_parameter_{code}"
+        self._attr_name = title
+        self._attr_entity_registry_enabled_default = not flag
+
+    @property
+    def native_value(self):
+        return self._device.parameter_value(self._code)
+
+
 class HaierLaundryRemainingTimeSensor(HaierLaundrySensor):
     _attr_device_class = SensorDeviceClass.DURATION
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
