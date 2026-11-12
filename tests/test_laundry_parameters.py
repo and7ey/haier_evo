@@ -1,5 +1,6 @@
 """Program staging uses native entities and never changes an active cycle."""
 from copy import deepcopy
+from time import monotonic
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -22,7 +23,7 @@ PROGRAMS = [
 
 def make_machine(hass, index=1):
     data = base.LAUNDRY["devices"][index]
-    cloud = SimpleNamespace(hass=hass, cloud_available=True, laundry_control=True, async_send=AsyncMock())
+    cloud = SimpleNamespace(hass=hass, cloud_available=True, laundry_control=True, async_send=AsyncMock(), _now=monotonic)
     device = HaierLaundry(
         haier=cloud, device_mac=data["device_id"], backend_data=deepcopy(data["backend_data"]),
     )
