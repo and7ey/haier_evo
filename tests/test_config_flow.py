@@ -103,9 +103,9 @@ async def test_user_flow_duplicate(hass, aioclient_mock, config_entry):
 
 async def test_options_flow_sets_laundry_control(hass, config_entry):
     """The options hold the control of washers (1.7); the old flow answered 500 (#96)."""
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
     assert config_entry.supports_options is True
     assert config_entry.supports_reconfigure is True
-    result = await hass.config_entries.options.async_init(config_entry.entry_id)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "init"
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"laundry_control": True})

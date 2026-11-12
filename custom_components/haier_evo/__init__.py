@@ -32,9 +32,11 @@ from .const import (
     DOMAIN,
     SETUP_INCOMPLETE_RETRIES,
 )
+from .device_laundry import HaierLaundry
 from .logger import _LOGGER, mask_macs
 
 PLATFORMS: list[Platform] = [
+    Platform.EVENT,
     Platform.BUTTON,
     Platform.CLIMATE,
     Platform.SWITCH,
@@ -208,6 +210,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> boo
     ):
         registry.async_remove_device(http_device.id)
     entry.runtime_data = haier
+    for device in haier.devices:
+        if isinstance(device, HaierLaundry):
+            device.laundry_events.start(entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     haier.start(entry)
     _LOGGER.debug("Haier Evo set up with %d device(s)", len(haier.devices))

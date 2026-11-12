@@ -131,6 +131,25 @@
                     "cancelled": "Отменена"
                 }
             }
+        },
+        "event": {
+            "laundry": {
+                "name": "События программы",
+                "state_attributes": {
+                    "event_type": {
+                        "name": "Событие",
+                        "state": {
+                            "program_finished": "Программа завершена",
+                            "cycle_ended": "Работа прекращена",
+                            "program_cancelled": "Программа отменена",
+                            "care_started": "Уход после программы начат",
+                            "care_finished": "Уход после программы завершён",
+                            "error": "Ошибка устройства",
+                            "error_cleared": "Ошибка устройства устранена"
+                        }
+                    }
+                }
+            }
         }
     },
     "exceptions": {
