@@ -287,3 +287,24 @@ async def test_nonzero_start_ack_is_not_success_when_parameters_already_match(ha
         if task is not None and not task.done():
             task.cancel()
         await base.stop(hass, entry)
+
+
+@pytest.mark.parametrize("mac", [base.HW90["device_id"], base.HD80["device_id"]])
+async def test_start_not_written_can_be_retried_immediately(hass, aioclient_mock, ws_factory, mac):
+    entry, device = await prepare(hass, aioclient_mock, ws_factory, mac)
+    try:
+        with patch.object(entry.runtime_data, "_async_wait_connected", AsyncMock(return_value=None)):
+            with pytest.raises(HomeAssistantError) as error:
+                await device.start()
+        assert error.value.translation_key == "command_failed"
+        assert not device._start_pending
+        assert device._cancel_start_pending is None
+        assert not entry.runtime_data._pending
+        assert not entry.runtime_data._waiters
+        assert not sent(ws_factory, "operation")
+        with patch.object(C, "WS_ACK_TIMEOUT", 600), patch.object(C, "WS_COMMAND_WAIT", 0):
+            await device.start()
+        assert len(sent(ws_factory, "operation")) == 1
+        assert device._start_pending
+    finally:
+        await base.stop(hass, entry)

@@ -22,6 +22,10 @@ class HaierCommandError(HomeAssistantError):
     """Command could not be delivered to the Haier Evo cloud."""
 
 
+class HaierCommandNotSent(HaierCommandError):
+    """No connection became available, so the command was never written."""
+
+
 # Alarms that ask for maintenance, not report a fault.
 FILTER_ALARM = "filterCleaningAlarm"
 MAINTENANCE_ALARMS = frozenset({FILTER_ALARM})
