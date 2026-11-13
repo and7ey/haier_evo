@@ -35,6 +35,7 @@ from .client import (
 from .device import (  # noqa: F401
     HaierCommandError,
     HaierCommandLocked,
+    HaierCommandNotSent,
     HaierCommandRejected,
     HaierDevice,
     _same_value,
@@ -952,6 +953,8 @@ class Haier:
         for _attempt in range(2):
             ws = await self._async_wait_connected(C.WS_SEND_TIMEOUT)
             if ws is None:
+                if self._is_laundry_start(payload):
+                    raise HaierCommandNotSent(translation_domain=C.DOMAIN, translation_key="command_failed")
                 break
             if trace:
                 # Registered before the write: the answer may beat send_str.

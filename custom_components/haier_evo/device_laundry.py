@@ -19,7 +19,15 @@ from homeassistant.helpers.event import async_call_later
 
 from . import config as CFG  # noqa: N812
 from . import const as C  # noqa: N812
-from .device import HaierCommandLocked, HaierCommandRejected, HaierDevice, _norm, device_part, parsefloat
+from .device import (
+    HaierCommandLocked,
+    HaierCommandNotSent,
+    HaierCommandRejected,
+    HaierDevice,
+    _norm,
+    device_part,
+    parsefloat,
+)
 from .laundry_events import LaundryEvents
 
 # washing machines, washer-dryers and dryers
@@ -473,7 +481,7 @@ class HaierLaundry(HaierDevice):
                 "commandName": program["group"],
                 "commands": [dict(c) for c in program["commands"]],
             })
-        except HaierCommandRejected:
+        except (HaierCommandRejected, HaierCommandNotSent):
             self.clear_start_pending()
             raise
         if self._start_pending:
