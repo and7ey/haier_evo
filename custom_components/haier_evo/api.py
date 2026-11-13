@@ -248,6 +248,12 @@ class Haier:
         self._reauth_started = False
         # Entry option: washers and dryers take commands (beta, 1.7).
         self.laundry_control = False
+        self._laundry_refresh_lock = asyncio.Lock()
+        self._laundry_refresh_task: asyncio.Task | None = None
+        self._laundry_polled_at: dict[str, float] = {}
+        self._laundry_wakeups: set[str] = set()
+        self._laundry_retry_at = 0.0
+        self._laundry_failures = 0
 
     @staticmethod
     def _now() -> float:
@@ -404,6 +410,11 @@ class Haier:
             self.hass, self._async_check_device_list, C.DEVICE_LIST_REFRESH_INTERVAL,
             name=f"{C.DOMAIN} device list", cancel_on_shutdown=True,
         ))
+        if any(isinstance(device, HaierLaundry) for device in self.devices):
+            entry.async_on_unload(async_track_time_interval(
+                self.hass, self._schedule_laundry_refresh, C.LAUNDRY_REFRESH_INTERVAL,
+                name=f"{C.DOMAIN} active laundry refresh", cancel_on_shutdown=True,
+            ))
         if self.from_cache:
             self._create_task(self._async_sync_from_cloud(), "initial refresh")
 
@@ -453,6 +464,12 @@ class Haier:
 
     async def async_stop(self) -> None:
         self._stopping = True
+        self._laundry_wakeups.clear()
+        if self._laundry_refresh_task is not None:
+            self._laundry_refresh_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._laundry_refresh_task
+            self._laundry_refresh_task = None
         self._cancel_unavailable_timer()
         self._wakeup.set()
         ws = self._ws
@@ -613,6 +630,55 @@ class Haier:
             _LOGGER.info("The WebSocket was closed for the token (code %s), renewing it", ws.close_code)
             self.client.token_rejected(token)
 
+    @callback
+    def _schedule_laundry_refresh(self, _now: Any = None) -> None:
+        if self._stopping or self._reauth_started or self._entry is None:
+            return
+        if self._laundry_refresh_task is not None and not self._laundry_refresh_task.done():
+            return
+        self._laundry_refresh_task = self._entry.async_create_background_task(
+            self.hass, self.async_refresh_laundry(), f"{C.DOMAIN} active laundry refresh"
+        )
+
+    async def async_refresh_laundry(self) -> None:
+        """Read one woken or stale online machine without accelerating offline polling."""
+        if self._laundry_refresh_lock.locked():
+            return
+        async with self._laundry_refresh_lock:
+            now = self._now()
+            if self._stopping or self._reauth_started or now < self._laundry_retry_at:
+                return
+            laundry = [device for device in self.devices if isinstance(device, HaierLaundry)]
+            woken = [device for device in laundry if device.device_id in self._laundry_wakeups
+                     and now - self._laundry_polled_at.get(device.device_id, 0)
+                     >= C.LAUNDRY_REFRESH_INTERVAL.total_seconds()]
+            # Start the standby budget once; partial pushes must not reset it.
+            for device in laundry:
+                self._laundry_polled_at.setdefault(device.device_id, device.laundry_updated_at)
+            stale = [device for device in laundry if device.connected and device.synced
+                     and (device.state not in ("running", "paused")
+                          or now - device.laundry_updated_at >= C.LAUNDRY_PUSH_MAX_AGE)
+                     and now - self._laundry_polled_at.get(device.device_id, 0) >= C.LAUNDRY_PUSH_MAX_AGE]
+            candidates = woken or stale
+            if not candidates:
+                return
+            device = min(candidates, key=lambda device: self._laundry_polled_at.get(device.device_id, 0))
+            was_woken = device.device_id in self._laundry_wakeups
+            # A new wake received during the request must survive this read.
+            self._laundry_wakeups.discard(device.device_id)
+            self._laundry_polled_at[device.device_id] = now
+            failed = await self._async_resync([device], preserve_newer_push=True)
+            if failed:
+                if was_woken and device.changed_at <= now:
+                    self._laundry_wakeups.add(device.device_id)
+                self._laundry_failures += 1
+                self._laundry_retry_at = max(
+                    self._laundry_retry_at, self._now() + min(60 * 2 ** min(self._laundry_failures - 1, 4), 900)
+                )
+            else:
+                self._laundry_failures = 0
+                self._laundry_retry_at = 0.0
+
     async def _async_periodic_refresh(self, _now: Any = None) -> None:
         await self._async_resync()
 
@@ -675,7 +741,9 @@ class Haier:
             self._schedule_rebuild(f"a new device in the app ({info['title'] or info['type']})")
             return
 
-    async def _async_resync(self, devices: list[HaierDevice] | None = None) -> set[str]:
+    async def _async_resync(
+        self, devices: list[HaierDevice] | None = None, *, preserve_newer_push: bool = False
+    ) -> set[str]:
         """Re-read device statuses via REST (after an outage, a lost command, or periodically).
 
         Returns the MACs whose status could not be read for now (network,
@@ -693,11 +761,15 @@ class Haier:
                 return {str(d.device_id).lower() for d in self.devices}
             except HaierError as err:
                 _LOGGER.debug("Resync of %s failed: %s", device.device_name, err)
-                if isinstance(err, HaierApiError):
+                if isinstance(err, HaierRateLimitError):
+                    self._laundry_retry_at = max(self._laundry_retry_at, self._now() + err.retry_after)
+                if isinstance(err, HaierApiError) and not preserve_newer_push:
                     refused = True
                 else:
                     failed.add(str(device.device_id).lower())
                 continue
+            if self._stopping:
+                return failed
             if device.described_differently(status):
                 # New firmware, attributes or rules: the entities and the
                 # profile were built from the old description (1.6).
@@ -714,7 +786,7 @@ class Haier:
             # A refused description may be a unit removed in the app: the
             # device list says, not in six hours but now.
             await self._async_check_device_list()
-        if devices is None and self.on_refreshed is not None:
+        if (devices is None or preserve_newer_push) and self.on_refreshed is not None:
             self.on_refreshed()
         return failed
 
@@ -746,7 +818,29 @@ class Haier:
                 else:
                     _LOGGER.debug("Message for an unknown device: %s", message.get("event"))
                 return
+            was_connected, previous_link = device.connected, device.link_status
+            previous_power = device.power if isinstance(device, HaierLaundry) else None
             device.on_message(message)
+            if isinstance(device, HaierLaundry):
+                event = message.get("event")
+                payload = message.get("payload")
+                status = payload.get("status") if isinstance(payload, dict) else None
+                came_online = not was_connected and device.connected
+                link_restored = (event == "deviceConnectionStatusEvent"
+                                 and device.link_status == "GOOD" and previous_link != "GOOD")
+                turned_on = device.connected and previous_power is False and device.power is True
+                data = message.get("data")
+                program = data.get("program") if isinstance(data, dict) else None
+                program = program if isinstance(program, dict) else data
+                program_status = program.get("status") if isinstance(program, dict) else None
+                active_without_power = (device.connected and device.power is False
+                                        and event in ("ProgramWasherBaseEvent", "ProgramDryerBaseEvent")
+                                        and program_status in ("PROGRAM_STARTED", "IN_PROGRESS", "STARTED", "PAUSED"))
+                if event == "deviceStatusEvent" and status is not None and not device.connected:
+                    self._laundry_wakeups.discard(device.device_id)
+                elif came_online or link_restored or turned_on or active_without_power:
+                    self._laundry_wakeups.add(device.device_id)
+                    self._schedule_laundry_refresh()
             if message.get("event") in ("status", "deviceStatusEvent") and self.on_refreshed is not None:
                 # What came over the socket is worth saving too: a stop of Home
                 # Assistant unloads nothing, so without this the file kept the
