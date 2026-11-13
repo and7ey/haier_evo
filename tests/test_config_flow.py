@@ -1,6 +1,8 @@
 """Config flow: login check, errors, reauth, reconfigure (#96, #98, #87)."""
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from aiohttp import ClientError
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
@@ -117,9 +119,12 @@ async def test_reauth(hass, aioclient_mock, config_entry, hass_storage):
     aioclient_mock.post(LOGIN_URL, json=load_fixture("login.json"))
     result = await config_entry.start_reauth_flow(hass)
     assert result["step_id"] == "reauth_confirm"
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"password": "new-password"}
-    )
+    with patch.object(hass.config_entries, "async_reload", return_value=True) as reload_entry:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"password": "new-password"}
+        )
+        await hass.async_block_till_done()
+        reload_entry.assert_awaited_once_with(config_entry.entry_id)
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
     assert "password" not in config_entry.data
@@ -134,9 +139,12 @@ async def test_reconfigure(hass, aioclient_mock, config_entry, hass_storage):
     aioclient_mock.post(LOGIN_URL, json=load_fixture("login.json"))
     result = await config_entry.start_reconfigure_flow(hass)
     assert result["step_id"] == "reconfigure"
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"email": EMAIL, "password": "other-password", "region": "ru"}
-    )
+    with patch.object(hass.config_entries, "async_reload", return_value=True) as reload_entry:
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"email": EMAIL, "password": "other-password", "region": "ru"}
+        )
+        await hass.async_block_till_done()
+        reload_entry.assert_awaited_once_with(config_entry.entry_id)
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert "password" not in config_entry.data
