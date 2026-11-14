@@ -197,11 +197,6 @@ class Haier:
         self.device_list: list[dict[str, str]] = []
         # Built from the saved descriptions: the cloud did not answer at start.
         self.from_cache = False
-        # The start read the cloud and fell back to the saved descriptions: the
-        # background read waits CACHE_RETRY_FIRST s first. Without the pause a
-        # cloud that fails such a start and answers the check right after it
-        # reloads the entry again and again (a unit added in the app).
-        self.sync_delayed = False
         # MACs (lower case) of units Home Assistant knows and the cloud no
         # longer returns, which a setup has already stopped waiting for. Kept
         # with the saved descriptions, so the next start does not wait again.
@@ -243,9 +238,19 @@ class Haier:
         self.reconnects = 0
         self.lost_commands = 0
         self._rebuild_scheduled = False
-        # The saved sign-in was rejected and the reauth flow started: once per
-        # start, the next start comes with the new sign-in (1.7 stopped as well).
+        # Set once the cloud refused the saved sign-in: background loops stop,
+        # the reauth flow is the user's (1.7's _refresh returned then too).
         self._reauth_started = False
+        # Seconds the first background read of a start from the saved
+        # descriptions waits (set by the entry setup, see _CLOUD_FALLBACKS).
+        self.first_sync_delay = 0.0
+        # True while that pause runs: a reconnect or the periodic refresh does
+        # not read the cloud early (only then; a start from the cache that
+        # simply waits for REST keeps them)
+        self._sync_paused = False
+        # MACs whose status could not be applied in a resync: the traceback
+        # goes to the log once, later failures as one line
+        self._apply_failed: set[str] = set()
         # Entry option: washers and dryers take commands (beta, 1.7).
         self.laundry_control = False
 
@@ -417,10 +422,25 @@ class Haier:
         entry, and that start reads the cloud (RELOAD_FROM_CLOUD).
         """
         delay = C.CACHE_RETRY_FIRST
-        if self.sync_delayed:
-            await asyncio.sleep(delay)
+        if self.first_sync_delay:
+            self._sync_paused = True
+            try:
+                await asyncio.sleep(self.first_sync_delay)
+            finally:
+                self._sync_paused = False
+        logged = False
         while not self._stopping:
-            failed = await self._async_resync()
+            try:
+                failed = await self._async_resync()
+            except Exception:  # noqa: BLE001 - the loop must not die
+                # a unit is isolated in _async_resync; this is anything else:
+                # the traceback once, then a line
+                if logged:
+                    _LOGGER.warning("Haier Evo: reading the devices still fails")
+                else:
+                    logged = True
+                    _LOGGER.exception("Haier Evo: reading the devices failed")
+                failed = {str(d.device_id).lower() for d in self.devices}
             if self._stopping or self._rebuild_scheduled or self._reauth_started:
                 return
             if not failed:
@@ -432,7 +452,7 @@ class Haier:
             return
         self.from_cache = False
         await self._async_check_device_list()
-        if self.on_synced is not None and not self._rebuild_scheduled:
+        if self.on_synced is not None and not self._rebuild_scheduled and not self._reauth_started:
             self.on_synced()
 
     def _start_reauth(self) -> None:
@@ -586,7 +606,9 @@ class Haier:
             self._outage_causes.clear()
             _LOGGER.info("Haier Evo cloud connection is back")
         _LOGGER.debug("WebSocket connected")
-        if self._ever_connected and outage is not None and outage > C.WS_RESYNC_AFTER:
+        if self._ever_connected and outage is not None and outage > C.WS_RESYNC_AFTER and not self._sync_paused:
+            # not during the pause after a fallback to the saved descriptions:
+            # it is there so that the cloud is not read early
             self._create_task(self._async_resync(), "resync")
         self._ever_connected = True
         self._notify_all()
@@ -614,6 +636,8 @@ class Haier:
             self.client.token_rejected(token)
 
     async def _async_periodic_refresh(self, _now: Any = None) -> None:
+        if self._sync_paused:
+            return  # the pause after a fallback to the saved descriptions
         await self._async_resync()
 
     def _schedule_rebuild(self, reason: str) -> None:
@@ -698,18 +722,31 @@ class Haier:
                 else:
                     failed.add(str(device.device_id).lower())
                 continue
-            if device.described_differently(status):
-                # New firmware, attributes or rules: the entities and the
-                # profile were built from the old description (1.6).
-                self._schedule_rebuild(f"the cloud describes {device.device_name} differently")
-            if (devices is None or not device.absolute_commands) and device.synced and device.changed_at > started:
-                # A push or a command came in while the request was in flight:
-                # the REST snapshot is older than what the entity already shows.
-                # Only absolute commands need a targeted read-back to undo an
-                # optimistic value; laundry actions never override a newer push.
+            try:
+                if device.described_differently(status):
+                    # New firmware, attributes or rules: the entities and the
+                    # profile were built from the old description (1.6).
+                    self._schedule_rebuild(f"the cloud describes {device.device_name} differently")
+                if (devices is None or not device.absolute_commands) and device.synced and device.changed_at > started:
+                    # A push or a command came in while the request was in flight:
+                    # the REST snapshot is older than what the entity already shows.
+                    # Only absolute commands need a targeted read-back to undo an
+                    # optimistic value; laundry actions never override a newer push.
+                    continue
+                device.update_from_backend(status, requested_at=started)
+                device.notify()
+            except Exception:  # noqa: BLE001 - one odd status must not keep the others stale
+                # as _async_build_devices: the unit counts as not read, the
+                # others go on; the traceback once, then a line
+                mac = str(device.device_id).lower()
+                failed.add(mac)
+                if mac in self._apply_failed:
+                    _LOGGER.warning("Haier Evo: the status of %s still cannot be applied", device.device_name)
+                else:
+                    self._apply_failed.add(mac)
+                    _LOGGER.exception("Haier Evo: the status of %s cannot be applied", device.device_name)
                 continue
-            device.update_from_backend(status, requested_at=started)
-            device.notify()
+            self._apply_failed.discard(str(device.device_id).lower())
         if devices is None and refused:
             # A refused description may be a unit removed in the app: the
             # device list says, not in six hours but now.
