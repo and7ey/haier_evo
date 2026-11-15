@@ -247,6 +247,9 @@ class Haier:
         # The saved sign-in was rejected and the reauth flow started: once per
         # start, the next start comes with the new sign-in (1.7 stopped as well).
         self._reauth_started = False
+        # MACs whose fresh state could not be applied (a bug in the device's
+        # code): the traceback is logged once, see _async_resync.
+        self._apply_failed: set[str] = set()
         # Entry option: washers and dryers take commands (beta, 1.7).
         self.laundry_control = False
 
@@ -709,8 +712,21 @@ class Haier:
                 # Only absolute commands need a targeted read-back to undo an
                 # optimistic value; laundry actions never override a newer push.
                 continue
-            device.update_from_backend(status, requested_at=started)
-            device.notify()
+            try:
+                device.update_from_backend(status, requested_at=started)
+                device.notify()
+            except Exception:  # noqa: BLE001 - one device's bug must not leave the others unread
+                # Not counted as failed: the cloud answered, a retry would
+                # only find the same bug again. The traceback is logged once
+                # per device, not at every pass.
+                mac = str(device.device_id).lower()
+                if mac in self._apply_failed:
+                    _LOGGER.debug("Failed to apply the state of %s again", device.device_name, exc_info=True)
+                else:
+                    self._apply_failed.add(mac)
+                    _LOGGER.exception("Failed to apply the state of %s", device.device_name)
+            else:
+                self._apply_failed.discard(str(device.device_id).lower())
         if devices is None and refused:
             # A refused description may be a unit removed in the app: the
             # device list says, not in six hours but now.

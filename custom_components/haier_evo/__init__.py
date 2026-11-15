@@ -212,7 +212,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> boo
     entry.runtime_data = haier
     for device in haier.devices:
         if isinstance(device, HaierLaundry):
-            device.laundry_events.start(entry)
+            try:
+                device.laundry_events.start(entry)
+            except Exception:  # noqa: BLE001 - the events of one machine must not fail the entry
+                _LOGGER.exception("Failed to start the program events of %s", device.device_name)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     haier.start(entry)
     _LOGGER.debug("Haier Evo set up with %d device(s)", len(haier.devices))

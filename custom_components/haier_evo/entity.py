@@ -9,6 +9,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 
 from . import const as C  # noqa: N812
+from .logger import _LOGGER
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -60,8 +61,16 @@ def async_setup_platform(
     registry = er.async_get(hass)
     entities = []
     for device in entry.runtime_data.devices:
-        entities.extend(getattr(device, f"create_entities_{platform}")())
-        for unique_id in device.retired_unique_ids(platform):
+        try:
+            created = getattr(device, f"create_entities_{platform}")()
+            retired = device.retired_unique_ids(platform)
+        except Exception:  # noqa: BLE001 - one device's bug must not take the platform of the others down
+            # Nothing is removed from the registry either: what the device
+            # no longer offers is not known.
+            _LOGGER.exception("Failed to create the %s entities of %s", platform, device.device_name)
+            continue
+        entities.extend(created)
+        for unique_id in retired:
             if entity_id := registry.async_get_entity_id(platform, C.DOMAIN, unique_id):
                 registry.async_remove(entity_id)
     if entities:
