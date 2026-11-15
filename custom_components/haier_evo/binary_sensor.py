@@ -185,6 +185,22 @@ class HaierLaundryRemoteControlSensor(HaierBinarySensor):
         return bool(self._device.remote_control)
 
 
+class HaierLaundryDoorLockSensor(HaierBinarySensor):
+    """On while the door is locked, during a wash (HW70/HW90,
+    device_laundry.LAUNDRY_DOOR_LOCK; no LOCK class: its "on" means unlocked)."""
+
+    _attr_icon = "mdi:door-closed-lock"
+
+    def __init__(self, device: api.HaierDevice) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_door_lock"
+        self._attr_name = "Дверца заблокирована"
+
+    @property
+    def is_on(self) -> bool:
+        return bool(getattr(self._device, "door_locked", False))
+
+
 class HaierLaundryChildLockSensor(HaierBinarySensor):
     """On while the child lock holds the buttons (no LOCK class: its "on" means unlocked)."""
 
