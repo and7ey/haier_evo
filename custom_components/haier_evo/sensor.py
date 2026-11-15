@@ -5,7 +5,7 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfTemperature, UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfTemperature, UnitOfTime, UnitOfVolume
 from homeassistant.core import HomeAssistant
 
 from . import api
@@ -183,6 +183,46 @@ class HaierLaundryParameterSensor(HaierSensor):
     @property
     def native_value(self):
         return self._device.parameter_value(self._code)
+
+
+class HaierLaundryMeterSensor(HaierSensor):
+    """Energy, water and washes of HW70/HW90 (device_laundry.LAUNDRY_METERS):
+    the totals count up (the energy dashboard takes them), the values of a
+    wash start again at 0."""
+
+    KINDS = {
+        # meter: name, device class, unit, state class, diagnostic
+        "energy_total": ("Потреблено энергии", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR,
+                         SensorStateClass.TOTAL_INCREASING, False),
+        "energy_cycle": ("Энергия за стирку", SensorDeviceClass.ENERGY, UnitOfEnergy.KILO_WATT_HOUR, None, False),
+        "water_total": ("Израсходовано воды", SensorDeviceClass.WATER, UnitOfVolume.LITERS,
+                        SensorStateClass.TOTAL_INCREASING, False),
+        "water_cycle": ("Вода за стирку", SensorDeviceClass.WATER, UnitOfVolume.LITERS, None, False),
+        "washes_total": ("Всего стирок", None, None, SensorStateClass.TOTAL_INCREASING, True),
+        "washes_since_drum_clean": ("Стирок после очистки барабана", None, None, SensorStateClass.TOTAL, True),
+    }
+
+    def __init__(self, device: api.HaierDevice, meter: str) -> None:
+        super().__init__(device)
+        self._meter = meter
+        name, device_class, unit, state_class, diagnostic = self.KINDS[meter]
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_{meter}"
+        self._attr_name = name
+        self._attr_device_class = device_class
+        self._attr_native_unit_of_measurement = unit
+        self._attr_state_class = state_class
+        if diagnostic:
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_icon = "mdi:counter" if device_class is None else None
+        if device_class is SensorDeviceClass.ENERGY:
+            self._attr_suggested_display_precision = 2
+
+    @property
+    def native_value(self):
+        value = self._device.meter_value(self._meter)
+        if value is None or self._attr_device_class is SensorDeviceClass.ENERGY:
+            return value
+        return int(value)
 
 
 class HaierLaundryRemainingTimeSensor(HaierLaundrySensor):

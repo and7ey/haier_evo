@@ -427,3 +427,77 @@ async def test_laundry_parameter_sensors_in_home_assistant(hass, aioclient_mock,
     await hass.async_block_till_done()
     assert hass.states.get(temperature).state == "60"
     await stop(hass, entry)
+
+
+# --- energy, water, washes and the door lock of HW70/HW90 (and7ey/haier_evo#114) ---
+
+
+async def test_laundry_meters_of_hw90(hass):
+    washer = laundry_machine(hass, HW90)
+    assert washer.meters == {
+        "energy_total": "40", "energy_cycle": "39", "water_total": "38", "water_cycle": "37",
+        "washes_total": "36", "washes_since_drum_clean": "35", "door_lock": "21",
+    }
+    sensors = {e.unique_id.split("_HW90B14367U_")[-1]: e for e in washer.create_entities_sensor()}
+    assert [(m, sensors[m].native_value) for m in (
+        "energy_total", "energy_cycle", "water_total", "water_cycle", "washes_total", "washes_since_drum_clean",
+    )] == [("energy_total", 0.39), ("energy_cycle", 0.17), ("water_total", 58), ("water_cycle", 1),
+           ("washes_total", 0), ("washes_since_drum_clean", 0)]
+    total, cycle = sensors["energy_total"], sensors["energy_cycle"]
+    assert (str(total.device_class), total.native_unit_of_measurement, str(total.state_class)) == (
+        "energy", "kWh", "total_increasing")
+    assert (str(cycle.device_class), cycle.state_class) == ("energy", None)
+    assert (str(sensors["water_total"].device_class), sensors["water_total"].native_unit_of_measurement) == ("water", "L")
+    assert str(sensors["washes_total"].entity_category) == "diagnostic"
+    locks = [e for e in washer.create_entities_binary_sensor() if e.unique_id.endswith("_door_lock")]
+    assert [(e.name, e.is_on) for e in locks] == [("Дверца заблокирована", True)]  # locked: the dump is mid-wash
+    # the end of the wash of #114: the counters went up, the door unlocked
+    for code, value in {"40": "37.21", "39": "0.52", "38": "2813", "37": "45", "36": "83", "21": "false"}.items():
+        washer._apply_value(code, value)
+    assert (washer.meter_value("energy_total"), washer.meter_value("water_cycle"), washer.door_locked) == (37.21, 45, False)
+    for bad in ("-1", "nan", "x"):
+        washer._apply_value("40", bad)
+        assert washer.meter_value("energy_total") is None, bad
+    assert washer.to_dict()["meters"]["water_total"] == 2813
+
+
+async def test_laundry_meters_only_with_the_same_definitions(hass):
+    # other models number their attributes otherwise: none of these sensors
+    for item, kind in ((HW60, "WM"), (HD80, "DRY")):
+        machine = laundry_machine(hass, item, kind=kind)
+        assert machine.meters == {}, item["device_name"]
+        assert not [e for e in machine.create_entities_sensor() if e.unique_id.endswith(("_energy_total", "_washes_total"))]
+        assert not [e for e in machine.create_entities_binary_sensor() if e.unique_id.endswith("_door_lock")]
+    # one definition differs: all or nothing
+    data = copy.deepcopy(HW90["backend_data"])
+    for attr in data["smartDeviceControl"]["attributes"]:
+        if attr.get("name") == "40":
+            attr["range"]["data"]["maxValue"] = "100"
+    assert laundry_machine(hass, HW90, data=data).meters == {}
+    # a writable door lock is not this one; the meters stay
+    data = copy.deepcopy(HW90["backend_data"])
+    for attr in data["smartDeviceControl"]["attributes"]:
+        if attr.get("name") == "21":
+            attr["writable"] = True
+    meters = laundry_machine(hass, HW90, data=data).meters
+    assert "energy_total" in meters and "door_lock" not in meters
+
+
+async def test_laundry_meters_in_home_assistant(hass, aioclient_mock, ws_factory):
+    entry = await start(hass, aioclient_mock, ws_factory, LAUNDRY)
+    washer = device_by_mac(entry, HW90["device_id"])
+    prefix = f"{washer.device_id}_{washer.device_model}"
+    energy = hass.states.get(eid(hass, "sensor", f"{prefix}_energy_total"))
+    assert (energy.state, energy.attributes["unit_of_measurement"], energy.attributes["state_class"]) == (
+        "0.39", "kWh", "total_increasing")
+    assert hass.states.get(eid(hass, "binary_sensor", f"{prefix}_door_lock")).state == "on"
+    ws_factory.current.feed({
+        "event": "status", "macAddress": washer.device_id,
+        "payload": {"statuses": [{"properties": {"40": "1.02", "21": "false"}}]},
+    })
+    await hass.async_block_till_done()
+    assert hass.states.get(eid(hass, "sensor", f"{prefix}_energy_total")).state == "1.02"
+    assert hass.states.get(eid(hass, "binary_sensor", f"{prefix}_door_lock")).state == "off"
+    dryer = device_by_mac(entry, HD80["device_id"])
+    assert eid(hass, "sensor", f"{dryer.device_id}_{dryer.device_model}_energy_total") is None
+    await stop(hass, entry)
