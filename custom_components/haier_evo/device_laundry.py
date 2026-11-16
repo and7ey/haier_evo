@@ -165,11 +165,14 @@ LAUNDRY_METERS = {
 # the door lock of the same machines: true while a wash runs, false at its end
 # with the door still closed (opening it changes code 31, not this one)
 LAUNDRY_DOOR_LOCK = "21"
+# the door itself: 1 open, 0 closed. Seven diagnostics of #114 agree, with three
+# changes: opened after the wash, closed and opened again with the machine idle.
+LAUNDRY_DOOR_OPEN = "31"
 
 
 def laundry_meters(data: Any) -> dict[str, str]:
-    """{meter: code} of LAUNDRY_METERS (and "door_lock") when the description
-    defines all of them as on HW70/HW90, else {}."""
+    """{meter: code} of LAUNDRY_METERS (and "door_lock", "door_open") when the
+    description defines all of them as on HW70/HW90, else {}."""
     attrs = {str(a.get("name")): a for a in device_part(data).get("attributes") or [] if isinstance(a, dict)}
 
     def defined(code: str, data_type: str, maximum: str) -> bool:
@@ -181,10 +184,11 @@ def laundry_meters(data: Any) -> dict[str, str]:
     if not all(defined(*spec) for spec in LAUNDRY_METERS.values()):
         return {}
     meters = {name: spec[0] for name, spec in LAUNDRY_METERS.items()}
-    lock = _d(attrs.get(LAUNDRY_DOOR_LOCK))
-    values = {_norm(_d(item).get("data")) for item in _d(lock.get("list")).get("data") or []}
-    if lock.get("writable") is False and values == {"0", "1"}:
-        meters["door_lock"] = LAUNDRY_DOOR_LOCK
+    for name, code in (("door_lock", LAUNDRY_DOOR_LOCK), ("door_open", LAUNDRY_DOOR_OPEN)):
+        flag = _d(attrs.get(code))
+        values = {_norm(_d(item).get("data")) for item in _d(flag.get("list")).get("data") or []}
+        if flag.get("writable") is False and values == {"0", "1"}:
+            meters[name] = code
     return meters
 
 
@@ -312,7 +316,7 @@ class HaierLaundry(HaierDevice):
         self.codes: dict[str, str] = {}
         self.phase_titles: dict[str, str] = {}
         self.parameters: dict[str, dict] = {}  # the program's parameters the app names (laundry_parameters)
-        self.meters: dict[str, str] = {}  # energy, water, washes, door lock of HW70/HW90 (laundry_meters)
+        self.meters: dict[str, str] = {}  # energy, water, washes, the door of HW70/HW90 (laundry_meters)
         self.program_title: str | None = None
         self.program_status: str | None = None  # IN_PROGRESS, PAUSED, FINISHED... as the cloud says
         self.is_dryer = False
@@ -467,6 +471,11 @@ class HaierLaundry(HaierDevice):
         raw = self._raw.get(self.meters.get("door_lock", ""))
         return None if raw is None else _norm(raw) == "1"
 
+    @property
+    def door_open(self) -> bool | None:
+        raw = self._raw.get(self.meters.get("door_open", ""))
+        return None if raw is None else _norm(raw) == "1"
+
     def shown_parameters(self) -> dict[str, dict]:
         """The parameters worth a sensor: the machine reports a value (a code
         it leaves empty, rinses 135 on HW70, would never show one), and a
@@ -532,6 +541,7 @@ class HaierLaundry(HaierDevice):
             "codes": dict(self.codes),
             "meters": {meter: self.meter_value(meter) for meter in LAUNDRY_METERS if meter in self.meters},
             "door_locked": self.door_locked,
+            "door_open": self.door_open,
             "parameters": {
                 code: {"title": p["title"], "value": self.parameter_value(code)} for code, p in self.parameters.items()
             },
@@ -606,6 +616,8 @@ class HaierLaundry(HaierDevice):
             entities.append(binary_sensor.HaierLaundryChildLockSensor(self))
         if "door_lock" in self.meters:
             entities.append(binary_sensor.HaierLaundryDoorLockSensor(self))
+        if "door_open" in self.meters:
+            entities.append(binary_sensor.HaierLaundryDoorSensor(self))
         return entities
 
     def retired_unique_ids(self, platform: str) -> list[str]:
