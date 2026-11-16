@@ -201,6 +201,22 @@ class HaierLaundryDoorLockSensor(HaierBinarySensor):
         return bool(getattr(self._device, "door_locked", False))
 
 
+class HaierLaundryDoorSensor(HaierEntity, BinarySensorEntity):
+    """On while the door is open (HW70/HW90, device_laundry.LAUNDRY_DOOR_OPEN);
+    unknown until the machine reports it."""
+
+    _attr_device_class = BinarySensorDeviceClass.DOOR
+
+    def __init__(self, device: api.HaierDevice) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_door"
+        self._attr_name = "Дверца"
+
+    @property
+    def is_on(self) -> bool | None:
+        return getattr(self._device, "door_open", None)
+
+
 class HaierLaundryChildLockSensor(HaierBinarySensor):
     """On while the child lock holds the buttons (no LOCK class: its "on" means unlocked)."""
 
