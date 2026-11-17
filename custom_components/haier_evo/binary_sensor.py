@@ -229,6 +229,12 @@ class HaierWMDryerRunningSensor(HaierWMFlagSensor):
     feature, fallback = "dryer_running", "Сушильный барабан работает"
 
 
+class HaierWMChildLockSensor(HaierWMFlagSensor):
+    # "childLockStatus" of the app's control block: the panel's buttons are locked
+    _attr_icon = "mdi:lock"
+    feature, fallback = "child_lock", "Блокировка от детей"
+
+
 class HaierWMRemoteControlSensor(HaierWMFlagSensor):
     _attr_icon = "mdi:remote"
     feature, fallback = "remote_control", "Удалённое управление"
@@ -294,6 +300,7 @@ WM_FLAG_SENSORS: tuple[type[HaierWMFlagSensor], ...] = (
     HaierWMWasherRunningSensor,
     HaierWMDryerRunningSensor,
     HaierWMRemoteControlSensor,
+    HaierWMChildLockSensor,
     HaierWMWashDryModeSensor,
     HaierWMDelayedStartSensor,
     HaierWMAutoDetergentSensor,

@@ -78,7 +78,7 @@ async def test_values_and_entities(hass):
     }
     assert sensors[sensor.HaierWMDryLevelSensor].options == ["dry_iron", "dry_wear", "dry_closet", "dry_extra"]
     assert {cls.feature: flags[cls].is_on for cls in binary_sensor.WM_FLAG_SENSORS} == {
-        "washer_running": False, "dryer_running": False, "remote_control": False, "wash_dry_mode": False, "delayed_start": False,
+        "washer_running": False, "dryer_running": False, "remote_control": False, "child_lock": False, "wash_dry_mode": False, "delayed_start": False,
         "auto_detergent": True, "auto_conditioner": True, "steam_treatment": False,
         "uv_sterilization": False, "plasma_sterilization": False,
     }
