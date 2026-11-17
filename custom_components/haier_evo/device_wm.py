@@ -107,6 +107,15 @@ class HaierWM(HaierDevice):
             entities.append(select.HaierWMSpinSpeedSelect(self))
         return entities
 
+    def value_of(self, name: str) -> str | None:
+        """The profile's name of an attribute's value ("on", "wash_cotton"), or the
+        raw value of an attribute without mappings; None while not known."""
+        attr = self.config.get_attr_by_name(name)
+        raw = self._raw.get(str(attr.code)) if attr is not None else None
+        if attr is None or raw is None:
+            return None
+        return attr.get_item_name(raw) if attr.list else raw
+
     def create_entities_sensor(self) -> list:
         from . import sensor
         entities = []
@@ -114,4 +123,10 @@ class HaierWM(HaierDevice):
             entities.append(sensor.HaierWMRemainingTimeSensor(self))
         if self.config['status'] is not None:
             entities.append(sensor.HaierWMStatusSensor(self))
+        # the washer-dryer of CASWD129C1C.yaml, read only
+        entities += [cls(self) for cls in sensor.WM_SENSORS if self.config[cls.feature] is not None]
         return entities
+
+    def create_entities_binary_sensor(self) -> list:
+        from . import binary_sensor
+        return [cls(self) for cls in binary_sensor.WM_FLAG_SENSORS if self.config[cls.feature] is not None]
