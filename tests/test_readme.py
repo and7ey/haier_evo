@@ -50,7 +50,7 @@ def _profiles() -> dict[str, str]:
         if path.stem == "default":
             continue
         names = set(re.findall(r"^\s*-\s*name:\s*(\w+)", path.read_text(encoding="utf-8"), re.M))
-        profiles[path.stem] = "WH" if "heating_mode" in names else "WM" if "program" in names else "AC"
+        profiles[path.stem] = "WH" if "heating_mode" in names else "WM" if {"program", "wash_program"} & names else "AC"
     return profiles
 
 

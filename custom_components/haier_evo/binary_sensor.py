@@ -230,3 +230,81 @@ class HaierLaundryChildLockSensor(HaierBinarySensor):
     @property
     def is_on(self) -> bool:
         return bool(self._device.child_lock)
+
+
+class HaierWMFlagSensor(HaierBinarySensor):
+    """An on/off of the washer-dryer (CASWD129C1C.yaml), read only."""
+
+    _device: api.HaierWM
+    feature: str
+    fallback: str
+
+    def __init__(self, device: api.HaierWM) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_{self.feature}"
+        self._attr_name = self.fallback
+
+    @property
+    def is_on(self) -> bool:
+        return self._device.value_of(self.feature) == "on"
+
+
+class HaierWMConnectionSensor(HaierWMFlagSensor):
+    # the machine's own flag, next to the cloud's ONLINE/OFFLINE of other devices
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    feature, fallback = "connection", "Соединение"
+
+
+class HaierWMRemoteControlSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:remote"
+    feature, fallback = "remote_control", "Удалённое управление"
+
+
+class HaierWMWashDryModeSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:tumble-dryer"
+    feature, fallback = "wash_dry_mode", "Стирка и сушка"
+
+
+class HaierWMDelayedStartSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:timer-outline"
+    feature, fallback = "delayed_start", "Отложенный старт"
+
+
+class HaierWMAutoDetergentSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:cup-water"
+    feature, fallback = "auto_detergent", "Автодозировка моющего средства"
+
+
+class HaierWMAutoConditionerSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:cup-water"
+    feature, fallback = "auto_conditioner", "Автодозировка кондиционера"
+
+
+class HaierWMSteamSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:weather-fog"
+    feature, fallback = "steam_treatment", "Обработка паром"
+
+
+class HaierWMUVSterilizationSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:lightbulb-fluorescent-tube-outline"
+    feature, fallback = "uv_sterilization", "УФ-стерилизация"
+
+
+class HaierWMPlasmaSterilizationSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:creation"
+    feature, fallback = "plasma_sterilization", "Плазменная стерилизация"
+
+
+# in the order the entities are created
+WM_FLAG_SENSORS: tuple[type[HaierWMFlagSensor], ...] = (
+    HaierWMConnectionSensor,
+    HaierWMRemoteControlSensor,
+    HaierWMWashDryModeSensor,
+    HaierWMDelayedStartSensor,
+    HaierWMAutoDetergentSensor,
+    HaierWMAutoConditionerSensor,
+    HaierWMSteamSensor,
+    HaierWMUVSterilizationSensor,
+    HaierWMPlasmaSterilizationSensor,
+)
