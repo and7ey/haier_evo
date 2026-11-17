@@ -1,11 +1,16 @@
 """Washing machines."""
 from __future__ import annotations
 
+import copy
+import time
+from typing import Any
+
 from . import config as CFG  # noqa: N812
 from . import const as C  # noqa: N812
 from .device import (
     HaierDevice,
     _described_attributes,
+    device_part,
     parsefloat,
 )
 from .logger import _LOGGER
@@ -13,12 +18,19 @@ from .logger import _LOGGER
 
 class HaierWM(HaierDevice):
 
+    # The cloud's REST description of the old format lags behind its pushes: a
+    # power-off pushed at 00:06:58, the periodic read at 00:07:20 still had the
+    # machine on and ONLINE (CASWD129C1C). A value pushed this recently wins.
+    PUSH_WINS_FOR = 900.0
+
     def __init__(
         self,
         backend_data: dict = None,
         **kwargs
     ) -> None:
         super().__init__(**kwargs)
+        self._pushed_at: dict[str, float] = {}
+        self._status_pushed_at: float | None = None
         self.status = None
         self.program = None
         self.temperature = None
@@ -50,6 +62,37 @@ class HaierWM(HaierDevice):
         for attr in self.config.attrs:
             self._apply_value(attr.code, attr.current)
             _LOGGER.debug("%s: %s", self.device_name, attr)
+
+    def _handle_status_update(self, received_message: dict) -> None:
+        now = time.monotonic()
+        for status in (received_message.get("payload") or {}).get("statuses") or []:
+            if isinstance(status, dict) and isinstance(status.get("properties"), dict):
+                for key, value in status["properties"].items():
+                    if value is not None:
+                        self._pushed_at[str(key)] = now
+        super()._handle_status_update(received_message)
+
+    def _handle_device_status_update(self, received_message: dict) -> None:
+        if (received_message.get("payload") or {}).get("status") is not None:
+            self._status_pushed_at = time.monotonic()
+        super()._handle_device_status_update(received_message)
+
+    def update_from_backend(self, data: Any, *, requested_at: float | None = None) -> None:
+        """A REST status, but what was pushed lately stays: the snapshot is older than it."""
+        if isinstance(data, dict) and isinstance(self._status_data, dict):
+            now = time.monotonic()
+            fresh = {code for code, at in self._pushed_at.items() if now - at < self.PUSH_WINS_FOR}
+            keep_status = self._status_pushed_at is not None and now - self._status_pushed_at < self.PUSH_WINS_FOR
+            if fresh or keep_status:
+                data = copy.deepcopy(data)
+                part = device_part(data)
+                if keep_status and device_part(self._status_data).get("status") is not None:
+                    part["status"] = device_part(self._status_data)["status"]
+                for attr in part.get("attributes") or []:
+                    code = str(attr.get("name")) if isinstance(attr, dict) else None
+                    if code in fresh and code in self._raw:
+                        attr["currentValue"] = self._raw[code]
+        super().update_from_backend(data, requested_at=requested_at)
 
     def _set_attribute_value(self, code: str, value: str) -> None:
         attr = self.config.get_attr_by_code(code)

@@ -158,3 +158,32 @@ async def test_a_care_seen_on_the_machine(hass):
             wm._apply_value(code, value)
         seen.append((phase.native_value, running.is_on))
     assert seen == [("care", True), (None, True), ("finished", False)]
+
+
+async def test_a_lagging_rest_status_does_not_undo_a_push(hass, monkeypatch):
+    """Seen on the machine: the power-off pushed, the periodic read 22 s later still "on" and ONLINE."""
+    import custom_components.haier_evo.device_wm as device_wm
+
+    clock = [1000.0]
+    monkeypatch.setattr(device_wm.time, "monotonic", lambda: clock[0])
+    wm = washer(hass)
+    assert wm.status == "on"
+    stale = copy.deepcopy(ITEM["backend_data"])
+    stale["status"] = "ONLINE"
+    for attr in stale["attributes"]:
+        if attr["name"] == "8":
+            attr["currentValue"] = "1"
+
+    wm.on_message({"event": "status", "macAddress": MAC, "payload": {"statuses": [{"properties": {"8": "0"}}]}})
+    wm.on_message({"event": "deviceStatusEvent", "macAddress": MAC, "payload": {"status": "TURNED_OFF"}})
+    assert wm.status == "off"
+    clock[0] += 22
+    wm.update_from_backend(copy.deepcopy(stale), requested_at=clock[0])
+    assert wm.status == "off"
+    # what the cache saves is what the entities show
+    saved = {a["name"]: a.get("currentValue") for a in wm.status_data["attributes"]}
+    assert (saved["8"], wm.status_data["status"]) == ("0", "TURNED_OFF")
+    # long after the push, REST is the only source again (a lost push)
+    clock[0] += wm.PUSH_WINS_FOR
+    wm.update_from_backend(copy.deepcopy(stale), requested_at=clock[0])
+    assert (wm.status, wm.status_data["status"]) == ("on", "ONLINE")
