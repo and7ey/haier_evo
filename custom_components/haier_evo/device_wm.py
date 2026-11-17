@@ -129,4 +129,5 @@ class HaierWM(HaierDevice):
 
     def create_entities_binary_sensor(self) -> list:
         from . import binary_sensor
-        return [cls(self) for cls in binary_sensor.WM_FLAG_SENSORS if self.config[cls.feature] is not None]
+        entities = [binary_sensor.HaierProblemSensor(self), binary_sensor.HaierConnectivitySensor(self)]
+        return entities + [cls(self) for cls in binary_sensor.WM_FLAG_SENSORS if self.config[cls.feature] is not None]
