@@ -139,12 +139,12 @@ async def test_a_washing_seen_on_the_machine(hass):
     phase = sensor.HaierWMWashPhaseSensor(wm)
     running = binary_sensor.HaierWMWasherRunningSensor(wm)
     seen = []
-    for values in ({"0": "4", "23": "1", "22": "4", "45": "25"}, {"22": "5"}, {"22": "11", "45": "4"},
-                   {"23": "2", "22": "14", "45": "1"}):
+    for values in ({"0": "4", "23": "1", "22": "4", "45": "25"}, {"22": "5"}, {"22": "9", "45": "10"},
+                   {"22": "11", "45": "4"}, {"23": "2", "22": "14", "45": "1"}):
         for code, value in values.items():
             wm._apply_value(code, value)
         seen.append((phase.native_value, running.is_on))
-    assert seen == [("washing", True), ("rinsing", True), ("spinning", True), ("finished", False)]
+    assert seen == [("washing", True), ("rinsing", True), ("final_rinse", True), ("spinning", True), ("finished", False)]
     wm._apply_value("22", "15")
     assert phase.native_value == "delayed_start"
 

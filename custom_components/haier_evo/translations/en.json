@@ -204,6 +204,7 @@
                     "none": "No program",
                     "washing": "Washing",
                     "rinsing": "Rinsing",
+                    "final_rinse": "Rinsing",
                     "spinning": "Spinning",
                     "finished": "Finished",
                     "delayed_start": "Waiting for delayed start"
