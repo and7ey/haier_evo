@@ -173,6 +173,14 @@ class HaierWMCareProgramSensor(HaierWMValueSensor):
     feature, fallback = "care_program", "Программа ухода"
 
 
+class HaierWMWashPhaseSensor(HaierWMValueSensor):
+    """Seen on the machine: none, washing, rinsing, spinning, finished; waiting for a delayed start."""
+
+    _attr_translation_key = "wm_wash_phase"
+    _attr_icon = "mdi:progress-clock"
+    feature, fallback = "wash_phase", "Этап стирки"
+
+
 class HaierWMTimeSensor(HaierWMSensor):
     """Minutes left; the washing's time comes as hours and minutes."""
 
@@ -201,6 +209,7 @@ class HaierWMDryRemainingTimeSensor(HaierWMTimeSensor):
 
 # in the order the entities are created
 WM_SENSORS: tuple[type[HaierWMSensor], ...] = (
+    HaierWMWashPhaseSensor,
     HaierWMWashProgramSensor,
     HaierWMWashTemperatureSensor,
     HaierWMWashSpinSpeedSensor,

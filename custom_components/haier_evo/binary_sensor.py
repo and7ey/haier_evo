@@ -249,6 +249,18 @@ class HaierWMFlagSensor(HaierBinarySensor):
         return self._device.value_of(self.feature) == "on"
 
 
+class HaierWMWasherRunningSensor(HaierWMFlagSensor):
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_icon = "mdi:washing-machine"
+    feature, fallback = "washer_running", "Стиральный барабан работает"
+
+
+class HaierWMDryerRunningSensor(HaierWMFlagSensor):
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_icon = "mdi:tumble-dryer"
+    feature, fallback = "dryer_running", "Сушильный барабан работает"
+
+
 class HaierWMRemoteControlSensor(HaierWMFlagSensor):
     _attr_icon = "mdi:remote"
     feature, fallback = "remote_control", "Удалённое управление"
@@ -311,6 +323,8 @@ class HaierWMDryerFilterSensor(HaierBinarySensor):
 
 # in the order the entities are created
 WM_FLAG_SENSORS: tuple[type[HaierWMFlagSensor], ...] = (
+    HaierWMWasherRunningSensor,
+    HaierWMDryerRunningSensor,
     HaierWMRemoteControlSensor,
     HaierWMWashDryModeSensor,
     HaierWMDelayedStartSensor,
