@@ -144,7 +144,8 @@
                     "wash_wool": "Wool",
                     "wash_down": "Down",
                     "wash_delicate": "Delicate",
-                    "wash_drum_clean": "Drum clean"
+                    "wash_drum_clean": "Drum clean",
+                    "wash_app": "App program"
                 }
             },
             "wm_dry_mode": {
@@ -183,7 +184,8 @@
             "wm_dry_level": {
                 "state": {
                     "dry_iron": "Iron dry",
-                    "dry_closet": "Closet dry",
+                    "dry_wear": "Ready to wear",
+                    "dry_closet": "Cupboard dry",
                     "dry_extra": "Extra dry"
                 }
             },

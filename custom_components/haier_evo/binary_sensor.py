@@ -263,7 +263,7 @@ class HaierWMRemoteControlSensor(HaierWMFlagSensor):
 
 class HaierWMWashDryModeSensor(HaierWMFlagSensor):
     _attr_icon = "mdi:tumble-dryer"
-    feature, fallback = "wash_dry_mode", "Стирка и сушка"
+    feature, fallback = "wash_dry_mode", "Умная связка"
 
 
 class HaierWMDelayedStartSensor(HaierWMFlagSensor):
@@ -273,12 +273,12 @@ class HaierWMDelayedStartSensor(HaierWMFlagSensor):
 
 class HaierWMAutoDetergentSensor(HaierWMFlagSensor):
     _attr_icon = "mdi:cup-water"
-    feature, fallback = "auto_detergent", "Автодозировка моющего средства"
+    feature, fallback = "auto_detergent", "Автодозирование моющего средства"
 
 
 class HaierWMAutoConditionerSensor(HaierWMFlagSensor):
     _attr_icon = "mdi:cup-water"
-    feature, fallback = "auto_conditioner", "Автодозировка кондиционера"
+    feature, fallback = "auto_conditioner", "Автодозирование смягчающего средства"
 
 
 class HaierWMSteamSensor(HaierWMFlagSensor):

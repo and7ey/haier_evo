@@ -17,7 +17,7 @@ FIXTURES = ROOT / "tests" / "fixtures"
 LEVELS = {"устройство": "device", "данные облака": "data", "профиль": "profile", "сообщение": "report"}
 KINDS = {"AC": "Кондиционер", "REF": "Холодильник", "WH": "Водонагреватель", "WM": "Стиральная машина",
          "DRY": "Сушильная машина"}
-DUMPS = ("evo_dump.json", "ref_dump.json", "laundry_dump.json", "wh_dump.json", "hw70_dump.json")
+DUMPS = ("evo_dump.json", "ref_dump.json", "laundry_dump.json", "wh_dump.json", "hw70_dump.json", "caswd_dump.json")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 
 
