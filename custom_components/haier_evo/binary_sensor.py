@@ -289,6 +289,36 @@ class HaierWMPlasmaSterilizationSensor(HaierWMFlagSensor):
     feature, fallback = "plasma_sterilization", "Плазменная стерилизация"
 
 
+class HaierWMSoakSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:water-outline"
+    feature, fallback = "soak", "Замачивание"
+
+
+class HaierWMHygieneSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:shield-check-outline"
+    feature, fallback = "hygiene", "Гигиена"
+
+
+class HaierWMIntensiveWashSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:arm-flex-outline"
+    feature, fallback = "intensive_wash", "Интенсивная стирка"
+
+
+class HaierWMNightWashSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:weather-night"
+    feature, fallback = "night_wash", "Ночная стирка"
+
+
+class HaierWMEcoWashSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:leaf"
+    feature, fallback = "eco_wash", "Эко"
+
+
+class HaierWMHighWaterLevelSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:waves-arrow-up"
+    feature, fallback = "high_water_level", "Высокий уровень воды"
+
+
 # in the order the entities are created
 WM_FLAG_SENSORS: tuple[type[HaierWMFlagSensor], ...] = (
     HaierWMRemoteControlSensor,
@@ -299,4 +329,10 @@ WM_FLAG_SENSORS: tuple[type[HaierWMFlagSensor], ...] = (
     HaierWMSteamSensor,
     HaierWMUVSterilizationSensor,
     HaierWMPlasmaSterilizationSensor,
+    HaierWMSoakSensor,
+    HaierWMHygieneSensor,
+    HaierWMIntensiveWashSensor,
+    HaierWMNightWashSensor,
+    HaierWMEcoWashSensor,
+    HaierWMHighWaterLevelSensor,
 )
