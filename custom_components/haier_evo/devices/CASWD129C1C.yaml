@@ -226,3 +226,32 @@ attributes:
         value: "off"
       - haier: "1"
         value: "on"
+  - name: wash_phase
+    id: "22"
+    mappings:
+      - haier: "0"
+        value: "none"
+      - haier: "4"
+        value: "washing"
+      - haier: "5"
+        value: "rinsing"
+      - haier: "11"
+        value: "spinning"
+      - haier: "14"
+        value: "finished"
+      - haier: "15"
+        value: "delayed_start"
+  - name: washer_running
+    id: "23"
+    mappings:
+      - haier: "2"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: dryer_running
+    id: "6"
+    mappings:
+      - haier: "2"
+        value: "off"
+      - haier: "1"
+        value: "on"

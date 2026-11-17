@@ -198,6 +198,16 @@
                 "state": {
                     "no_spin": "Без отжима"
                 }
+            },
+            "wm_wash_phase": {
+                "state": {
+                    "none": "Нет программы",
+                    "washing": "Стирка",
+                    "rinsing": "Полоскание",
+                    "spinning": "Отжим",
+                    "finished": "Завершено",
+                    "delayed_start": "Ожидание отложенного старта"
+                }
             }
         },
         "event": {

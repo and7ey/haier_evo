@@ -198,6 +198,16 @@
                 "state": {
                     "no_spin": "No spin"
                 }
+            },
+            "wm_wash_phase": {
+                "state": {
+                    "none": "No program",
+                    "washing": "Washing",
+                    "rinsing": "Rinsing",
+                    "spinning": "Spinning",
+                    "finished": "Finished",
+                    "delayed_start": "Waiting for delayed start"
+                }
             }
         },
         "event": {

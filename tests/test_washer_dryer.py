@@ -35,10 +35,10 @@ async def test_the_profile_is_found_for_the_cut_model(hass):
 async def test_attributes_are_named_by_code(hass):
     wm = washer(hass)
     names = {str(a.code): a.name for a in wm.config.attrs}
-    assert {code: names[code] for code in ("0", "8", "27", "35", "48", "58", "76", "87", "22")} == {
+    assert {code: names[code] for code in ("0", "8", "27", "35", "48", "58", "76", "87", "22", "51")} == {
         "0": "wash_program", "8": "status", "27": "dry_remaining_time", "35": "plasma_sterilization",
         "48": "dry_level", "58": "care_program", "76": "wash_temperature", "87": "wash_spin_speed",
-        "22": "unknown",
+        "22": "wash_phase", "51": "unknown",
     }
     # nothing takes the names of the upstream washing machine: no commands go out
     assert [wm.config[n] for n in ("program", "temperature", "spin_speed", "remaining_time")] == [None] * 4
@@ -62,6 +62,7 @@ async def test_values_and_entities(hass):
     sensors = {type(e): e for e in wm.create_entities_sensor()}
     flags = {type(e): e for e in wm.create_entities_binary_sensor()}
     assert {cls.feature: sensors[cls].native_value for cls in sensor.WM_SENSORS} == {
+        "wash_phase": "finished",
         "wash_program": "wash_cotton",
         "wash_temperature": "30",
         "wash_spin_speed": "800",
@@ -74,7 +75,7 @@ async def test_values_and_entities(hass):
     }
     assert sensors[sensor.HaierWMDryLevelSensor].options == ["dry_iron", "dry_wear", "dry_closet", "dry_extra"]
     assert {cls.feature: flags[cls].is_on for cls in binary_sensor.WM_FLAG_SENSORS} == {
-        "remote_control": False, "wash_dry_mode": False, "delayed_start": False,
+        "washer_running": False, "dryer_running": False, "remote_control": False, "wash_dry_mode": False, "delayed_start": False,
         "auto_detergent": True, "auto_conditioner": True, "steam_treatment": False,
         "uv_sterilization": False, "plasma_sterilization": False,
     }
@@ -127,3 +128,19 @@ async def test_dryer_filter_alarm(hass):
     assert wm.alarm_texts == ["[E6] Засорен фильтр- осушитель."]
     wm._set_alarms(["dryerFanErr"])
     assert (filter_sensor.is_on, problem.is_on) == (False, True)
+
+
+async def test_a_washing_seen_on_the_machine(hass):
+    """"Быстрая", 25 min: the phases as the cloud pushed them, then the end."""
+    wm = washer(hass)
+    phase = sensor.HaierWMWashPhaseSensor(wm)
+    running = binary_sensor.HaierWMWasherRunningSensor(wm)
+    seen = []
+    for values in ({"0": "4", "23": "1", "22": "4", "45": "25"}, {"22": "5"}, {"22": "11", "45": "4"},
+                   {"23": "2", "22": "14", "45": "1"}):
+        for code, value in values.items():
+            wm._apply_value(code, value)
+        seen.append((phase.native_value, running.is_on))
+    assert seen == [("washing", True), ("rinsing", True), ("spinning", True), ("finished", False)]
+    wm._apply_value("22", "15")
+    assert phase.native_value == "delayed_start"
