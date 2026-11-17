@@ -181,6 +181,14 @@ class HaierWMWashPhaseSensor(HaierWMValueSensor):
     feature, fallback = "wash_phase", "Этап стирки"
 
 
+class HaierWMDryPhaseSensor(HaierWMValueSensor):
+    """The upper drum, seen on the machine: none, drying, care, finished."""
+
+    _attr_translation_key = "wm_dry_phase"
+    _attr_icon = "mdi:progress-clock"
+    feature, fallback = "dry_phase", "Этап сушки и ухода"
+
+
 class HaierWMTimeSensor(HaierWMSensor):
     """Minutes left; the washing's time comes as hours and minutes."""
 
@@ -214,6 +222,7 @@ WM_SENSORS: tuple[type[HaierWMSensor], ...] = (
     HaierWMWashTemperatureSensor,
     HaierWMWashSpinSpeedSensor,
     HaierWMWashRemainingTimeSensor,
+    HaierWMDryPhaseSensor,
     HaierWMDryModeSensor,
     HaierWMDryProgramSensor,
     HaierWMDryLevelSensor,

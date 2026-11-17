@@ -38,7 +38,7 @@ async def test_attributes_are_named_by_code(hass):
     assert {code: names[code] for code in ("0", "8", "27", "35", "48", "58", "76", "87", "22", "51")} == {
         "0": "wash_program", "8": "status", "27": "dry_remaining_time", "35": "plasma_sterilization",
         "48": "dry_level", "58": "care_program", "76": "wash_temperature", "87": "wash_spin_speed",
-        "22": "wash_phase", "51": "unknown",
+        "22": "wash_phase", "51": "dry_phase",
     }
     # nothing takes the names of the upstream washing machine: no commands go out
     assert [wm.config[n] for n in ("program", "temperature", "spin_speed", "remaining_time")] == [None] * 4
@@ -49,7 +49,7 @@ async def test_a_description_does_not_name_an_attribute_the_profile_does_not(has
     """Should the cloud describe the attributes one day: "Температура" of another code stays unknown."""
     data = copy.deepcopy(ITEM["backend_data"])
     for attr in data["attributes"]:
-        if attr["name"] in ("22", "51"):
+        if attr["name"] in ("62", "63"):  # not in the profile
             attr["description"] = "Температура"
     wm = washer(hass, data)
     assert wm.config["temperature"] is None
@@ -67,6 +67,7 @@ async def test_values_and_entities(hass):
         "wash_temperature": "30",
         "wash_spin_speed": "800",
         "wash_remaining_minutes": 1,
+        "dry_phase": "none",
         "dry_mode": "dry",
         "dry_program": "dry_auto",
         "dry_level": "dry_closet",
@@ -144,3 +145,16 @@ async def test_a_washing_seen_on_the_machine(hass):
     assert seen == [("washing", True), ("rinsing", True), ("spinning", True), ("finished", False)]
     wm._apply_value("22", "15")
     assert phase.native_value == "delayed_start"
+
+
+async def test_a_care_seen_on_the_machine(hass):
+    """Care "Рубашки", 20 min: care, a phase not named yet (5) in the last minutes, finished."""
+    wm = washer(hass)
+    phase = sensor.HaierWMDryPhaseSensor(wm)
+    running = binary_sensor.HaierWMDryerRunningSensor(wm)
+    seen = []
+    for values in ({"44": "2", "58": "14", "6": "1", "51": "9"}, {"51": "5"}, {"6": "2", "51": "6"}):
+        for code, value in values.items():
+            wm._apply_value(code, value)
+        seen.append((phase.native_value, running.is_on))
+    assert seen == [("care", True), (None, True), ("finished", False)]

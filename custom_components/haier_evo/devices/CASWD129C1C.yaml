@@ -255,3 +255,14 @@ attributes:
         value: "off"
       - haier: "1"
         value: "on"
+  - name: dry_phase
+    id: "51"
+    mappings:
+      - haier: "0"
+        value: "none"
+      - haier: "8"
+        value: "drying"
+      - haier: "9"
+        value: "care"
+      - haier: "6"
+        value: "finished"
