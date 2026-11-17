@@ -9,6 +9,13 @@ attributes:
         value: "off"
       - haier: "1"
         value: "on"
+  - name: child_lock
+    id: "5"
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
   - name: remote_control
     id: "4"
     mappings:
