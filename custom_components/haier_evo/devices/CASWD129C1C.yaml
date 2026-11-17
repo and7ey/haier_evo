@@ -3,13 +3,6 @@
 # Old cloud format, read only: the integration sends the machine no commands.
 attributes:
   - name: status
-    id: "19"
-    mappings:
-      - haier: "false"
-        value: "off"
-      - haier: "true"
-        value: "on"
-  - name: connection
     id: "8"
     mappings:
       - haier: "0"

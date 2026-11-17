@@ -35,8 +35,8 @@ async def test_the_profile_is_found_for_the_cut_model(hass):
 async def test_attributes_are_named_by_code(hass):
     wm = washer(hass)
     names = {str(a.code): a.name for a in wm.config.attrs}
-    assert {code: names[code] for code in ("0", "19", "27", "35", "48", "58", "76", "87", "22")} == {
-        "0": "wash_program", "19": "status", "27": "dry_remaining_time", "35": "plasma_sterilization",
+    assert {code: names[code] for code in ("0", "8", "27", "35", "48", "58", "76", "87", "22")} == {
+        "0": "wash_program", "8": "status", "27": "dry_remaining_time", "35": "plasma_sterilization",
         "48": "dry_level", "58": "care_program", "76": "wash_temperature", "87": "wash_spin_speed",
         "22": "unknown",
     }
@@ -74,11 +74,11 @@ async def test_values_and_entities(hass):
     }
     assert sensors[sensor.HaierWMDryLevelSensor].options == ["dry_iron", "dry_wear", "dry_closet", "dry_extra"]
     assert {cls.feature: flags[cls].is_on for cls in binary_sensor.WM_FLAG_SENSORS} == {
-        "connection": True, "remote_control": False, "wash_dry_mode": False, "delayed_start": False,
+        "remote_control": False, "wash_dry_mode": False, "delayed_start": False,
         "auto_detergent": True, "auto_conditioner": True, "steam_treatment": False,
         "uv_sterilization": False, "plasma_sterilization": False,
     }
-    assert wm.status == "off"
+    assert wm.status == "on"  # 8, "onOffStatus" of the drums in the app
     unique_ids = [e.unique_id for e in (*sensors.values(), *flags.values())]
     assert len(set(unique_ids)) == len(unique_ids)
     assert f"{MAC}_CASWD129C1C_wash_program" in unique_ids
