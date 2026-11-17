@@ -217,13 +217,6 @@ class HaierWMFlagSensor(HaierBinarySensor):
         return self._device.value_of(self.feature) == "on"
 
 
-class HaierWMConnectionSensor(HaierWMFlagSensor):
-    # the machine's own flag, next to the cloud's ONLINE/OFFLINE of other devices
-    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-    feature, fallback = "connection", "Соединение"
-
-
 class HaierWMRemoteControlSensor(HaierWMFlagSensor):
     _attr_icon = "mdi:remote"
     feature, fallback = "remote_control", "Удалённое управление"
@@ -266,7 +259,6 @@ class HaierWMPlasmaSterilizationSensor(HaierWMFlagSensor):
 
 # in the order the entities are created
 WM_FLAG_SENSORS: tuple[type[HaierWMFlagSensor], ...] = (
-    HaierWMConnectionSensor,
     HaierWMRemoteControlSensor,
     HaierWMWashDryModeSensor,
     HaierWMDelayedStartSensor,
