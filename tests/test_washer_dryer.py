@@ -113,3 +113,17 @@ async def test_pushed_values(hass):
     assert (program.native_value, left.native_value) == ("wash_app", 75)
     wm._apply_value("0", 12345)  # a program the profile does not know
     assert program.native_value is None
+
+
+async def test_dryer_filter_alarm(hass):
+    """[E6] of the machine's error table: the filter sensor and "Неисправность" are on."""
+    wm = washer(hass)
+    flags = {type(e): e for e in wm.create_entities_binary_sensor()}
+    filter_sensor = flags[binary_sensor.HaierWMDryerFilterSensor]
+    problem = flags[binary_sensor.HaierProblemSensor]
+    assert (filter_sensor.is_on, problem.is_on) == (False, False)
+    wm._set_alarms(["dryerFilterBlockedAlarm"])
+    assert (filter_sensor.is_on, problem.is_on) == (True, True)
+    assert wm.alarm_texts == ["[E6] Засорен фильтр- осушитель."]
+    wm._set_alarms(["dryerFanErr"])
+    assert (filter_sensor.is_on, problem.is_on) == (False, True)

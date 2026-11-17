@@ -257,6 +257,26 @@ class HaierWMPlasmaSterilizationSensor(HaierWMFlagSensor):
     feature, fallback = "plasma_sterilization", "Плазменная стерилизация"
 
 
+class HaierWMDryerFilterSensor(HaierBinarySensor):
+    """The cloud's alarm "[E6] Засорен фильтр- осушитель" of the washer-dryer.
+
+    A fault ("Неисправность" is on too), with a sensor of its own for automations.
+    """
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = "mdi:air-filter"
+    ALARM = "dryerFilterBlockedAlarm"
+
+    def __init__(self, device: api.HaierWM) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_dryer_filter"
+        self._attr_name = "Засорён фильтр сушилки"
+
+    @property
+    def is_on(self) -> bool:
+        return self.ALARM in self._device.alarms
+
+
 # in the order the entities are created
 WM_FLAG_SENSORS: tuple[type[HaierWMFlagSensor], ...] = (
     HaierWMRemoteControlSensor,
