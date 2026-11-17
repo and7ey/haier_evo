@@ -235,6 +235,8 @@ attributes:
         value: "washing"
       - haier: "5"
         value: "rinsing"
+      - haier: "9"
+        value: "final_rinse"
       - haier: "11"
         value: "spinning"
       - haier: "14"

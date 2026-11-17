@@ -174,7 +174,11 @@ class HaierWMCareProgramSensor(HaierWMValueSensor):
 
 
 class HaierWMWashPhaseSensor(HaierWMValueSensor):
-    """Seen on the machine: none, washing, rinsing, spinning, finished; waiting for a delayed start."""
+    """Seen on the machine: none, washing, rinsing, spinning, finished; waiting for a delayed start.
+
+    final_rinse (9): water let in with the drum standing, between the rinsing and
+    the spinning ("Быстрая" at 1400 rpm with the softener dosed).
+    """
 
     _attr_translation_key = "wm_wash_phase"
     _attr_icon = "mdi:progress-clock"
