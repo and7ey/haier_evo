@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import copy
 import time
+from datetime import datetime, timedelta
 from typing import Any
+
+from homeassistant.util import dt as dt_util
 
 from . import config as CFG  # noqa: N812
 from . import const as C  # noqa: N812
@@ -30,6 +33,10 @@ class HaierWM(HaierDevice):
     ) -> None:
         super().__init__(**kwargs)
         self._pushed_at: dict[str, float] = {}
+        # Minutes of the washing program as the machine shows it before a start, and
+        # the start it is waiting for: the machine reports only the time to the end.
+        self._wash_duration: int | None = None
+        self._wash_start: datetime | None = None
         self._status_pushed_at: float | None = None
         self.status = None
         self.program = None
@@ -149,6 +156,46 @@ class HaierWM(HaierDevice):
         if self.config['spin_speed'] is not None:
             entities.append(select.HaierWMSpinSpeedSelect(self))
         return entities
+
+    def _apply_value(self, code: Any, value: Any) -> None:
+        super()._apply_value(code, value)
+        self._note_wash_start()
+
+    def wash_minutes(self) -> int | None:
+        """Minutes to the end of the washing (the machine gives hours and minutes)."""
+        hours = parsefloat(self.value_of("wash_remaining_hours"))
+        minutes = parsefloat(self.value_of("wash_remaining_minutes"))
+        if hours is None or minutes is None:
+            return None
+        return int(hours) * 60 + int(minutes)
+
+    def _note_wash_start(self) -> None:
+        """The start of a delayed washing, estimated: the end minus the program's length.
+
+        A delayed start sets when the program ends (the manual: "the preset time
+        is the end of the program"), and the machine reports the time to that end
+        only. The program's length is what it shows while a program is chosen and
+        not started, the delay not set yet. The start is fixed once, so that it
+        does not move with every minute of the countdown.
+        """
+        if self.config is None:
+            return
+        phase = self.value_of("wash_phase")
+        minutes = self.wash_minutes()
+        if phase == "none" and self.value_of("delayed_start") == "off":
+            if minutes:
+                self._wash_duration = minutes
+            self._wash_start = None
+        elif phase == "delayed_start":
+            if self._wash_start is None and self._wash_duration and minutes and minutes >= self._wash_duration:
+                start = dt_util.utcnow() + timedelta(minutes=minutes - self._wash_duration)
+                self._wash_start = start.replace(second=0, microsecond=0)
+        else:
+            self._wash_start = None
+
+    @property
+    def wash_start(self) -> datetime | None:
+        return self._wash_start
 
     def value_of(self, name: str) -> str | None:
         """The profile's name of an attribute's value ("on", "wash_cotton"), or the

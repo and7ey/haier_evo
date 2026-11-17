@@ -61,7 +61,9 @@ async def test_values_and_entities(hass):
     wm = washer(hass)
     sensors = {type(e): e for e in wm.create_entities_sensor()}
     flags = {type(e): e for e in wm.create_entities_binary_sensor()}
-    assert {cls.feature: sensors[cls].native_value for cls in sensor.WM_SENSORS} == {
+    assert sensors[sensor.HaierWMWashStartSensor].native_value is None  # no delayed start
+    assert {cls.feature: sensors[cls].native_value for cls in sensor.WM_SENSORS
+            if cls is not sensor.HaierWMWashStartSensor} == {
         "wash_phase": "finished",
         "wash_program": "wash_cotton",
         "wash_temperature": "30",
@@ -187,3 +189,45 @@ async def test_a_lagging_rest_status_does_not_undo_a_push(hass, monkeypatch):
     clock[0] += wm.PUSH_WINS_FOR
     wm.update_from_backend(copy.deepcopy(stale), requested_at=clock[0])
     assert (wm.status, wm.status_data["status"]) == ("on", "ONLINE")
+
+
+async def test_the_start_of_a_delayed_washing(hass, monkeypatch):
+    """The machine reports the time to the end only: the start is the end minus the program."""
+    from datetime import UTC, datetime, timedelta
+
+    import custom_components.haier_evo.device_wm as device_wm
+
+    now = datetime(2026, 11, 18, 0, 0, 30, tzinfo=UTC)
+    monkeypatch.setattr(device_wm.dt_util, "utcnow", lambda: now)
+    wm = washer(hass)
+    start = sensor.HaierWMWashStartSensor(wm)
+    assert start.unique_id == f"{MAC}_CASWD129C1C_wash_start"
+    assert start.device_class == "timestamp"
+    # "Хлопок" chosen and not started: 1 h 15 min is the program's length
+    for code, value in {"22": "0", "18": "0", "43": "1", "45": "15"}.items():
+        wm._apply_value(code, value)
+    assert start.native_value is None
+    # the delay being set: the time to its end shows, the length stays
+    for code, value in {"18": "1", "43": "3", "45": "0"}.items():
+        wm._apply_value(code, value)
+    # started: waiting, 3 h to the end, so the washing starts in 1 h 45 min
+    wm._apply_value("22", "15")
+    assert start.native_value == datetime(2026, 11, 18, 1, 45, tzinfo=UTC)
+    # the countdown does not move it
+    now += timedelta(minutes=30)
+    wm._apply_value("43", "2")
+    wm._apply_value("45", "30")
+    assert start.native_value == datetime(2026, 11, 18, 1, 45, tzinfo=UTC)
+    # the washing began
+    wm._apply_value("22", "4")
+    assert start.native_value is None
+
+
+async def test_no_start_without_the_programs_length(hass):
+    """Home Assistant started during the wait: the length was never seen, nothing is guessed."""
+    data = copy.deepcopy(ITEM["backend_data"])
+    for attr in data["attributes"]:
+        if attr["name"] in ("22", "18", "43", "45"):
+            attr["currentValue"] = {"22": "15", "18": "1", "43": "2", "45": "30"}[attr["name"]]
+    wm = washer(hass, data)
+    assert sensor.HaierWMWashStartSensor(wm).native_value is None
