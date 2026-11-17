@@ -76,8 +76,7 @@ async def test_values_and_entities(hass):
     assert {cls.feature: flags[cls].is_on for cls in binary_sensor.WM_FLAG_SENSORS} == {
         "remote_control": False, "wash_dry_mode": False, "delayed_start": False,
         "auto_detergent": True, "auto_conditioner": True, "steam_treatment": False,
-        "uv_sterilization": False, "plasma_sterilization": False, "soak": False, "hygiene": False,
-        "intensive_wash": False, "night_wash": False, "eco_wash": False, "high_water_level": False,
+        "uv_sterilization": False, "plasma_sterilization": False,
     }
     # the cloud's alarms and ONLINE/OFFLINE, as for the washers of the current format
     assert flags[binary_sensor.HaierProblemSensor].is_on is False
