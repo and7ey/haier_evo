@@ -144,7 +144,8 @@
                     "wash_wool": "Шерсть",
                     "wash_down": "Пуховые вещи",
                     "wash_delicate": "Деликатная",
-                    "wash_drum_clean": "Очистка барабана"
+                    "wash_drum_clean": "Очистка барабана",
+                    "wash_app": "Программа приложения"
                 }
             },
             "wm_dry_mode": {
@@ -182,9 +183,10 @@
             },
             "wm_dry_level": {
                 "state": {
-                    "dry_iron": "Сушка под утюг",
-                    "dry_closet": "Сушка в шкаф",
-                    "dry_extra": "Экстра сушка"
+                    "dry_iron": "Под утюг",
+                    "dry_wear": "К носке",
+                    "dry_closet": "В шкаф",
+                    "dry_extra": "Экстрасухая"
                 }
             },
             "wm_wash_temperature": {

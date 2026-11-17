@@ -1,50 +1,29 @@
 """Casarte CASWD129C1CU, a washer-dryer of the old cloud format (HaierWM, CASWD129C1C.yaml).
 
-The description here is made up from the codes of the profile, with the
-descriptions the old format gives several attributes ("Температура",
-"Программа"...); to be replaced with the machine's diagnostics.
+tests/fixtures/caswd_dump.json is the description the integration saved for
+the machine (and7ey/haier_evo#88), MAC and serial number replaced. Every
+attribute is described as "not found": the profile names them by code. The
+codes of the care program (58), the plasma (35), the delayed start (18) and the
+drying level (48) were checked on the machine against the app.
 """
 from __future__ import annotations
 
+import copy
 from types import SimpleNamespace
 
 from custom_components.haier_evo import binary_sensor, sensor
 from custom_components.haier_evo.device_wm import HaierWM
 
-MAC = "a0:b7:65:00:00:01"
+from .conftest import load_fixture
+
+ITEM = load_fixture("caswd_dump.json")["devices"][0]
+MAC = ITEM["device_id"]
 
 
-def attribute(code: str, description: str, value: str) -> dict:
-    return {"name": code, "description": description, "currentValue": value, "type": "LIST"}
-
-
-DESCRIPTION = {
-    "info": {"model": "CASWD129C1CU", "serialNumber": "x"},
-    "status": "ONLINE",
-    "settings": {"name": {"name": "Стиральная машина"}},
-    "attributes": [
-        attribute("0", "Программа", "10"),
-        attribute("1", "Стирка и сушка", "1"),
-        attribute("4", "Удалённое управление", "0"),
-        attribute("8", "Соединение", "1"),
-        attribute("19", "Статус", "true"),
-        attribute("27", "Оставшееся время", "40"),
-        attribute("43", "Оставшееся время", "1"),
-        attribute("44", "Режим", "1"),
-        attribute("45", "Оставшееся время", "25"),
-        attribute("48", "Температура", "2"),
-        attribute("50", "Программа", "1"),
-        attribute("76", "Температура", "40"),
-        attribute("87", "Скорость отжима", "1000"),
-        attribute("99", "Температура", "0"),  # not in the profile
-    ],
-}
-
-
-def washer(hass) -> HaierWM:
+def washer(hass, backend_data: dict | None = None) -> HaierWM:
     hub = SimpleNamespace(hass=hass, cloud_available=True, laundry_control=False)
-    return HaierWM(haier=hub, device_mac=MAC, device_serial="x", device_title="Стиральная машина",
-                   backend_data=DESCRIPTION)
+    return HaierWM(haier=hub, device_mac=MAC, device_serial="x", device_title=ITEM["device_name"],
+                   backend_data=copy.deepcopy(backend_data or ITEM["backend_data"]))
 
 
 async def test_the_profile_is_found_for_the_cut_model(hass):
@@ -53,15 +32,28 @@ async def test_the_profile_is_found_for_the_cut_model(hass):
     assert wm.config._find_config_file().endswith("CASWD129C1C.yaml")
 
 
-async def test_attributes_are_named_by_code_not_by_description(hass):
+async def test_attributes_are_named_by_code(hass):
     wm = washer(hass)
     names = {str(a.code): a.name for a in wm.config.attrs}
-    assert {code: names[code] for code in ("0", "19", "27", "48", "50", "76", "87", "99")} == {
-        "0": "wash_program", "19": "status", "27": "dry_remaining_time", "48": "dry_level",
-        "50": "dry_program", "76": "wash_temperature", "87": "wash_spin_speed", "99": "unknown",
+    assert {code: names[code] for code in ("0", "19", "27", "35", "48", "58", "76", "87", "22")} == {
+        "0": "wash_program", "19": "status", "27": "dry_remaining_time", "35": "plasma_sterilization",
+        "48": "dry_level", "58": "care_program", "76": "wash_temperature", "87": "wash_spin_speed",
+        "22": "unknown",
     }
     # nothing takes the names of the upstream washing machine: no commands go out
     assert [wm.config[n] for n in ("program", "temperature", "spin_speed", "remaining_time")] == [None] * 4
+    assert wm.create_entities_select() == []
+
+
+async def test_a_description_does_not_name_an_attribute_the_profile_does_not(hass):
+    """Should the cloud describe the attributes one day: "Температура" of another code stays unknown."""
+    data = copy.deepcopy(ITEM["backend_data"])
+    for attr in data["attributes"]:
+        if attr["name"] in ("22", "51"):
+            attr["description"] = "Температура"
+    wm = washer(hass, data)
+    assert wm.config["temperature"] is None
+    assert wm.config.get_attr_by_name("wash_temperature").code == 76
     assert wm.create_entities_select() == []
 
 
@@ -71,34 +63,50 @@ async def test_values_and_entities(hass):
     flags = {type(e): e for e in wm.create_entities_binary_sensor()}
     assert {cls.feature: sensors[cls].native_value for cls in sensor.WM_SENSORS} == {
         "wash_program": "wash_cotton",
-        "wash_temperature": "40",
-        "wash_spin_speed": "1000",
-        "wash_remaining_minutes": 85,  # 1 h 25 min
+        "wash_temperature": "30",
+        "wash_spin_speed": "800",
+        "wash_remaining_minutes": 1,
         "dry_mode": "dry",
-        "dry_program": "dry_cotton",
+        "dry_program": "dry_auto",
         "dry_level": "dry_closet",
-        "care_program": None,  # not in the description
-        "dry_remaining_time": 40,
+        "care_program": "care_none",
+        "dry_remaining_time": 110,
     }
-    assert sensors[sensor.HaierWMWashProgramSensor].options[:3] == ["wash_auto", "wash_shirts", "wash_bulky"]
+    assert sensors[sensor.HaierWMDryLevelSensor].options == ["dry_iron", "dry_wear", "dry_closet", "dry_extra"]
     assert {cls.feature: flags[cls].is_on for cls in binary_sensor.WM_FLAG_SENSORS} == {
-        "connection": True, "remote_control": False, "wash_dry_mode": True, "delayed_start": False,
-        "auto_detergent": False, "auto_conditioner": False, "steam_treatment": False,
+        "connection": True, "remote_control": False, "wash_dry_mode": False, "delayed_start": False,
+        "auto_detergent": True, "auto_conditioner": True, "steam_treatment": False,
         "uv_sterilization": False, "plasma_sterilization": False,
     }
-    assert wm.status == "on"
+    assert wm.status == "off"
     unique_ids = [e.unique_id for e in (*sensors.values(), *flags.values())]
     assert len(set(unique_ids)) == len(unique_ids)
     assert f"{MAC}_CASWD129C1C_wash_program" in unique_ids
+
+
+async def test_values_seen_on_the_machine(hass):
+    """Read from the cloud while the machine ran: care "Шерсть", then drying "Авто" with plasma."""
+    wm = washer(hass)
+    care = sensor.HaierWMCareProgramSensor(wm)
+    mode = sensor.HaierWMDryModeSensor(wm)
+    level = sensor.HaierWMDryLevelSensor(wm)
+    plasma = binary_sensor.HaierWMPlasmaSterilizationSensor(wm)
+    for code, value in {"44": "2", "50": "41", "58": "8", "48": "0"}.items():
+        wm._apply_value(code, value)
+    assert (mode.native_value, care.native_value, level.native_value) == ("care", "care_wool", None)
+    for code, value in {"44": "1", "50": "43", "58": "0", "48": "3", "35": "1"}.items():
+        wm._apply_value(code, value)
+    assert (mode.native_value, care.native_value, level.native_value, plasma.is_on) == (
+        "dry", "care_none", "dry_closet", True)
 
 
 async def test_pushed_values(hass):
     wm = washer(hass)
     program = sensor.HaierWMWashProgramSensor(wm)
     left = sensor.HaierWMWashRemainingTimeSensor(wm)
-    wm._apply_value("0", 17)
-    wm._apply_value("43", 0)
-    wm._apply_value("45", 7)
-    assert (program.native_value, left.native_value) == ("wash_wool", 7)
+    wm._apply_value("0", 45)  # a program of the app ("Джинсы", "Шторы"...)
+    wm._apply_value("43", 1)
+    wm._apply_value("45", 15)
+    assert (program.native_value, left.native_value) == ("wash_app", 75)
     wm._apply_value("0", 12345)  # a program the profile does not know
     assert program.native_value is None

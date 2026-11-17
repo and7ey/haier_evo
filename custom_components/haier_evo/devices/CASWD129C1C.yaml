@@ -57,6 +57,8 @@ attributes:
         value: "wash_delicate"
       - haier: "3"
         value: "wash_drum_clean"
+      - haier: "45"
+        value: "wash_app"
   - name: wash_temperature
     id: "76"
     mappings:
@@ -217,8 +219,10 @@ attributes:
       - haier: "1"
         value: "dry_iron"
       - haier: "2"
-        value: "dry_closet"
+        value: "dry_wear"
       - haier: "3"
+        value: "dry_closet"
+      - haier: "4"
         value: "dry_extra"
   - name: dry_remaining_time
     id: "27"
