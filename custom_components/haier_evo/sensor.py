@@ -186,7 +186,13 @@ class HaierWMWashPhaseSensor(HaierWMValueSensor):
 
 
 class HaierWMDryPhaseSensor(HaierWMValueSensor):
-    """The upper drum, seen on the machine: none, drying, care, finished."""
+    """The upper drum, seen on the machine: none, drying, care, finished.
+
+    final_drying (4): the last ~15 minutes of a drying, the time still counting down;
+    finishing (5): after the main cycle of a drying or a care, the time stays at
+    1 minute and the drum turns until "finished". Named for what they are, not for
+    what the machine does: nothing different is seen on it.
+    """
 
     _attr_translation_key = "wm_dry_phase"
     _attr_icon = "mdi:progress-clock"

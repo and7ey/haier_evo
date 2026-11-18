@@ -150,7 +150,7 @@ async def test_a_washing_seen_on_the_machine(hass):
 
 
 async def test_a_care_seen_on_the_machine(hass):
-    """Care "Рубашки", 20 min: care, a phase not named yet (5) in the last minutes, finished."""
+    """Care "Рубашки", 20 min: care, finishing (5) in the last minutes, finished."""
     wm = washer(hass)
     phase = sensor.HaierWMDryPhaseSensor(wm)
     running = binary_sensor.HaierWMDryerRunningSensor(wm)
@@ -159,7 +159,7 @@ async def test_a_care_seen_on_the_machine(hass):
         for code, value in values.items():
             wm._apply_value(code, value)
         seen.append((phase.native_value, running.is_on))
-    assert seen == [("care", True), (None, True), ("finished", False)]
+    assert seen == [("care", True), ("finishing", True), ("finished", False)]
 
 
 async def test_a_lagging_rest_status_does_not_undo_a_push(hass, monkeypatch):
@@ -231,3 +231,16 @@ async def test_no_start_without_the_programs_length(hass):
             attr["currentValue"] = {"22": "15", "18": "1", "43": "2", "45": "30"}[attr["name"]]
     wm = washer(hass, data)
     assert sensor.HaierWMWashStartSensor(wm).native_value is None
+
+
+async def test_a_drying_seen_on_the_machine(hass):
+    """"Быстрая" after a washing: drying, final drying 15 min before the end, finishing, finished."""
+    wm = washer(hass)
+    phase = sensor.HaierWMDryPhaseSensor(wm)
+    seen = []
+    for values in ({"44": "1", "6": "1", "51": "8", "27": "58"}, {"51": "4", "27": "15"},
+                   {"51": "5", "27": "1"}, {"6": "2", "51": "6"}):
+        for code, value in values.items():
+            wm._apply_value(code, value)
+        seen.append(phase.native_value)
+    assert seen == ["drying", "final_drying", "finishing", "finished"]

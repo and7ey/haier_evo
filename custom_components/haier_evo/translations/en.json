@@ -215,6 +215,8 @@
                     "none": "No program",
                     "drying": "Drying",
                     "care": "Care",
+                    "final_drying": "Final drying",
+                    "finishing": "Finishing",
                     "finished": "Finished"
                 }
             }
