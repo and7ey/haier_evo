@@ -1,14 +1,14 @@
 # Haier Evo integration
-[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz) [![Release](https://img.shields.io/github/v/release/and7ey/haier_evo)](https://github.com/and7ey/haier_evo/releases/latest) [![Validate](https://github.com/and7ey/haier_evo/actions/workflows/validate.yaml/badge.svg?branch=main)](https://github.com/and7ey/haier_evo/actions/workflows/validate.yaml?query=branch%3Amain) [![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Ftests.json)](https://github.com/and7ey/haier_evo/actions/workflows/validate.yaml?query=branch%3Amain) [![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#stable)\
+[![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://hacs.xyz) [![Release](https://img.shields.io/github/v/release/and7ey/haier_evo)](https://github.com/and7ey/haier_evo/releases/latest) [![Validate](https://github.com/and7ey/haier_evo/actions/workflows/validate.yaml/badge.svg?branch=main)](https://github.com/and7ey/haier_evo/actions/workflows/validate.yaml?query=branch%3Amain) [![Tests](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Ftests.json)](https://github.com/and7ey/haier_evo/actions/workflows/validate.yaml?query=branch%3Amain) [![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#stable)\
 [![Home Assistant minimum](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Fha-minimum.json)](#разработка) [![Home Assistant previous but one](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Fha-prev2.json)](#разработка) [![Home Assistant previous](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Fha-prev1.json)](#разработка) [![Home Assistant current](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Fha-current.json)](#разработка) [![Home Assistant next](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fand7ey%2Fhaier_evo%2Fbadges%2Fha-next.json)](#разработка)
 
 Неофициальная интеграция для работы [Haier Evo](https://haieronline.ru/evo-iot/) (RU, KZ, BY).
 
 Поддержка водонагревателей (бойлеров), устойчивая работа при сбоях облака Haier, названия функций как в приложении Evo.
 
-[![Открыть репозиторий в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=and7ey&repository=haier_evo&category=integration)
+[![Открыть Haier Evo в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=and7ey&repository=haier_evo&category=integration)
 
-> **English.** Unofficial Home Assistant integration for the Haier Evo cloud (Russia, Kazakhstan, Belarus): air conditioners, refrigerators, F7 water heaters (tested on ES80V-F7), washing machines and dryers (their state; starting, pausing and cancelling programs is a beta, off by default and not yet checked on a real machine). Install it through HACS as a custom repository (the button above adds it in one click), restart Home Assistant, then add **Haier Evo** in *Settings → Devices & services* and sign in with your Evo account. The rest of this page is in Russian.
+> **English.** Unofficial Home Assistant integration for the Haier Evo cloud (Russia, Kazakhstan, Belarus): air conditioners, refrigerators, F7 water heaters (tested on ES80V-F7 and ES100V-F7), washing machines and dryers (their state; starting, pausing and cancelling programs is a beta, off by default and not yet checked on a real machine). It is in the default HACS catalogue: find **Haier Evo** in HACS (in Home Assistant 2026.11, in *Settings → Marketplace*) or open it with the button above, download it, restart Home Assistant, then add **Haier Evo** in *Settings → Devices & services* and sign in with your Evo account. The rest of this page is in Russian.
 
 ## Поддерживаемые устройства
 Интеграция работает с устройствами, которые видит приложение Evo: кондиционерами, холодильниками, водонагревателями (бойлерами), стиральными и сушильными машинами. Насколько проверена конкретная модель — в таблице.
@@ -114,7 +114,8 @@
 
 - датчик «Состояние»: выключена, ожидание, работает, пауза, завершена, отменена. Автоматизация на «завершена» сообщит, что стирка или сушка закончилась;
 - датчики «Программа» (как в приложении, например «Ежедневная»), «Этап» (названия этапов, которые даёт приложение; остальные — «Этап N») и «Осталось» (минуты; у выключенной машины 0);
-- бинарные датчики «Удалённое управление», «Блокировка от детей» и «Неисправность» (коды ошибок в атрибутах).
+- бинарные датчики «Удалённое управление», «Блокировка от детей», «Неисправность» (коды ошибок в атрибутах) и «Связь с облаком» (диагностика);
+- сущность событий «События программы» — о ней ниже.
 
 Атрибуты стиральных и сушильных машин облако отдаёт без названий, а коды у моделей разные: у HW60 оставшиеся часы — код 31, у HW90 — 32, у сушилки время — код 8. Что значит каждый код, интеграция берёт из описания экранов приложения Evo, которое облако отдаёт вместе с машиной, поэтому другие модели тоже должны работать. Программа и её завершение приходят отдельными событиями облака.
 
@@ -202,7 +203,7 @@ data:
 - описания устройств последнего удачного запуска хранятся в `.storage/haier_evo.<entry_id>.devices`: следующий запуск сразу строит устройства из них, не дожидаясь облака, а настоящее состояние читает в фоне (с нарастающей паузой, до 5 минут, пока облако не ответит). Первый запуск и перезагрузка из-за изменившегося списка или описания читают облако; если оно не ответило, запуск идёт из сохранённых описаний. Пока состояние устройства не прочитано, его сущности недоступны, чтобы не показывать старые значения. Состояние всех устройств перечитывается раз в 15 минут, список устройств — раз в 6 часов. Новое устройство в приложении, устройство, убранное из приложения, или изменившееся описание (например, после обновления прошивки) перезагружают интеграцию;
 - если облако не ответило, а сохранённых описаний нет или они не подходят, или облако вернуло пустой или неполный список устройств, Home Assistant сам повторяет запуск. Если облако вернуло меньше устройств, чем уже есть в Home Assistant, запуск повторяется до 3 раз: иначе сущности пропавшего устройства исчезли бы до следующего перезапуска. Устройство, которое так и не вернулось, ждут один раз, а не при каждом запуске; если оно убрано из аккаунта Evo, его удаляют со страницы устройства (⋮ → «Удалить»);
 - устройство, которое приложение показывает в списке, а облако отказывается описывать (HTTP 403/404, например устарелая или больше не расшаренная запись), пропускается, остальные запускаются. Так же пропускается, с предупреждением в журнале, описание, которое не удалось разобрать. Когда облако снова начнёт отдавать устройство, интеграция перезагрузится и добавит его;
-- HTTP-запросы повторяются при сбое соединения, websocket подключается с таймаутом и переподключается, если соединение перестало отвечать на ping. Если связь пропадала дольше 30 секунд, после переподключения состояние всех устройств перечитывается: изменения с пульта или из приложения за это время не теряются. Сессия websocket, по которой за минуту после открытия ничего не пришло, заменяется новой (вторая подряд — уже со свежим токеном). Если облако отозвало токен раньше срока (в том числе закрыв websocket с кодом 1007), он обновляется сразу при следующем подключении; токен обновляется за минуту до истечения, а только что выданный токен, который облако ещё не узнало, пробуется ещё раз через 3 секунды;
+- HTTP-запросы повторяются при сбое соединения, websocket подключается с таймаутом и переподключается, если соединение перестало отвечать на ping. Если связь пропадала дольше 30 секунд, после переподключения состояние всех устройств перечитывается: изменения с пульта или из приложения за это время не теряются. Сессия websocket, по которой за минуту после открытия ничего не пришло, заменяется новой; следующая такая сессия подряд ждёт вдвое дольше, до 8 минут, а вторая подряд открывается уже со свежим токеном. Если облако отозвало токен раньше срока (в том числе закрыв websocket с кодом 1007), он обновляется сразу при следующем подключении; токен обновляется за минуту до истечения, а только что выданный токен, который облако ещё не узнало, пробуется ещё раз через 3 секунды;
 - отказ облака в токене не считается неверным паролем: об этом может сказать только вход по паролю. Отклонённый после обновления токен — пауза и ещё одно обновление; если облако всё равно отказывает, Home Assistant повторяет запуск сам. Пароль спрашивается, только когда облако отвергло сам refresh-токен;
 - если websocket не подключён дольше 3 минут, сущности становятся недоступными: показанное состояние к этому времени может быть устаревшим. После переподключения они снова доступны;
 - раз в 15 минут состояние всех устройств перечитывается и без обрывов: так замечается соединение, которое отвечает на ping, но перестало присылать события. Если за время запроса пришло событие или ушла команда, более старый ответ не применяется;
@@ -261,7 +262,8 @@ pytest -q
 
 - записи интеграции и их состояния: загружена, повтор запуска, нужен повторный вход; мастер настройки, повторный вход, «Перенастроить» и настройки;
 - реестры сущностей и устройств, сервисы платформ, хранилище, диагностика;
-- данные облака из `tests/fixtures`: `evo_dump.json`, `ref_dump.json` и `laundry_dump.json` — обезличенные описания настоящих кондиционеров, бойлера, холодильника, стиральных и сушильных машин (MAC, серийные номера, IP, названия и ссылки заменены), плюс синтетические данные с MAC-адресами из документационного диапазона RFC 7042;
+- данные облака из `tests/fixtures`: `evo_dump.json`, `ref_dump.json`, `wh_dump.json` и `laundry_dump.json` — обезличенные описания настоящих кондиционеров, бойлеров ES80V-F7 и ES100V-F7, холодильника, стиральных и сушильных машин (MAC, серийные номера, IP, названия и ссылки заменены), плюс синтетические данные с MAC-адресами из документационного диапазона RFC 7042;
+- `laundry_care_history.json` — проекция истории Home Assistant для HW90 (работа → Fresh Air System → пауза → выключение) для событий программ;
 - `regression.json` фиксирует, как называются положения жалюзи и какие команды кондиционеры отправляют (`tests/test_regression.py`); если изменение намеренное, снимок нужно обновить;
 - `entities_by_release.json` — что создавал каждый релиз начиная с 1.0.0: при обновлении с любого из них каждая сущность существует с тем же `unique_id`, а намеренно убранные удаляются из реестра (`tests/test_devices.py`, `tests/test_upgrade.py`);
 - `tests/test_fuzz.py` — push-сообщения, текст websocket, описания устройств со сломанными частями, страница списка устройств, сроки токенов любого вида: ничто из этого не роняет интеграцию. Случаи детерминированы (фиксированный seed);
@@ -292,25 +294,22 @@ Haier предлагает разные мобильные приложения 
 
 ### 1. Где устанавливать
 
-- **Home Assistant 2026.11 и новее** — встроенный **Marketplace** (**Настройки → Marketplace**). Он заменил HACS: то, что было установлено через HACS, переезжает в него само, каталог и `hacs.json` те же. Чтобы добавить пользовательский репозиторий, Marketplace попросит подключить GitHub: вход по коду устройства, пароль в Home Assistant не вводится.
+Haier Evo есть в стандартном каталоге HACS: добавлять пользовательский репозиторий не нужно.
+
+- **Home Assistant 2026.11 и новее** — встроенный **Marketplace** (**Настройки → Marketplace**). Он заменил HACS: то, что было установлено через HACS, переезжает в него само, каталог и `hacs.json` те же.
 - **Home Assistant 2026.9 и 2026.10** — HACS, [инструкция по установке](https://www.hacs.xyz/docs/use/download/download/).
 
-### 2. Добавление репозитория Haier Evo
+### 2. Установка Haier Evo
 
-Интеграция кастомная, её добавляют как пользовательский репозиторий. Быстрее всего — кнопкой: она откроет репозиторий в вашем Home Assistant, останется нажать **Download**. В 2026.11 старые адреса HACS ведут в Marketplace, так что кнопка работает и там.
+Быстрее всего — кнопкой: она откроет Haier Evo в вашем Home Assistant, останется нажать **Download**. В 2026.11 старые адреса HACS ведут в Marketplace, так что кнопка работает и там.
 
-[![Открыть репозиторий в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=and7ey&repository=haier_evo&category=integration)
+[![Открыть Haier Evo в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=and7ey&repository=haier_evo&category=integration)
 
-Или вручную. В Marketplace: **Настройки → Marketplace**, меню **⋮** → добавить репозиторий по ссылке `https://github.com/and7ey/haier_evo` (тип — интеграция) → **Haier Evo** → **Download**. В HACS:
+Или вручную: откройте **HACS** в боковой панели (в 2026.11 — **Настройки → Marketplace**), найдите в поиске **Haier Evo** и нажмите **Download** (Загрузить).
 
-1. Откройте **HACS** в боковой панели Home Assistant.
-2. Нажмите на три точки (⋮) в верхнем правом углу и выберите **Custom repositories** (Пользовательские репозитории).
-3. В поле **Repository** вставьте ссылку: `https://github.com/and7ey/haier_evo`
-4. В поле **Category** выберите **Integration** (Интеграция).
-5. Нажмите **Add** (Добавить).
-6. Теперь найдите **Haier Evo** в поиске HACS и нажмите **Download** (Загрузить).
+Если раньше вы добавляли `https://github.com/and7ey/haier_evo` как пользовательский репозиторий, делать ничего не нужно: это тот же репозиторий, обновления продолжат приходить. Если же у вас был установлен форк `AGrigorii/haier_evo`, удалите его запись в **⋮ → Custom repositories** (Пользовательские репозитории) и скачайте Haier Evo из каталога: домен `haier_evo` тот же, настройки, сущности и история сохранятся.
 
-Ставьте релиз (`v1.6.3` и новее), а не ветку: по релизам работают номер версии и обновления в **Настройки → Обновления**.
+Ставьте релиз, а не ветку: по релизам работают номер версии и обновления в **Настройки → Обновления**.
 
 Что изменилось в каждой версии и что проверить при переходе с 0.3.x — в [CHANGELOG.md](CHANGELOG.md).
 
