@@ -71,6 +71,12 @@ DEVICE_LIST_REFRESH_INTERVAL = timedelta(hours=6)
 # row (up to 8x), the WS_SILENT_SESSIONS_FRESH_TOKEN-th one goes with a renewed token.
 WS_SILENT_SESSION_TIMEOUT = 60
 WS_SILENT_SESSIONS_FRESH_TOKEN = 2
+# A session can also go silent long after it opened: open, answering pings,
+# but no pushes any more (a unit switched on after a day off did not show up
+# until a reload, and the periodic read found what had not been pushed). Such a
+# session is replaced when a periodic read finds a change that was not pushed
+# while nothing came over the socket, or when nothing came for this long.
+WS_QUIET_REOPEN = 3600
 # The gateway may accept the upgrade and then close with this code
 # ("Auth token not valid!"): the token is refused.
 WS_CLOSE_TOKEN_REFUSED = 1007

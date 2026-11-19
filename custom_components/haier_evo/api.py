@@ -218,6 +218,12 @@ class Haier:
         # Store of the saved descriptions (set by the entry setup).
         self.cache_store: Any = None
         self._silent_sessions = 0
+        # Messages received over the socket, their count at the last periodic
+        # read and the time of the last one: a session that went silent (see
+        # WS_QUIET_REOPEN).
+        self._ws_messages = 0
+        self._messages_at_refresh = 0
+        self._last_message_at = self._now()
         self._entry: ConfigEntry | None = None
         self._ws: ClientWebSocketResponse | None = None
         self._connected = asyncio.Event()
@@ -634,6 +640,8 @@ class Haier:
         try:
             async for msg in ws:
                 if msg.type == WSMsgType.TEXT:
+                    self._ws_messages += 1
+                    self._last_message_at = self._now()
                     if not received:
                         received = True
                         self._silent_sessions = 0
@@ -710,7 +718,30 @@ class Haier:
     async def _async_periodic_refresh(self, _now: Any = None) -> None:
         if self._sync_paused:
             return  # the pause after a fallback to the saved descriptions
+        before = {device.device_id: device.raw_values for device in self.devices}
         await self._async_resync()
+        quiet = self._ws_messages == self._messages_at_refresh
+        self._messages_at_refresh = self._ws_messages
+        missed = [str(device.device_name) for device in self.devices if device.raw_values != before.get(device.device_id)]
+        if quiet and missed:
+            self._reopen_ws(f"the WebSocket missed changes of {', '.join(missed)}", _LOGGER.info)
+        elif self._now() - self._last_message_at >= C.WS_QUIET_REOPEN:
+            self._reopen_ws("nothing came over the WebSocket for an hour", _LOGGER.debug)
+
+    def _reopen_ws(self, reason: str, log: Callable[..., None]) -> None:
+        """Replace a session that is open but no longer brings pushes.
+
+        A fresh one gets the statuses of every unit within seconds; one that
+        does not is caught by the silent session check.
+        """
+        ws = self._ws
+        if ws is None or ws.closed:
+            return
+        log("Haier Evo: %s, opening a new one", reason)
+        # what the new session brings, not the old one's silence, counts from now on
+        self._last_message_at = self._now()
+        self._connected.clear()
+        self._create_task(ws.close(), "reopen silent")
 
     def _schedule_rebuild(self, reason: str) -> None:
         """The entities are built from what the cloud said at start: build them anew."""
