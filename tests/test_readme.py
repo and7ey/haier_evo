@@ -17,7 +17,7 @@ FIXTURES = ROOT / "tests" / "fixtures"
 LEVELS = {"устройство": "device", "данные облака": "data", "профиль": "profile", "сообщение": "report"}
 KINDS = {"AC": "Кондиционер", "REF": "Холодильник", "WH": "Водонагреватель", "WM": "Стиральная машина",
          "DRY": "Сушильная машина"}
-DUMPS = ("evo_dump.json", "ref_dump.json", "laundry_dump.json", "wh_dump.json")
+DUMPS = ("evo_dump.json", "ref_dump.json", "laundry_dump.json", "wh_dump.json", "caswd_dump.json")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 
 
@@ -50,7 +50,7 @@ def _profiles() -> dict[str, str]:
         if path.stem == "default":
             continue
         names = set(re.findall(r"^\s*-\s*name:\s*(\w+)", path.read_text(encoding="utf-8"), re.M))
-        profiles[path.stem] = "WH" if "heating_mode" in names else "WM" if "program" in names else "AC"
+        profiles[path.stem] = "WH" if "heating_mode" in names else "WM" if {"program", "wash_program"} & names else "AC"
     return profiles
 
 

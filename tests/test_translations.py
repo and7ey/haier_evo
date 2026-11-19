@@ -35,11 +35,7 @@ ALL_CODE = "\n".join(CODE.values())
 
 # Profiles nobody's model name can reach (see test_every_profile_is_reachable);
 # kept here until the profile is renamed or removed, so that a new one fails.
-UNREACHABLE = {
-    # 12 characters, but a model name is cut to 11 (HaierDevice._get_status):
-    # the lookup is for CASWD129C1C.yaml
-    "CASWD129C1CU",
-}
+UNREACHABLE: set[str] = set()
 # Home Assistant translates its own climate values itself
 HA_CLIMATE = {
     v for k, v in vars(climate_const).items() if k.startswith(("FAN_", "SWING_", "PRESET_")) and isinstance(v, str)
@@ -47,7 +43,7 @@ HA_CLIMATE = {
 # what the code looks attributes up by; a profile naming anything else is ignored
 CODE_NAMES = set(re.findall(
     r"""(?:config\[|get_attr_by_name\(|get_values\(|get_value\(|get_value_code\(|get_code_by_name\(|"""
-    r"""_check_writable\(|get_commands\(|attr\.name == |feature, fallback = )["']([a-z_0-9]+)["']""",
+    r"""_check_writable\(|get_commands\(|attr\.name == |feature, fallback = |hours = )["']([a-z_0-9]+)["']""",
     ALL_CODE,
 )) | {  # attr.name in ("quiet", "preset_mode_sleep")
     name for group in re.findall(r"attr\.name in \(([^)]*)\)", ALL_CODE)
@@ -89,7 +85,7 @@ MODELS = {s: c for s, c in CONFIGS.items() if s != "default"}
 # every profile but those of washing machines and water heaters
 AC_MODELS = [
     s for s, c in MODELS.items()
-    if not {"program", "heating_mode", "fridge_mode", "freezer_mode", "door_open"} & {a["name"] for a in c._config["attributes"]}
+    if not {"program", "wash_program", "heating_mode", "fridge_mode", "freezer_mode", "door_open"} & {a["name"] for a in c._config["attributes"]}
 ]
 
 

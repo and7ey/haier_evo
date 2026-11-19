@@ -1,11 +1,19 @@
 """Washing machines."""
 from __future__ import annotations
 
+import copy
+import time
+from datetime import datetime, timedelta
+from typing import Any
+
+from homeassistant.util import dt as dt_util
+
 from . import config as CFG  # noqa: N812
 from . import const as C  # noqa: N812
 from .device import (
     HaierDevice,
     _described_attributes,
+    device_part,
     parsefloat,
 )
 from .logger import _LOGGER
@@ -13,12 +21,23 @@ from .logger import _LOGGER
 
 class HaierWM(HaierDevice):
 
+    # The cloud's REST description of the old format lags behind its pushes: a
+    # power-off pushed at 00:06:58, the periodic read at 00:07:20 still had the
+    # machine on and ONLINE (CASWD129C1C). A value pushed this recently wins.
+    PUSH_WINS_FOR = 900.0
+
     def __init__(
         self,
         backend_data: dict = None,
         **kwargs
     ) -> None:
         super().__init__(**kwargs)
+        self._pushed_at: dict[str, float] = {}
+        # Minutes of the washing program as the machine shows it before a start, and
+        # the start it is waiting for: the machine reports only the time to the end.
+        self._wash_duration: int | None = None
+        self._wash_start: datetime | None = None
+        self._status_pushed_at: float | None = None
         self.status = None
         self.program = None
         self.temperature = None
@@ -50,6 +69,37 @@ class HaierWM(HaierDevice):
         for attr in self.config.attrs:
             self._apply_value(attr.code, attr.current)
             _LOGGER.debug("%s: %s", self.device_name, attr)
+
+    def _handle_status_update(self, received_message: dict) -> None:
+        now = time.monotonic()
+        for status in (received_message.get("payload") or {}).get("statuses") or []:
+            if isinstance(status, dict) and isinstance(status.get("properties"), dict):
+                for key, value in status["properties"].items():
+                    if value is not None:
+                        self._pushed_at[str(key)] = now
+        super()._handle_status_update(received_message)
+
+    def _handle_device_status_update(self, received_message: dict) -> None:
+        if (received_message.get("payload") or {}).get("status") is not None:
+            self._status_pushed_at = time.monotonic()
+        super()._handle_device_status_update(received_message)
+
+    def update_from_backend(self, data: Any, *, requested_at: float | None = None) -> None:
+        """A REST status, but what was pushed lately stays: the snapshot is older than it."""
+        if isinstance(data, dict) and isinstance(self._status_data, dict):
+            now = time.monotonic()
+            fresh = {code for code, at in self._pushed_at.items() if now - at < self.PUSH_WINS_FOR}
+            keep_status = self._status_pushed_at is not None and now - self._status_pushed_at < self.PUSH_WINS_FOR
+            if fresh or keep_status:
+                data = copy.deepcopy(data)
+                part = device_part(data)
+                if keep_status and device_part(self._status_data).get("status") is not None:
+                    part["status"] = device_part(self._status_data)["status"]
+                for attr in part.get("attributes") or []:
+                    code = str(attr.get("name")) if isinstance(attr, dict) else None
+                    if code in fresh and code in self._raw:
+                        attr["currentValue"] = self._raw[code]
+        super().update_from_backend(data, requested_at=requested_at)
 
     def _set_attribute_value(self, code: str, value: str) -> None:
         attr = self.config.get_attr_by_code(code)
@@ -107,6 +157,55 @@ class HaierWM(HaierDevice):
             entities.append(select.HaierWMSpinSpeedSelect(self))
         return entities
 
+    def _apply_value(self, code: Any, value: Any) -> None:
+        super()._apply_value(code, value)
+        self._note_wash_start()
+
+    def wash_minutes(self) -> int | None:
+        """Minutes to the end of the washing (the machine gives hours and minutes)."""
+        hours = parsefloat(self.value_of("wash_remaining_hours"))
+        minutes = parsefloat(self.value_of("wash_remaining_minutes"))
+        if hours is None or minutes is None:
+            return None
+        return int(hours) * 60 + int(minutes)
+
+    def _note_wash_start(self) -> None:
+        """The start of a delayed washing, estimated: the end minus the program's length.
+
+        A delayed start sets when the program ends (the manual: "the preset time
+        is the end of the program"), and the machine reports the time to that end
+        only. The program's length is what it shows while a program is chosen and
+        not started, the delay not set yet. The start is fixed once, so that it
+        does not move with every minute of the countdown.
+        """
+        if self.config is None:
+            return
+        phase = self.value_of("wash_phase")
+        minutes = self.wash_minutes()
+        if phase == "none" and self.value_of("delayed_start") == "off":
+            if minutes:
+                self._wash_duration = minutes
+            self._wash_start = None
+        elif phase == "delayed_start":
+            if self._wash_start is None and self._wash_duration and minutes and minutes >= self._wash_duration:
+                start = dt_util.utcnow() + timedelta(minutes=minutes - self._wash_duration)
+                self._wash_start = start.replace(second=0, microsecond=0)
+        else:
+            self._wash_start = None
+
+    @property
+    def wash_start(self) -> datetime | None:
+        return self._wash_start
+
+    def value_of(self, name: str) -> str | None:
+        """The profile's name of an attribute's value ("on", "wash_cotton"), or the
+        raw value of an attribute without mappings; None while not known."""
+        attr = self.config.get_attr_by_name(name)
+        raw = self._raw.get(str(attr.code)) if attr is not None else None
+        if attr is None or raw is None:
+            return None
+        return attr.get_item_name(raw) if attr.list else raw
+
     def create_entities_sensor(self) -> list:
         from . import sensor
         entities = []
@@ -114,4 +213,13 @@ class HaierWM(HaierDevice):
             entities.append(sensor.HaierWMRemainingTimeSensor(self))
         if self.config['status'] is not None:
             entities.append(sensor.HaierWMStatusSensor(self))
+        # the washer-dryer of CASWD129C1C.yaml, read only
+        entities += [cls(self) for cls in sensor.WM_SENSORS if self.config[cls.feature] is not None]
         return entities
+
+    def create_entities_binary_sensor(self) -> list:
+        from . import binary_sensor
+        entities = [binary_sensor.HaierProblemSensor(self), binary_sensor.HaierConnectivitySensor(self)]
+        if self.config.get_attr_by_name("dry_program") is not None:
+            entities.append(binary_sensor.HaierWMDryerFilterSensor(self))
+        return entities + [cls(self) for cls in binary_sensor.WM_FLAG_SENSORS if self.config[cls.feature] is not None]

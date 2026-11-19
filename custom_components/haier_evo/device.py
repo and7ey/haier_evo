@@ -166,6 +166,11 @@ class HaierDevice:
             self._online = str(value).upper() != "OFFLINE"
 
     @property
+    def raw_values(self) -> dict[str, str]:
+        """The last value of every attribute as the cloud sent it (a copy)."""
+        return dict(self._raw)
+
+    @property
     def status_data(self) -> dict:
         return self._status_data
 

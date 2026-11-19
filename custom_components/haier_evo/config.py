@@ -380,6 +380,33 @@ class HaierWMConfig(HaierDeviceConfig):
             f")"
         )
 
+    def merge_attributes(self) -> None:
+        """A profile names the cloud's attributes by code, not by description.
+
+        The descriptions of the old format do not tell the values of a
+        washer-dryer apart (it has a temperature, programs and times of its
+        own for washing and for drying), so with a profile a description such
+        as "Температура" names nothing: an attribute the profile does not
+        name is left "unknown", and no control is made for it.
+        """
+        profile = {str(a.code): a for a in self.get_config_attributes()}
+        named_by_profile = bool(profile)
+        for i, attr in enumerate(self.attrs[:]):
+            config_attr = profile.pop(str(attr.code), None)
+            if config_attr is not None:
+                config_attr.description = attr.description
+                config_attr.current = attr.current
+                config_attr.range = attr.range
+                config_attr.list = config_attr.list or attr.list
+                self.attrs[i] = config_attr
+            elif named_by_profile:
+                attr.name = "unknown"
+            if attr.command_name and not self.command_name:
+                self.command_name = attr.command_name
+        self.attrs.extend(profile.values())
+        self.extend_attributes()
+        self.attrs.sort(key=lambda a: a.code)
+
 
 class HaierWHConfig(HaierDeviceConfig):
 

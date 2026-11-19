@@ -198,3 +198,114 @@ class HaierLaundryChildLockSensor(HaierBinarySensor):
     @property
     def is_on(self) -> bool:
         return bool(self._device.child_lock)
+
+
+class HaierWMFlagSensor(HaierBinarySensor):
+    """An on/off of the washer-dryer (CASWD129C1C.yaml), read only."""
+
+    _device: api.HaierWM
+    feature: str
+    fallback: str
+
+    def __init__(self, device: api.HaierWM) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_{self.feature}"
+        self._attr_name = self.fallback
+
+    @property
+    def is_on(self) -> bool:
+        return self._device.value_of(self.feature) == "on"
+
+
+class HaierWMWasherRunningSensor(HaierWMFlagSensor):
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_icon = "mdi:washing-machine"
+    feature, fallback = "washer_running", "Стиральный барабан работает"
+
+
+class HaierWMDryerRunningSensor(HaierWMFlagSensor):
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_icon = "mdi:tumble-dryer"
+    feature, fallback = "dryer_running", "Сушильный барабан работает"
+
+
+class HaierWMChildLockSensor(HaierWMFlagSensor):
+    # "childLockStatus" of the app's control block: the panel's buttons are locked
+    _attr_icon = "mdi:lock"
+    feature, fallback = "child_lock", "Блокировка от детей"
+
+
+class HaierWMRemoteControlSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:remote"
+    feature, fallback = "remote_control", "Удалённое управление"
+
+
+class HaierWMWashDryModeSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:tumble-dryer"
+    feature, fallback = "wash_dry_mode", "Умная связка"
+
+
+class HaierWMDelayedStartSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:timer-outline"
+    feature, fallback = "delayed_start", "Отложенный старт"
+
+
+class HaierWMAutoDetergentSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:cup-water"
+    feature, fallback = "auto_detergent", "Автодозирование моющего средства"
+
+
+class HaierWMAutoConditionerSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:cup-water"
+    feature, fallback = "auto_conditioner", "Автодозирование смягчающего средства"
+
+
+class HaierWMSteamSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:weather-fog"
+    feature, fallback = "steam_treatment", "Обработка паром"
+
+
+class HaierWMUVSterilizationSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:lightbulb-fluorescent-tube-outline"
+    feature, fallback = "uv_sterilization", "УФ-стерилизация"
+
+
+class HaierWMPlasmaSterilizationSensor(HaierWMFlagSensor):
+    _attr_icon = "mdi:creation"
+    feature, fallback = "plasma_sterilization", "Плазменная стерилизация"
+
+
+class HaierWMDryerFilterSensor(HaierBinarySensor):
+    """The cloud's alarm "[E6] Засорен фильтр- осушитель" of the washer-dryer.
+
+    A fault ("Неисправность" is on too), with a sensor of its own for automations.
+    """
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = "mdi:air-filter"
+    ALARM = "dryerFilterBlockedAlarm"
+
+    def __init__(self, device: api.HaierWM) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_dryer_filter"
+        self._attr_name = "Засорён фильтр сушилки"
+
+    @property
+    def is_on(self) -> bool:
+        return self.ALARM in self._device.alarms
+
+
+# in the order the entities are created
+WM_FLAG_SENSORS: tuple[type[HaierWMFlagSensor], ...] = (
+    HaierWMWasherRunningSensor,
+    HaierWMDryerRunningSensor,
+    HaierWMRemoteControlSensor,
+    HaierWMChildLockSensor,
+    HaierWMWashDryModeSensor,
+    HaierWMDelayedStartSensor,
+    HaierWMAutoDetergentSensor,
+    HaierWMAutoConditionerSensor,
+    HaierWMSteamSensor,
+    HaierWMUVSterilizationSensor,
+    HaierWMPlasmaSterilizationSensor,
+)

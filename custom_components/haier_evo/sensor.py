@@ -9,6 +9,7 @@ from homeassistant.const import UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 
 from . import api
+from .device import parsefloat
 from .device_laundry import LAUNDRY_STATES
 from .entity import HaierEntity, async_setup_platform
 
@@ -100,6 +101,161 @@ class HaierWMStatusSensor(HaierSensor):
     def native_value(self) -> str | None:
         value = getattr(self._device, self._device_attr_name, None)
         return None if value is None else str(value)
+
+
+class HaierWMSensor(HaierSensor):
+    """A value of the washer-dryer (CASWD129C1C.yaml), read only."""
+
+    _device: api.HaierWM
+    feature: str
+    fallback: str
+
+    def __init__(self, device: api.HaierWM) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_{self.feature}"
+        self._attr_name = self.fallback
+
+
+class HaierWMValueSensor(HaierWMSensor):
+    """A setting of the current program: one of the profile's values."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+
+    def __init__(self, device: api.HaierWM) -> None:
+        super().__init__(device)
+        self._attr_options = device.config.get_values(self.feature)
+
+    @property
+    def native_value(self) -> str | None:
+        value = self._device.value_of(self.feature)
+        return value if value in self.options else None
+
+
+class HaierWMWashProgramSensor(HaierWMValueSensor):
+    _attr_translation_key = "wm_wash_program"
+    _attr_icon = "mdi:washing-machine"
+    feature, fallback = "wash_program", "Программа стирки"
+
+
+class HaierWMWashTemperatureSensor(HaierWMValueSensor):
+    _attr_translation_key = "wm_wash_temperature"
+    _attr_icon = "mdi:thermometer"
+    feature, fallback = "wash_temperature", "Температура стирки"
+
+
+class HaierWMWashSpinSpeedSensor(HaierWMValueSensor):
+    _attr_translation_key = "wm_wash_spin_speed"
+    _attr_icon = "mdi:rotate-right"
+    feature, fallback = "wash_spin_speed", "Скорость отжима"
+
+
+class HaierWMDryModeSensor(HaierWMValueSensor):
+    _attr_translation_key = "wm_dry_mode"
+    _attr_icon = "mdi:tumble-dryer"
+    feature, fallback = "dry_mode", "Режим сушки"
+
+
+class HaierWMDryProgramSensor(HaierWMValueSensor):
+    _attr_translation_key = "wm_dry_program"
+    _attr_icon = "mdi:tumble-dryer"
+    feature, fallback = "dry_program", "Программа сушки"
+
+
+class HaierWMDryLevelSensor(HaierWMValueSensor):
+    _attr_translation_key = "wm_dry_level"
+    _attr_icon = "mdi:water-percent"
+    feature, fallback = "dry_level", "Степень сушки"
+
+
+class HaierWMCareProgramSensor(HaierWMValueSensor):
+    _attr_translation_key = "wm_care_program"
+    _attr_icon = "mdi:hanger"
+    feature, fallback = "care_program", "Программа ухода"
+
+
+class HaierWMWashPhaseSensor(HaierWMValueSensor):
+    """Seen on the machine: none, washing, rinsing, spinning, finished; waiting for a delayed start.
+
+    final_rinse (9): water let in with the drum standing, between the rinsing and
+    the spinning ("Быстрая" at 1400 rpm with the softener dosed).
+    """
+
+    _attr_translation_key = "wm_wash_phase"
+    _attr_icon = "mdi:progress-clock"
+    feature, fallback = "wash_phase", "Этап стирки"
+
+
+class HaierWMDryPhaseSensor(HaierWMValueSensor):
+    """The upper drum, seen on the machine: none, drying, care, finished.
+
+    final_drying (4): the last ~15 minutes of a drying, the time still counting down;
+    finishing (5): after the main cycle of a drying or a care, the time stays at
+    1 minute and the drum turns until "finished". Named for what they are, not for
+    what the machine does: nothing different is seen on it.
+    """
+
+    _attr_translation_key = "wm_dry_phase"
+    _attr_icon = "mdi:progress-clock"
+    feature, fallback = "dry_phase", "Этап сушки и ухода"
+
+
+class HaierWMTimeSensor(HaierWMSensor):
+    """Minutes left; the washing's time comes as hours and minutes."""
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+    _attr_icon = "mdi:timer-sand"
+    hours: str | None = None
+
+    @property
+    def native_value(self) -> int | None:
+        minutes = parsefloat(self._device.value_of(self.feature))
+        hours = parsefloat(self._device.value_of(self.hours)) if self.hours else 0
+        if minutes is None or hours is None:
+            return None
+        return int(hours) * 60 + int(minutes)
+
+
+class HaierWMWashRemainingTimeSensor(HaierWMTimeSensor):
+    feature, fallback = "wash_remaining_minutes", "Осталось до конца стирки"
+    hours = "wash_remaining_hours"
+
+
+class HaierWMDryRemainingTimeSensor(HaierWMTimeSensor):
+    feature, fallback = "dry_remaining_time", "Осталось до конца сушки"
+
+
+class HaierWMWashStartSensor(HaierWMSensor):
+    """When a delayed washing starts, estimated (HaierWM._note_wash_start); empty otherwise."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:timer-play-outline"
+    feature, fallback = "wash_phase", "Начало стирки"
+
+    def __init__(self, device: api.HaierWM) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_wash_start"
+
+    @property
+    def native_value(self):
+        return self._device.wash_start
+
+
+# in the order the entities are created
+WM_SENSORS: tuple[type[HaierWMSensor], ...] = (
+    HaierWMWashPhaseSensor,
+    HaierWMWashProgramSensor,
+    HaierWMWashTemperatureSensor,
+    HaierWMWashSpinSpeedSensor,
+    HaierWMWashRemainingTimeSensor,
+    HaierWMWashStartSensor,
+    HaierWMDryPhaseSensor,
+    HaierWMDryModeSensor,
+    HaierWMDryProgramSensor,
+    HaierWMDryLevelSensor,
+    HaierWMCareProgramSensor,
+    HaierWMDryRemainingTimeSensor,
+)
 
 
 class HaierACTemperatureSensor(HaierSensor):
