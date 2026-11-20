@@ -2,7 +2,8 @@
 
 The accounts are anonymised dumps of real ones (the files of 1.7.2):
 evo_dump.json (water heater ES80V-F7 and
-three AS25S2SF2FA-B) and laundry_dump.json (washers HW60, HW90, dryer HD80).
+three AS25S2SF2FA-B) and laundry_dump.json (washers HW60, HW90, dryer HD80);
+wh_dump.json (ES100V-F7, #101) and hw70_dump.json (HW70-BP12337U1, #114) are diagnostics of users.
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ WH_MAC = "5c:01:3b:00:00:01"
 WH_UID = f"{WH_MAC}_ES80VF7"
 HW90 = next(d for d in LAUNDRY["devices"] if "HW90" in d["device_name"])
 HD80 = next(d for d in LAUNDRY["devices"] if "HD80" in d["device_name"])
+HW70 = load_fixture("hw70_dump.json")
 
 
 def mock_account(aioclient_mock, dump: dict) -> None:
@@ -517,4 +519,42 @@ async def test_laundry_meters_in_home_assistant(hass, aioclient_mock, ws_factory
     assert hass.states.get(eid(hass, "binary_sensor", f"{prefix}_door")).state == "on"
     dryer = device_by_mac(entry, HD80["device_id"])
     assert eid(hass, "sensor", f"{dryer.device_id}_{dryer.device_model}_energy_total") is None
+    await stop(hass, entry)
+
+
+async def test_hw70_of_issue_114(hass, aioclient_mock, ws_factory):
+    """HW70-BP12337U1 (fixtures/hw70_dump.json, and7ey/haier_evo#114): the machine the build of #116 ran on."""
+    item = HW70["devices"][0]
+    washer = laundry_machine(hass, item)
+    assert {m: washer.meter_value(m) for m in washer.meters if m.startswith(("energy", "water", "washes"))} == {
+        "energy_total": 36.69, "energy_cycle": 0, "water_total": 2768, "water_cycle": 0,
+        "washes_total": 82, "washes_since_drum_clean": 26,
+    }
+    assert (washer.door_open, washer.door_locked) == (True, False)  # off, with its door open
+    parameters = parameter_sensors(washer)
+    assert len(parameters) == 14
+    assert sorted((p.name, p.native_value) for p in parameters.values() if p.entity_registry_enabled_default) == [
+        ("Отжим", "800"), ("Температура", "30"), ("Удаление пятен", "Выкл.")]
+    assert len(laundry_programs(item["backend_data"])) == 30
+
+    entry = await start(hass, aioclient_mock, ws_factory, HW70)
+    washer = device_by_mac(entry, item["device_id"])
+    assert (washer.device_type, washer.device_model) == ("WM", "HW70BP12337")
+    prefix = f"{washer.device_id}_{washer.device_model}"
+    states = {
+        key: hass.states.get(eid(hass, platform, f"{prefix}_{key}")).state
+        for platform, key in (("sensor", "state"), ("sensor", "energy_total"), ("sensor", "water_total"),
+                              ("sensor", "washes_total"), ("binary_sensor", "door"), ("binary_sensor", "door_lock"))
+    }
+    assert states == {"state": "off", "energy_total": "36.69", "water_total": "2768", "washes_total": "82",
+                      "door": "on", "door_lock": "off"}
+    # its push of 2026-11-20 (the debug log in #114): switched on, the door still open
+    ws_factory.current.feed({
+        "event": "status", "macAddress": washer.device_id,
+        "payload": {"statuses": [{"properties": {"40": "37.85", "38": "2889", "36": "85", "35": "29", "31": "1"}}]},
+    })
+    await hass.async_block_till_done()
+    assert hass.states.get(eid(hass, "sensor", f"{prefix}_energy_total")).state == "37.85"
+    assert hass.states.get(eid(hass, "sensor", f"{prefix}_washes_total")).state == "85"
+    assert hass.states.get(eid(hass, "binary_sensor", f"{prefix}_door")).state == "on"
     await stop(hass, entry)
