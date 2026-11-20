@@ -8,12 +8,12 @@
 
 [![Открыть Haier Evo в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=and7ey&repository=haier_evo&category=integration)
 
-> **English.** Unofficial Home Assistant integration for the Haier Evo cloud (Russia, Kazakhstan, Belarus): air conditioners, refrigerators, F7 water heaters (tested on ES80V-F7 and ES100V-F7), washing machines and dryers (their state; starting, pausing and cancelling programs is a beta, off by default and not yet checked on a real machine). It is in the default HACS catalogue: find **Haier Evo** in HACS (in Home Assistant 2026.11, in *Settings → Marketplace*) or open it with the button above, download it, restart Home Assistant, then add **Haier Evo** in *Settings → Devices & services* and sign in with your Evo account. The rest of this page is in Russian.
+> **English.** Unofficial Home Assistant integration for the Haier Evo cloud (Russia, Kazakhstan, Belarus): air conditioners, refrigerators, F7 water heaters (tested on ES80V-F7 and ES100V-F7), washing machines and dryers (their state and program parameters, and on HW70-BP12337U1 and HW90-B14367U1 energy, water, wash counters and the door, tested on a HW70-BP12337U1; starting, pausing and cancelling programs is a beta, off by default and not yet checked on a real machine). It is in the default HACS catalogue: find **Haier Evo** in HACS (in Home Assistant 2026.11, in *Settings → Marketplace*) or open it with the button above, download it, restart Home Assistant, then add **Haier Evo** in *Settings → Devices & services* and sign in with your Evo account. The rest of this page is in Russian.
 
 ## Поддерживаемые устройства
 Интеграция работает с устройствами, которые видит приложение Evo: кондиционерами, холодильниками, водонагревателями (бойлерами), стиральными и сушильными машинами. Насколько проверена конкретная модель — в таблице.
 
-- 🟢 **устройство** — работает на живом устройстве автора;
+- 🟢 **устройство** — работает на живом устройстве: у автора интеграции или у пользователя, который запускал сборку и прислал диагностику (ссылка на issue или PR — в строке модели); описание модели из облака тоже лежит в `tests/fixtures`;
 - 🟢 **данные облака** — проверено тестами на настоящем описании модели из облака (`tests/fixtures`);
 - 🟡 **профиль** — для модели есть профиль с кодами (`custom_components/haier_evo/devices`), его прислали пользователи или он взят из других форков; здесь не проверялся;
 - ⚪ **сообщение** — модель упоминали пользователи в issue; проверки нет.
@@ -57,7 +57,7 @@
 | Стиральная машина | HW60-BP12929AE | 🟢 данные облака | состояние, программа, этап, оставшееся время, удалённое управление, блокировка от детей, ошибки; запуск, пауза и отмена программ — бета, на машине не проверены |
 | Стиральная машина | HW90-B14367U1 | 🟢 данные облака | то же; управление — бета, на машине не проверено |
 | Стиральная машина | HW70-BP12929E | ⚪ сообщение | дамп в upstream-issue #63, по формату как HW60 |
-| Стиральная машина | HW70-BP12337U1 | ⚪ сообщение | диагностика в upstream-issue #114, по формату как HW90 |
+| Стиральная машина | HW70-BP12337U1 | 🟢 устройство | сборку из [#116](https://github.com/and7ey/haier_evo/pull/116) запускал на своей машине автор [#114](https://github.com/and7ey/haier_evo/issues/114): состояние, программа, параметры программы, энергия, вода, счётчики стирок и замок дверцы; датчик «Дверца» добавлен позже и сверен по семи его диагностикам; ошибку E2 («дверца не закрыта») облако не присылает; управление — бета, на машине не проверено |
 | Стиральная машина | CASWD129C1CU (Casarte) | 🟡 профиль | старый формат облака; профиль не загружается: модель обрезается до 11 символов |
 | Сушильная машина | HD80-A2367U1 | 🟢 данные облака | то же; управление — бета, на машине не проверено |
 | Сушильная машина | HD70-A929E | ⚪ сообщение | дамп в upstream-issue #63, по формату как HD80 |
