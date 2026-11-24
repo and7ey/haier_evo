@@ -1,5 +1,37 @@
 {
- "_": "Casarte CASWD129C1CU (and7ey/haier_evo#88): the description of the old format the integration saved, MAC and serial number replaced",
+ "_": "Casarte CASWD129C1CU (and7ey/haier_evo#88): the description of the old format the integration saved, MAC and serial number replaced; the device list (backend_data) is built for the tests and holds this machine only (tests/test_devices.py)",
+ "backend_data": {
+  "presentation": {
+   "layout": {
+    "scrollContainer": [
+     {
+      "id": "72a6d224-cb66-4e6d-b427-2e4609252684",
+      "component": "deviceList",
+      "contractName": "deviceList",
+      "state": {
+       "title": "Устройства",
+       "items": [
+        {
+         "title": "Стиральная машина",
+         "status": "Выключен",
+         "action": {
+          "type": "ACTION_TYPE_REDIRECT",
+          "link": "haierevo://device?deviceId=a0%3Ab7%3A65%3A00%3A00%3A01&type=WM&serialNum=CEABAXE0000XXXXX0001"
+         }
+        }
+       ]
+      },
+      "trackingData": {
+       "component": {
+        "componentName": "deviceList",
+        "componentId": "72a6d224-cb66-4e6d-b427-2e4609252684"
+       }
+      }
+     }
+    ]
+   }
+  }
+ },
  "devices": [
   {
    "device_id": "a0:b7:65:00:00:01",

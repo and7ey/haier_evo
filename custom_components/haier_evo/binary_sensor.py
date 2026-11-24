@@ -23,7 +23,7 @@ class HaierBinarySensor(HaierEntity, BinarySensorEntity):
         super().__init__(device)
 
     @property
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         return getattr(self._device, self._device_attr_name, False)
 
 
@@ -245,8 +245,9 @@ class HaierWMFlagSensor(HaierBinarySensor):
         self._attr_name = self.fallback
 
     @property
-    def is_on(self) -> bool:
-        return self._device.value_of(self.feature) == "on"
+    def is_on(self) -> bool | None:
+        value = self._device.value_of(self.feature)
+        return None if value is None else value == "on"
 
 
 class HaierWMWasherRunningSensor(HaierWMFlagSensor):

@@ -244,3 +244,12 @@ async def test_a_drying_seen_on_the_machine(hass):
             wm._apply_value(code, value)
         seen.append(phase.native_value)
     assert seen == ["drying", "final_drying", "finishing", "finished"]
+
+
+async def test_an_unknown_option_is_unknown(hass):
+    """An option the cloud has not reported is neither on nor off."""
+    data = copy.deepcopy(ITEM["backend_data"])
+    for attr in data["attributes"]:
+        if attr["name"] == "13":  # steam_treatment
+            attr["currentValue"] = None
+    assert binary_sensor.HaierWMSteamSensor(washer(hass, data)).is_on is None
