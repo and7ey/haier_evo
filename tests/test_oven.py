@@ -41,7 +41,7 @@ async def test_oven_from_issue_128(hass, aioclient_mock, ws_factory):
     try:
         oven = device_by_mac(entry, MAC)
         assert isinstance(oven, HaierOV)
-        device = dr.async_get(hass).async_get_device(identifiers={(C.DOMAIN, MAC)})
+        device = dr.async_get(hass).async_get_device_by_identifier((C.DOMAIN, MAC), entry.entry_id)
         assert device.model == "HOQ-F6QSB4GBU" and device.sw_version == "1.5.3"
 
         def state(platform, suffix):
