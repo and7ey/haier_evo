@@ -621,6 +621,9 @@ class HaierDevice:
         return []
 
     # noinspection PyMethodMayBeStatic
+    def create_entities_number(self) -> list:
+        return []
+
     def create_entities_select(self) -> list:
         return []
 
@@ -652,6 +655,7 @@ class HaierDevice:
     ) -> HaierDevice:
         from .device_ac import HaierAC
         from .device_laundry import LAUNDRY_TYPES, HaierLaundry
+        from .device_ov import HaierOV
         from .device_ref import HaierREF
         from .device_wh import HaierWH
         from .device_wm import HaierWM
@@ -663,6 +667,7 @@ class HaierDevice:
             device_cls = {
                 "AC": HaierAC,
                 "REF": HaierREF,
+                "OV": HaierOV,
                 "WM": HaierWM,
                 "WH": HaierWH,
             }.get(device_type, cls)

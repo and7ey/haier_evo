@@ -232,3 +232,39 @@ class HaierLaundryRemainingTimeSensor(HaierLaundrySensor):
 
     def __init__(self, device: api.HaierDevice) -> None:
         super().__init__(device, "remaining_time", "remaining_time", "Осталось")
+
+
+class HaierOvenSensor(HaierSensor):
+    field: str
+
+    def __init__(self, device: api.HaierOV) -> None:
+        super().__init__(device)
+        self._device_attr_name = self.field
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_{self.field}"
+
+
+class HaierOvenTemperature(HaierOvenSensor):
+    field = "current_temperature"
+    _attr_translation_key = "oven_temperature"
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+
+class HaierOvenTarget(HaierOvenSensor):
+    field = "target_temperature"
+    _attr_translation_key = "oven_target"
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+
+
+class HaierOvenMode(HaierOvenSensor):
+    field = "mode"
+    _attr_translation_key = "oven_mode"
+
+
+class HaierOvenRemaining(HaierOvenSensor):
+    field = "remaining_time"
+    _attr_translation_key = "oven_remaining"
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES

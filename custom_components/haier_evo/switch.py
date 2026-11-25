@@ -149,3 +149,26 @@ class HaierWHSterilizationSwitch(HaierSwitch):
         self._device_attr_name = "sterilization_on"
         self._attr_unique_id = f"{device.device_id}_{device.device_model}_sterilization"
         self._attr_name = "Дезинфекция (BPS)"
+
+
+class HaierOvenPower(HaierEntity, SwitchEntity):
+    _device: api.HaierOV
+    _attr_translation_key = "oven_power"
+
+    def __init__(self, device: api.HaierOV) -> None:
+        super().__init__(device)
+        self._attr_unique_id = f"{device.device_id}_{device.device_model}_power"
+
+    @property
+    def is_on(self) -> bool | None:
+        return self._device.power
+
+    @property
+    def available(self) -> bool:
+        return self._device.can_control("power")
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._device.set_power(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._device.set_power(False)
