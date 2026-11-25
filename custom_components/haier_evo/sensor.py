@@ -9,8 +9,8 @@ from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfTemperature,
 from homeassistant.core import HomeAssistant
 
 from . import api
-from .device import parsefloat
 from .device_laundry import LAUNDRY_STATES
+from .device_wm import duration_minutes
 from .entity import HaierEntity, async_setup_platform
 
 
@@ -209,11 +209,8 @@ class HaierWMTimeSensor(HaierWMSensor):
 
     @property
     def native_value(self) -> int | None:
-        minutes = parsefloat(self._device.value_of(self.feature))
-        hours = parsefloat(self._device.value_of(self.hours)) if self.hours else 0
-        if minutes is None or hours is None:
-            return None
-        return int(hours) * 60 + int(minutes)
+        hours = self._device.value_of(self.hours) if self.hours else 0
+        return duration_minutes(hours, self._device.value_of(self.feature))
 
 
 class HaierWMWashRemainingTimeSensor(HaierWMTimeSensor):

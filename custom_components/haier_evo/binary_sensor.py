@@ -268,9 +268,16 @@ class HaierWMChildLockSensor(HaierWMFlagSensor):
     feature, fallback = "child_lock", "Блокировка от детей"
 
 
-class HaierWMRemoteControlSensor(HaierWMFlagSensor):
+class HaierWMWasherRemoteControlSensor(HaierWMFlagSensor):
+    # "washerRemoteCtrValid": each drum has a remote control of its own
     _attr_icon = "mdi:remote"
-    feature, fallback = "remote_control", "Удалённое управление"
+    feature, fallback = "washer_remote_control", "Удалённое управление стиркой"
+
+
+class HaierWMDryerRemoteControlSensor(HaierWMFlagSensor):
+    # "dryerRemoteCtrValid"
+    _attr_icon = "mdi:remote"
+    feature, fallback = "dryer_remote_control", "Удалённое управление сушкой"
 
 
 class HaierWMWashDryModeSensor(HaierWMFlagSensor):
@@ -332,7 +339,8 @@ class HaierWMDryerFilterSensor(HaierBinarySensor):
 WM_FLAG_SENSORS: tuple[type[HaierWMFlagSensor], ...] = (
     HaierWMWasherRunningSensor,
     HaierWMDryerRunningSensor,
-    HaierWMRemoteControlSensor,
+    HaierWMWasherRemoteControlSensor,
+    HaierWMDryerRemoteControlSensor,
     HaierWMChildLockSensor,
     HaierWMWashDryModeSensor,
     HaierWMDelayedStartSensor,

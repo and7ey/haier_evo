@@ -52,7 +52,7 @@ CODE_NAMES = set(re.findall(
 ON_OFF = {"health", "light", "sound", "antifreeze", "cleaning", "autohumidity", "comfort", "quiet", "turbo",
           "preset_mode_sleep", "preset_mode_boost", "status", "sterilization", "super_cooling", "super_freeze",
           "vacation_mode"}
-TOP_KEYS = {"command_name", "attributes", "commands", "preset_modes"}
+TOP_KEYS = {"command_name", "attributes", "commands", "preset_modes", "attributes_by_code", "rest_lags_behind_push"}
 ATTR_KEYS, MAP_KEYS = {"name", "id", "mappings"}, {"haier", "value"}
 
 

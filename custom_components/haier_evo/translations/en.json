@@ -165,7 +165,8 @@
                     "dry_cotton": "Cotton",
                     "dry_quick": "Quick",
                     "dry_wool": "Wool",
-                    "dry_down": "Down"
+                    "dry_down": "Down",
+                    "dry_app": "App program"
                 }
             },
             "wm_care_program": {
@@ -204,7 +205,7 @@
                     "none": "No program",
                     "washing": "Washing",
                     "rinsing": "Rinsing",
-                    "final_rinse": "Rinsing",
+                    "final_rinse": "Final rinse",
                     "spinning": "Spinning",
                     "finished": "Finished",
                     "delayed_start": "Waiting for delayed start"

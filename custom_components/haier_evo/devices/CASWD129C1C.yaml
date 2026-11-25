@@ -1,6 +1,13 @@
 # Casarte CASWD129C1CU, a washer-dryer: the cloud's model name is cut to 11
 # characters (HaierDevice._get_status), hence the name of the file.
 # Old cloud format, read only: the integration sends the machine no commands.
+# The cloud describes every attribute as "not found", and the descriptions of
+# the old format repeat for washing and drying: attributes are named by code
+# only (HaierWMConfig.merge_attributes).
+attributes_by_code: true
+# The REST state lags behind the pushes: a pushed value wins over it for 15
+# minutes (HaierWM.update_from_backend).
+rest_lags_behind_push: true
 attributes:
   - name: status
     id: "8"
@@ -16,7 +23,14 @@ attributes:
         value: "off"
       - haier: "1"
         value: "on"
-  - name: remote_control
+  - name: washer_remote_control
+    id: "26"
+    mappings:
+      - haier: "0"
+        value: "off"
+      - haier: "1"
+        value: "on"
+  - name: dryer_remote_control
     id: "4"
     mappings:
       - haier: "0"
@@ -192,6 +206,8 @@ attributes:
         value: "dry_down"
       - haier: "41"
         value: "dry_none"
+      - haier: "42"
+        value: "dry_app"
   - name: care_program
     id: "58"
     mappings:

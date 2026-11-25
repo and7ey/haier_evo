@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import time
 from datetime import datetime, timedelta
 from typing import Any
@@ -18,12 +19,29 @@ from .device import (
 )
 from .logger import _LOGGER
 
+# Where the saved description keeps when values were pushed (wall clock):
+# a restart soon after a push still knows that a lagging REST is older.
+PUSHED_AT = "pushedAt"
+# Values that make one reading: the washing's time comes as hours and minutes.
+READINGS = (("wash_remaining_hours", "wash_remaining_minutes"),)
+# What the length of a washing program depends on, as the machine shows it.
+WASH_SETTINGS = ("wash_program", "wash_temperature", "wash_spin_speed")
+
+
+def duration_minutes(hours: Any, minutes: Any) -> int | None:
+    """Hours and minutes as the machine gives them, in minutes; None if one is not a number."""
+    h, m = parsefloat(hours), parsefloat(minutes)
+    if h is None or m is None or not (math.isfinite(h) and math.isfinite(m)):
+        return None
+    return int(h) * 60 + int(m)
+
 
 class HaierWM(HaierDevice):
 
     # The cloud's REST description of the old format lags behind its pushes: a
     # power-off pushed at 00:06:58, the periodic read at 00:07:20 still had the
-    # machine on and ONLINE (CASWD129C1C). A value pushed this recently wins.
+    # machine on and ONLINE (CASWD129C1C). With rest_lags_behind_push in the
+    # profile a value pushed this recently wins.
     PUSH_WINS_FOR = 900.0
 
     def __init__(
@@ -32,18 +50,23 @@ class HaierWM(HaierDevice):
         **kwargs
     ) -> None:
         super().__init__(**kwargs)
+        # When an attribute code, "status" or "alarms" was pushed (time.time()).
         self._pushed_at: dict[str, float] = {}
-        # Minutes of the washing program as the machine shows it before a start, and
-        # the start it is waiting for: the machine reports only the time to the end.
-        self._wash_duration: int | None = None
+        # Minutes of the washing program as the machine shows it before a start
+        # (with the settings they are for), and the start it is waiting for: the
+        # machine reports only the time to the end.
+        self._wash_duration: tuple[tuple, int] | None = None
         self._wash_start: datetime | None = None
-        self._status_pushed_at: float | None = None
         self.status = None
         self.program = None
         self.temperature = None
         self.spin_speed = None
         self.remaining_time = None
         self._get_status(backend_data)
+        saved = device_part(self._status_data).get(PUSHED_AT) if isinstance(self._status_data, dict) else None
+        if self.config.rest_lags_behind_push and isinstance(saved, dict):
+            self._pushed_at = {str(k): float(v) for k, v in saved.items() if isinstance(v, (int, float))}
+        self._note_wash_start()
 
     @property
     def config(self) -> CFG.HaierWMConfig:
@@ -71,35 +94,67 @@ class HaierWM(HaierDevice):
             _LOGGER.debug("%s: %s", self.device_name, attr)
 
     def _handle_status_update(self, received_message: dict) -> None:
-        now = time.monotonic()
-        for status in (received_message.get("payload") or {}).get("statuses") or []:
-            if isinstance(status, dict) and isinstance(status.get("properties"), dict):
-                for key, value in status["properties"].items():
-                    if value is not None:
-                        self._pushed_at[str(key)] = now
+        if self.config is not None and self.config.rest_lags_behind_push:
+            now = time.time()
+            for status in (received_message.get("payload") or {}).get("statuses") or []:
+                if not isinstance(status, dict):
+                    continue
+                if isinstance(status.get("properties"), dict):
+                    for key, value in status["properties"].items():
+                        if value is not None:
+                            self._pushed_at[str(key)] = now
+                if "alarms" in status:  # an empty list too: the machine cleared its alarm
+                    self._pushed_at["alarms"] = now
         super()._handle_status_update(received_message)
+        self._save_pushed_at()
 
     def _handle_device_status_update(self, received_message: dict) -> None:
-        if (received_message.get("payload") or {}).get("status") is not None:
-            self._status_pushed_at = time.monotonic()
+        if (received_message.get("payload") or {}).get("status") is not None and self.config.rest_lags_behind_push:
+            self._pushed_at["status"] = time.time()
         super()._handle_device_status_update(received_message)
+        self._save_pushed_at()
+
+    def _fresh(self) -> set[str]:
+        """What was pushed less than PUSH_WINS_FOR ago: codes, "status", "alarms"."""
+        now = time.time()
+        fresh = {key for key, at in self._pushed_at.items() if 0 <= now - at < self.PUSH_WINS_FOR}
+        for names in READINGS:
+            codes = {str(attr.code) for name in names if (attr := self.config.get_attr_by_name(name)) is not None}
+            if fresh & codes:  # one reading: never the hours of one and the minutes of another
+                fresh |= codes
+        return fresh
+
+    def _save_pushed_at(self) -> None:
+        """Into the description the cache saves, the fresh ones only."""
+        if self._pushed_at and isinstance(self._status_data, dict):
+            fresh = self._fresh()
+            self._pushed_at = {key: at for key, at in self._pushed_at.items() if key in fresh}
+            device_part(self._status_data)[PUSHED_AT] = dict(self._pushed_at)
 
     def update_from_backend(self, data: Any, *, requested_at: float | None = None) -> None:
-        """A REST status, but what was pushed lately stays: the snapshot is older than it."""
-        if isinstance(data, dict) and isinstance(self._status_data, dict):
-            now = time.monotonic()
-            fresh = {code for code, at in self._pushed_at.items() if now - at < self.PUSH_WINS_FOR}
-            keep_status = self._status_pushed_at is not None and now - self._status_pushed_at < self.PUSH_WINS_FOR
-            if fresh or keep_status:
-                data = copy.deepcopy(data)
-                part = device_part(data)
-                if keep_status and device_part(self._status_data).get("status") is not None:
-                    part["status"] = device_part(self._status_data)["status"]
-                for attr in part.get("attributes") or []:
-                    code = str(attr.get("name")) if isinstance(attr, dict) else None
-                    if code in fresh and code in self._raw:
-                        attr["currentValue"] = self._raw[code]
+        """A REST status, but what was pushed lately stays: the snapshot is older than it.
+
+        Only with rest_lags_behind_push in the profile: for the other machines a
+        read-back of a command is what the machine has.
+        """
+        if (
+            isinstance(data, dict) and isinstance(self._status_data, dict)
+            and self.config is not None and self.config.rest_lags_behind_push
+            and (fresh := self._fresh())
+        ):
+            data = copy.deepcopy(data)
+            part = device_part(data)
+            saved = device_part(self._status_data)
+            if "status" in fresh and saved.get("status") is not None:
+                part["status"] = saved["status"]
+            if "alarms" in fresh:
+                part["alarms"] = copy.deepcopy(saved.get("alarms") or [])
+            for attr in part.get("attributes") or []:
+                code = str(attr.get("name")) if isinstance(attr, dict) else None
+                if code in fresh and code in self._raw:
+                    attr["currentValue"] = self._raw[code]
         super().update_from_backend(data, requested_at=requested_at)
+        self._save_pushed_at()
 
     def _set_attribute_value(self, code: str, value: str) -> None:
         attr = self.config.get_attr_by_code(code)
@@ -157,17 +212,14 @@ class HaierWM(HaierDevice):
             entities.append(select.HaierWMSpinSpeedSelect(self))
         return entities
 
-    def _apply_value(self, code: Any, value: Any) -> None:
-        super()._apply_value(code, value)
+    def notify(self) -> None:
+        # after a whole message or REST status, whatever the order of its values
         self._note_wash_start()
+        super().notify()
 
     def wash_minutes(self) -> int | None:
         """Minutes to the end of the washing (the machine gives hours and minutes)."""
-        hours = parsefloat(self.value_of("wash_remaining_hours"))
-        minutes = parsefloat(self.value_of("wash_remaining_minutes"))
-        if hours is None or minutes is None:
-            return None
-        return int(hours) * 60 + int(minutes)
+        return duration_minutes(self.value_of("wash_remaining_hours"), self.value_of("wash_remaining_minutes"))
 
     def _note_wash_start(self) -> None:
         """The start of a delayed washing, estimated: the end minus the program's length.
@@ -175,23 +227,30 @@ class HaierWM(HaierDevice):
         A delayed start sets when the program ends (the manual: "the preset time
         is the end of the program"), and the machine reports the time to that end
         only. The program's length is what it shows while a program is chosen and
-        not started, the delay not set yet. The start is fixed once, so that it
-        does not move with every minute of the countdown.
+        not started, the delay not set yet: it counts for those settings of this
+        cycle only, a missed choice of another program leaves the start unknown.
+        The start is fixed once, so that it does not move with every minute of
+        the countdown.
         """
-        if self.config is None:
+        if self.config is None or self.config.get_attr_by_name("wash_phase") is None:
             return
         phase = self.value_of("wash_phase")
         minutes = self.wash_minutes()
-        if phase == "none" and self.value_of("delayed_start") == "off":
-            if minutes:
-                self._wash_duration = minutes
-            self._wash_start = None
-        elif phase == "delayed_start":
-            if self._wash_start is None and self._wash_duration and minutes and minutes >= self._wash_duration:
-                start = dt_util.utcnow() + timedelta(minutes=minutes - self._wash_duration)
+        settings = tuple(self.value_of(name) for name in WASH_SETTINGS)
+        if phase == "delayed_start":
+            duration = self._wash_duration[1] if self._wash_duration and self._wash_duration[0] == settings else None
+            if self._wash_start is None and duration and minutes and minutes >= duration:
+                start = dt_util.utcnow() + timedelta(minutes=minutes - duration)
                 self._wash_start = start.replace(second=0, microsecond=0)
-        else:
-            self._wash_start = None
+            return
+        self._wash_start = None
+        if phase == "none":
+            if self.value_of("delayed_start") == "off" and minutes:
+                self._wash_duration = (settings, minutes)
+            # with the delay being set the time shown is to its end: the length stays
+        elif phase is not None:
+            # the cycle runs or has ended: its length is not the next one's
+            self._wash_duration = None
 
     @property
     def wash_start(self) -> datetime | None:

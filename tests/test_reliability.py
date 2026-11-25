@@ -317,6 +317,22 @@ def test_old_copy_of_a_bundled_profile_is_removed(tmp_path):
     assert not os.path.exists(copy_path)
 
 
+def test_old_copy_of_the_default_profile_gives_way_to_a_new_profile(tmp_path):
+    """1.5.2 copied default.yaml for a model without a profile; it got one since (CASWD129C1C)."""
+    default = CFG.HaierWMConfig("NOPROFILE", "")._find_config_file()
+    bundled = CFG.HaierWMConfig("CASWD129C1C", "")._find_config_file()
+    assert default.endswith("default.yaml") and bundled.endswith("CASWD129C1C.yaml")
+    user = str(tmp_path / "haier_evo")
+    copy_path = f"{user}.CASWD129C1C.yaml"
+    shutil.copyfile(default, copy_path)
+    assert CFG.HaierWMConfig("CASWD129C1C", user)._find_config_file() == bundled
+    assert not os.path.exists(copy_path)
+    # changed by the user: kept
+    with open(default, encoding="utf-8") as src, open(copy_path, "w", encoding="utf-8") as dst:
+        dst.write(src.read() + "\n# my own change\n")
+    assert CFG.HaierWMConfig("CASWD129C1C", user)._find_config_file() == copy_path
+
+
 def test_own_profile_is_kept(tmp_path):
     bundled = CFG.HaierACConfig("AS25PHP2HRA", "")._find_config_file()
     user = str(tmp_path / "haier_evo")
