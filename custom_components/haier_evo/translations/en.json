@@ -335,7 +335,7 @@
             "message": "Choose the Program to start entity of a Haier washer or dryer"
         },
         "oven_control_unavailable": {
-            "message": "The oven cannot accept this command. Check its connection, remote control and control panel lock."
+            "message": "The oven cannot accept this command. Check its connection, remote control and any fault or lock shown on the control panel."
         },
         "oven_temperature_unavailable": {
             "message": "This temperature is unavailable for the current cooking mode and program stage."

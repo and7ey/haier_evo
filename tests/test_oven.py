@@ -1,6 +1,7 @@
 """HOQ-F6QSB4GBU discovery on the #128 diagnostics and commands on explicit app links."""
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
 from unittest.mock import patch
 
@@ -127,5 +128,62 @@ async def test_uncertain_oven_write_is_not_repeated(hass, aioclient_mock, ws_fac
         assert [message["command"] for socket in ws_factory.sockets for message in socket.sent] == [
             {"commandName": "0", "value": "1"}
         ]
+    finally:
+        await stop(hass, entry)
+
+
+async def test_stale_or_missing_permission_never_authorizes_a_write(hass, aioclient_mock, ws_factory):
+    dump = control_account()
+    entry = await start(hass, aioclient_mock, ws_factory, dump)
+    try:
+        oven = device_by_mac(entry, MAC)
+        ws = ws_factory.current
+        push(ws, {"0": "1", "51": "1", "14": "3"})
+        await hass.async_block_till_done()
+        assert oven.can_control("target_temperature")
+
+        oven.synced = False  # startup with a saved description
+        push(ws, {"19": "100"})
+        await hass.async_block_till_done()
+        assert not oven.can_control("power")
+
+        snapshot = dump["devices"][0]["backend_data"]
+        oven.update_from_backend(snapshot)
+        push(ws, {"51": "1", "14": "3", "0": "1"})
+        await hass.async_block_till_done()
+        assert oven.can_control("power")
+        missing = deepcopy(snapshot)
+        next(a for a in missing["smartDeviceControl"]["attributes"] if a["name"] == "51").pop("currentValue")
+        oven.update_from_backend(missing)
+        with pytest.raises(HomeAssistantError):
+            await oven.set_power(True)
+
+        push(ws, {"51": "1", "0": "1", "14": "3"})
+        ws.feed({"event": "status", "macAddress": MAC, "payload": {"statuses": [{"alarms": ["masterTempSensorErr"]}]}})
+        await hass.async_block_till_done()
+        with pytest.raises(HomeAssistantError):
+            await oven.set_temperature(180)
+        assert ws.sent == []
+    finally:
+        await stop(hass, entry)
+
+
+async def test_unacknowledged_temperature_is_read_back_without_replay(hass, aioclient_mock, ws_factory):
+    entry = await start(hass, aioclient_mock, ws_factory, control_account())
+    try:
+        oven = device_by_mac(entry, MAC)
+        push(ws_factory.current, {"51": "1", "0": "1", "14": "3"})
+        await hass.async_block_till_done()
+        with patch.object(C, "WS_ACK_TIMEOUT", 0.05), patch.object(C, "WS_COMMAND_WAIT", 0):
+            await oven.set_temperature(190)
+            await ws_factory.wait_for(2)
+            async with asyncio.timeout(3):
+                while entry.runtime_data.lost_commands == 0:
+                    await asyncio.sleep(0.01)
+            await hass.async_block_till_done()
+        assert [message["command"] for ws in ws_factory.sockets for message in ws.sent] == [
+            {"commandName": "6", "value": "190"}
+        ]
+        assert oven.target_temperature == 180
     finally:
         await stop(hass, entry)

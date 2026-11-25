@@ -45,15 +45,15 @@ class HaierOV(HaierDevice):
         screen = data.get("device")
         main = _field(screen, "mainControl")
         monitor = _field(screen, "monitoringScreen")
-        time = _field(monitor, "time", "remainingTime")
+        remaining = _field(monitor, "time", "remainingTime")
         links = {
             "power": _field(main, "power", "link"),
             "remote": _field(main, "remoteControlMode", "link"),
             "child_lock": _field(main, "lock", "link"),
             "current_temperature": _field(monitor, "temperature", "link"),
             "work_status": _field(monitor, "workStatus"),
-            "hours": _field(time, "hours"),
-            "minutes": _field(time, "minutes"),
+            "hours": _field(remaining, "hours"),
+            "minutes": _field(remaining, "minutes"),
         }
         meanings = {"grCmdOperationMode": "mode", "grCmdTargetTemperature": "target_temperature"}
         for item in _field(screen, "enrichToAttr") or []:
@@ -66,8 +66,9 @@ class HaierOV(HaierDevice):
                            if isinstance(title := _field(item, "name"), str) and title}
         attrs = {a["name"]: a for a in part.get("attributes") or []
                  if isinstance(a, dict) and isinstance(a.get("name"), str) and a["name"].isdigit()}
-        if _norm(_field(main, "power", "activeValue")) != "1":
-            links.pop("power")
+        for key, block in (("power", "power"), ("child_lock", "lock")):
+            if _norm(_field(main, block, "activeValue")) != "1":
+                links.pop(key)
         for name, link in links.items():
             code = _field(link, "name")
             attr = attrs.get(code) if isinstance(code, str) else None
@@ -131,8 +132,8 @@ class HaierOV(HaierDevice):
         return self._flag("power")
 
     def offers_control(self, name: str) -> bool:
-        attr = self.config.get_attr_by_name(name)
-        return bool(attr and attr.get("writable") is True and attr.get("operationType") == "I"
+        attr = self._cloud_attribute(self.config[name])
+        return bool(attr.get("writable") is True and attr.get("operationType") == "I"
                     and self.config["remote"] and self.config["power"] and self.config["child_lock"])
 
     def can_control(self, name: str) -> bool:
@@ -143,7 +144,9 @@ class HaierOV(HaierDevice):
     @property
     def temperature_limits(self) -> tuple[int, int, int] | None:
         """The current program's writable Celsius range from the app's mode-specific rule."""
-        if self.power is not True or self.target_temperature is None or self._value("work_status") not in {"2", "3", "4"}:
+        if self.problem or self.power is not True or self.target_temperature is None:
+            return None
+        if self._value("work_status") not in {"2", "3", "4"}:
             return None
         for rule in device_part(self.status_data).get("modifiers") or []:
             conditions = _field(rule, "trigger", "conditions", "condition")
@@ -165,6 +168,8 @@ class HaierOV(HaierDevice):
         await self._send_single_command({"commandName": code, "value": value})
 
     async def set_power(self, on: bool) -> None:
+        if on and self.problem:
+            raise HaierCommandLocked(translation_domain=C.DOMAIN, translation_key="oven_control_unavailable")
         await self._write("power", "1" if on else "0")
 
     async def set_temperature(self, value: float) -> None:
