@@ -1,0 +1,288 @@
+{
+  "_": "HOQ-F6QSB4GBU, firmware 1.5.3. Relevant fields from issue #128. The device list and MAC are synthetic. Redacted screen links are preserved as received.",
+  "backend_data": {
+    "presentation": {
+      "layout": {
+        "scrollContainer": [
+          {
+            "trackingData": {"component": {"componentName": "deviceList"}},
+            "state": {"items": [{"title": "Oven", "action": {"link": "haierevo://device?type=OV&deviceId=02:00:00:00:01:28"}}]}
+          }
+        ]
+      }
+    }
+  },
+  "devices": [
+    {
+      "device_id": "02:00:00:00:01:28",
+      "backend_data": {
+        "smartDeviceControl": {
+          "info": {"model": "HOQ-F6QSB4GBU"},
+          "settings": {"firmware": {"value": "1.5.3", "updateRequired": false}},
+          "status": "OFFLINE",
+          "alarms": [],
+          "attributes": [
+            {
+              "type": "STEP",
+              "name": "6",
+              "description": "not found",
+              "currentValue": "180",
+              "operationType": "I",
+              "readable": true,
+              "writable": true,
+              "invisible": false,
+              "range": {"type": "STEP", "data": {"dataType": "Integer", "step": "1", "minValue": "0", "maxValue": "300"}}
+            },
+            {
+              "type": "STEP",
+              "name": "19",
+              "description": "not found",
+              "currentValue": "25",
+              "readable": true,
+              "writable": false,
+              "invisible": false,
+              "range": {"type": "STEP", "data": {"dataType": "Integer", "step": "1", "minValue": "0", "maxValue": "500"}}
+            },
+            {
+              "type": "LIST",
+              "name": "51",
+              "description": "not found",
+              "currentValue": "0",
+              "readable": true,
+              "writable": false,
+              "invisible": false,
+              "list": {"type": "LIST", "data": [{"data": "true", "name": "not found"}, {"data": "false", "name": "not found"}]}
+            },
+            {
+              "type": "LIST",
+              "name": "5",
+              "description": "not found",
+              "currentValue": "46",
+              "defaultValue": "0",
+              "readable": true,
+              "writable": false,
+              "invisible": false,
+              "list": {"type": "LIST", "data": [{"data": "0", "name": "not found"}, {"data": "1", "name": "not found"}, {"data": "2", "name": "not found"}, {"data": "5", "name": "not found"}, {"data": "7", "name": "not found"}, {"data": "9", "name": "not found"}, {"data": "10", "name": "not found"}, {"data": "16", "name": "not found"}, {"data": "18", "name": "not found"}, {"data": "19", "name": "not found"}, {"data": "20", "name": "not found"}, {"data": "25", "name": "not found"}, {"data": "32", "name": "not found"}, {"data": "41", "name": "not found"}, {"data": "46", "name": "not found"}, {"data": "47", "name": "not found"}, {"data": "48", "name": "not found"}, {"data": "50", "name": "not found"}, {"data": "88", "name": "not found"}, {"data": "89", "name": "not found"}]}
+            },
+            {
+              "type": "LIST",
+              "name": "2",
+              "description": "not found",
+              "currentValue": "0",
+              "operationType": "I",
+              "readable": true,
+              "writable": true,
+              "invisible": false,
+              "list": {"type": "LIST", "data": [{"data": "true", "name": "not found"}, {"data": "false", "name": "not found"}]}
+            },
+            {
+              "type": "STEP",
+              "name": "11",
+              "description": "not found",
+              "currentValue": "0",
+              "readable": true,
+              "writable": false,
+              "invisible": false,
+              "range": {"type": "STEP", "data": {"dataType": "Integer", "step": "1", "minValue": "0", "maxValue": "23"}}
+            },
+            {
+              "type": "LIST",
+              "name": "0",
+              "description": "not found",
+              "currentValue": "0",
+              "operationType": "I",
+              "readable": true,
+              "writable": true,
+              "invisible": false,
+              "list": {"type": "LIST", "data": [{"data": "true", "name": "not found"}, {"data": "false", "name": "not found"}]}
+            },
+            {
+              "type": "LIST",
+              "name": "14",
+              "description": "not found",
+              "currentValue": "0",
+              "defaultValue": "0",
+              "readable": true,
+              "writable": false,
+              "invisible": false,
+              "list": {"type": "LIST", "data": [{"data": "0", "name": "not found"}, {"data": "2", "name": "not found"}, {"data": "3", "name": "not found"}, {"data": "4", "name": "not found"}, {"data": "5", "name": "not found"}, {"data": "9", "name": "not found"}, {"data": "10", "name": "not found"}]}
+            },
+            {
+              "type": "STEP",
+              "name": "12",
+              "description": "not found",
+              "currentValue": "0",
+              "readable": true,
+              "writable": false,
+              "invisible": false,
+              "range": {"type": "STEP", "data": {"dataType": "Integer", "step": "1", "minValue": "0", "maxValue": "59"}}
+            }
+          ],
+          "modifiers": [
+            {
+              "priority": 36,
+              "trigger": {"operator": "OR", "alarms": ["masterTempSensorErr", "evpSensorErr", "motorBoardCommunicationErr"]},
+              "actions": [{"name": "6", "rewriteFields": "W", "writable": false}]
+            },
+            {
+              "priority": 31,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "51", "values": ["false"]}]}, "alarms": []},
+              "actions": [{"name": "0", "rewriteFields": "W", "writable": false}, {"name": "6", "rewriteFields": "W", "writable": false}]
+            },
+            {
+              "priority": 30,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "2", "values": ["true"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "W", "writable": false}]
+            },
+            {
+              "priority": 29,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "0", "values": ["false"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "W", "writable": false}]
+            },
+            {
+              "priority": 27,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "14", "values": ["0"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "W", "writable": false}]
+            },
+            {
+              "priority": 19,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["89"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WD", "writable": false, "defaultValue": "190"}]
+            },
+            {
+              "priority": 18,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["88"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WD", "writable": false, "defaultValue": "200"}]
+            },
+            {
+              "priority": 17,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["50"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "200", "valueRange": {"range": {"step": "1", "minValue": "160", "maxValue": "220"}}}]
+            },
+            {
+              "priority": 16,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["48"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "70", "valueRange": {"range": {"step": "1", "minValue": "60", "maxValue": "90"}}}]
+            },
+            {
+              "priority": 15,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["47"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "160", "valueRange": {"range": {"step": "1", "minValue": "30", "maxValue": "300"}}}]
+            },
+            {
+              "priority": 14,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["46"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "180", "valueRange": {"range": {"step": "1", "minValue": "30", "maxValue": "300"}}}]
+            },
+            {
+              "priority": 13,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["41"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WD", "writable": false, "defaultValue": "110"}]
+            },
+            {
+              "priority": 12,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["32"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "180", "valueRange": {"range": {"step": "1", "minValue": "120", "maxValue": "250"}}}]
+            },
+            {
+              "priority": 11,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["25"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "160", "valueRange": {"range": {"step": "1", "minValue": "30", "maxValue": "200"}}}]
+            },
+            {
+              "priority": 10,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["20"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "160", "valueRange": {"range": {"step": "1", "minValue": "30", "maxValue": "250"}}}]
+            },
+            {
+              "priority": 9,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["19"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "165", "valueRange": {"range": {"step": "1", "minValue": "30", "maxValue": "250"}}}]
+            },
+            {
+              "priority": 8,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["18"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "180", "valueRange": {"range": {"step": "1", "minValue": "30", "maxValue": "250"}}}]
+            },
+            {
+              "priority": 7,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["16"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "60", "valueRange": {"range": {"step": "1", "minValue": "40", "maxValue": "100"}}}]
+            },
+            {
+              "priority": 6,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["10"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WD", "writable": false, "defaultValue": "35"}]
+            },
+            {
+              "priority": 5,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["9"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WD", "writable": false, "defaultValue": "40"}]
+            },
+            {
+              "priority": 4,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["7"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "220", "valueRange": {"range": {"step": "1", "minValue": "160", "maxValue": "300"}}}]
+            },
+            {
+              "priority": 3,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["5"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "11", "valueRange": {"range": {"step": "1", "minValue": "1", "maxValue": "11"}}}]
+            },
+            {
+              "priority": 2,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["2"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WDV", "writable": true, "defaultValue": "200", "valueRange": {"range": {"step": "1", "minValue": "30", "maxValue": "250"}}}]
+            },
+            {
+              "priority": 1,
+              "trigger": {"operator": "AND", "conditions": {"condition": [{"mode": "5", "values": ["1"]}]}, "alarms": []},
+              "actions": [{"name": "6", "rewriteFields": "WVD", "writable": true, "defaultValue": "160", "valueRange": {"range": {"step": "1", "minValue": "30", "maxValue": "220"}}}]
+            }
+          ]
+        },
+        "device": {
+          "mainControl": {
+            "power": {"link": "**REDACTED**", "activeValue": "1", "on": "Включен", "off": "Выключен"},
+            "remoteControlMode": {
+              "link": "**REDACTED**",
+              "onTitle": "Дистанционное управление включено",
+              "offTitle": "Дистанционное управление выключено",
+              "onDescription": "Включается автоматически вместе с устройством",
+              "offDescription": "Выключается автоматически вместе с устройством"
+            },
+            "lock": {"link": "**REDACTED**", "activeValue": "1"}
+          },
+          "monitoringScreen": {
+            "temperature": {"link": "**REDACTED**", "hint": "Температура внутри"},
+            "workStatus": {"type": "LIST", "name": "14", "description": "workStatus"},
+            "time": {
+              "remainingTime": {"hours": {"type": "STEP", "name": "11", "description": "remainingBakeTimeHH"}, "minutes": {"type": "STEP", "name": "12", "description": "remainingBakeTimeMM"}}
+            }
+          },
+          "enrichToAttr": [
+            {
+              "enrichName": "grCmdTargetTemperature",
+              "link1": {"type": "STEP", "name": "36", "description": "grCmdTargetTemperature1"},
+              "link2": {"type": "STEP", "name": "35", "description": "grCmdTargetTemperature2"},
+              "link3": {"type": "STEP", "name": "44", "description": "grCmdTargetTemperature3"},
+              "readLink": {"type": "STEP", "name": "6", "description": "bakeTargetTemperature"}
+            },
+            {
+              "enrichName": "grCmdOperationMode",
+              "link1": {"type": "LIST", "name": "37", "description": "grCmdOperationMode1"},
+              "link2": {"type": "LIST", "name": "31", "description": "grCmdOperationMode2"},
+              "link3": {"type": "LIST", "name": "27", "description": "grCmdOperationMode3"},
+              "readLink": {"type": "LIST", "name": "5", "description": "operationMode"}
+            }
+          ],
+          "enrichAttributes": {
+            "attrs": {
+              "grCmdOperationMode": {"name": "grCmdOperationMode", "title": "Режим", "hint": "При подключенном термощупе некоторые режимы недоступны", "list": {"valueToIcon": {"88": {"icon": "", "name": "Автоматическая выпечка хлеба"}, "89": {"icon": "", "name": "Автоматическая выпечка булочек"}, "46": {"icon": "", "name": "Выпечка"}, "25": {"icon": "", "name": "Сушка"}, "47": {"icon": "", "name": "Принудительная вентиляция"}, "48": {"icon": "", "name": "Приготовление в вакууме"}, "16": {"icon": "", "name": "Поддержание тепла"}, "18": {"icon": "", "name": "Конвекционный гриль"}, "19": {"icon": "", "name": "Жаркое"}, "1": {"icon": "", "name": "Классическая выпечка"}, "2": {"icon": "", "name": "Выпечка с конвекцией"}, "5": {"icon": "", "name": "Гриль"}, "7": {"icon": "", "name": "Пицца"}, "9": {"icon": "", "name": "Размораживание"}, "50": {"icon": "", "name": "Аэрогриль"}, "41": {"icon": "", "name": "Акваочистка"}, "20": {"icon": "", "name": "Кондитерская выпечка"}, "10": {"icon": "", "name": "Расстойка теста"}, "32": {"icon": "", "name": "Приготовление на пару"}}}}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

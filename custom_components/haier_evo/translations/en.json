@@ -130,6 +130,18 @@
                     "finished": "Finished",
                     "cancelled": "Cancelled"
                 }
+            },
+            "oven_temperature": {
+                "name": "Oven temperature"
+            },
+            "oven_target": {
+                "name": "Target temperature"
+            },
+            "oven_mode": {
+                "name": "Cooking mode"
+            },
+            "oven_remaining": {
+                "name": "Time remaining"
             }
         },
         "event": {
@@ -149,6 +161,16 @@
                         }
                     }
                 }
+            }
+        },
+        "switch": {
+            "oven_power": {
+                "name": "Power"
+            }
+        },
+        "number": {
+            "oven_setpoint": {
+                "name": "Adjust temperature"
             }
         }
     },
@@ -311,6 +333,12 @@
         },
         "laundry_parameters_target": {
             "message": "Choose the Program to start entity of a Haier washer or dryer"
+        },
+        "oven_control_unavailable": {
+            "message": "The oven cannot accept this command. Check its connection, remote control and control panel lock."
+        },
+        "oven_temperature_unavailable": {
+            "message": "This temperature is unavailable for the current cooking mode and program stage."
         }
     },
     "options": {

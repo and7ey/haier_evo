@@ -44,6 +44,7 @@ from .device import (  # noqa: F401
 )
 from .device_ac import HaierAC  # noqa: F401
 from .device_laundry import HaierLaundry
+from .device_ov import HaierOV
 from .device_ref import HaierREF  # noqa: F401
 from .device_wm import HaierWM  # noqa: F401
 from .logger import _LOGGER
@@ -992,9 +993,9 @@ class Haier:
             _LOGGER.debug("An unconfirmed command was superseded by a newer one, not re-sending it")
             return
         self._sent_number.pop(trace, None)
-        start = self._is_laundry_start(payload)
-        if start:
-            _LOGGER.warning("Haier Evo did not confirm a start in %s s, reading state without repeating it", C.WS_ACK_TIMEOUT)
+        send_once = self._send_only_once(payload)
+        if send_once:
+            _LOGGER.warning("Haier Evo did not confirm a command in %s s, reading state without repeating it", C.WS_ACK_TIMEOUT)
         else:
             _LOGGER.warning("Haier Evo did not confirm a command in %s s, re-sending it", C.WS_ACK_TIMEOUT)
         # Only the socket the command went out on is suspect: commands sent
@@ -1002,7 +1003,7 @@ class Haier:
         if sent_ws is self._ws and not sent_ws.closed:
             self._connected.clear()
             await sent_ws.close()
-        if not start:
+        if not send_once:
             try:
                 await self.async_send(payload, retry=True)
             except HomeAssistantError:
@@ -1041,9 +1042,11 @@ class Haier:
         for name in command_names(payload):
             self._last_sent[(mac, name)] = self._sent_count
 
-    def _is_laundry_start(self, payload: dict) -> bool:
+    def _send_only_once(self, payload: dict) -> bool:
         device = self.get_device_by_id(payload.get("macAddress") or "")
-        return device is not None and device.absolute_commands is False and payload.get("action") == "operation"
+        return isinstance(device, HaierOV) or (
+            device is not None and device.absolute_commands is False and payload.get("action") == "operation"
+        )
 
     async def _async_wait_connected(self, wait: float) -> ClientWebSocketResponse | None:
         if self.connected:
@@ -1073,7 +1076,7 @@ class Haier:
         for _attempt in range(2):
             ws = await self._async_wait_connected(C.WS_SEND_TIMEOUT)
             if ws is None:
-                if self._is_laundry_start(payload):
+                if self._send_only_once(payload):
                     raise HaierCommandNotSent(translation_domain=C.DOMAIN, translation_key="command_failed")
                 break
             if trace:
@@ -1090,7 +1093,7 @@ class Haier:
                 self._connected.clear()
                 with suppress(Exception):
                     await ws.close()
-                if self._is_laundry_start(payload):
+                if self._send_only_once(payload):
                     break  # A failed write may already have started the machine.
                 continue
             except BaseException:

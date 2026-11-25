@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"
 LEVELS = {"устройство": "device", "данные облака": "data", "профиль": "profile", "сообщение": "report"}
 KINDS = {"AC": "Кондиционер", "REF": "Холодильник", "WH": "Водонагреватель", "WM": "Стиральная машина",
-         "DRY": "Сушильная машина"}
-DUMPS = ("evo_dump.json", "ref_dump.json", "laundry_dump.json", "wh_dump.json", "hw70_dump.json")
+         "DRY": "Сушильная машина", "OV": "Духовой шкаф"}
+DUMPS = ("evo_dump.json", "ref_dump.json", "laundry_dump.json", "wh_dump.json", "hw70_dump.json", "oven_dump.json")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 
 

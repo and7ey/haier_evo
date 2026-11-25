@@ -8,10 +8,10 @@
 
 [![Открыть Haier Evo в HACS вашего Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=and7ey&repository=haier_evo&category=integration)
 
-> **English.** Unofficial Home Assistant integration for the Haier Evo cloud (Russia, Kazakhstan, Belarus): air conditioners, refrigerators, F7 water heaters (tested on ES80V-F7 and ES100V-F7), washing machines and dryers (their state and program parameters, and on HW70-BP12337U1 and HW90-B14367U1 energy, water, wash counters and the door, tested on a HW70-BP12337U1; starting, pausing and cancelling programs is a beta, off by default and not yet checked on a real machine). It is in the default HACS catalogue: find **Haier Evo** in HACS (in Home Assistant 2026.11, in *Settings → Marketplace*) or open it with the button above, download it, restart Home Assistant, then add **Haier Evo** in *Settings → Devices & services* and sign in with your Evo account. The rest of this page is in Russian.
+> **English.** Unofficial Home Assistant integration for the Haier Evo cloud (Russia, Kazakhstan, Belarus): air conditioners, refrigerators, F7 water heaters (tested on ES80V-F7 and ES100V-F7), HOQ-F6QSB4GBU ovens, washing machines and dryers (their state and program parameters, and on HW70-BP12337U1 and HW90-B14367U1 energy, water, wash counters and the door, tested on a HW70-BP12337U1; starting, pausing and cancelling programs is a beta, off by default and not yet checked on a real machine). It is in the default HACS catalogue: find **Haier Evo** in HACS (in Home Assistant 2026.11, in *Settings → Marketplace*) or open it with the button above, download it, restart Home Assistant, then add **Haier Evo** in *Settings → Devices & services* and sign in with your Evo account. The rest of this page is in Russian.
 
 ## Поддерживаемые устройства
-Интеграция работает с устройствами, которые видит приложение Evo: кондиционерами, холодильниками, водонагревателями (бойлерами), стиральными и сушильными машинами. Насколько проверена конкретная модель — в таблице.
+Интеграция работает с устройствами, которые видит приложение Evo: кондиционерами, холодильниками, водонагревателями (бойлерами), духовыми шкафами, стиральными и сушильными машинами. Насколько проверена конкретная модель — в таблице.
 
 - 🟢 **устройство** — работает на живом устройстве: у автора интеграции или у пользователя, который запускал сборку и прислал диагностику (ссылка на issue или PR — в строке модели); описание модели из облака тоже лежит в `tests/fixtures`;
 - 🟢 **данные облака** — проверено тестами на настоящем описании модели из облака (`tests/fixtures`);
@@ -54,6 +54,7 @@
 | Водонагреватель | ES50V-F7 | 🟡 профиль | коды те же, что у ES80V-F7 |
 | Водонагреватель | ES100V-F7 | 🟢 устройство | коды те же, что у ES80V-F7; температура, Eco/Max, вкл/выкл, дезинфекция и блокировки проверены на прошивке 1.6.0 ([#101](https://github.com/and7ey/haier_evo/pull/101)) |
 | Водонагреватель | ES50VTF7P(R) | 🟡 профиль | свои коды атрибутов |
+| Духовой шкаф | HOQ-F6QSB4GBU | 🟢 данные облака | режим, заданная температура и оставшееся время по [диагностике #128](https://github.com/and7ey/haier_evo/issues/128). Управление требует проверки на духовке |
 | Стиральная машина | HW60-BP12929AE | 🟢 данные облака | состояние, программа, этап, оставшееся время, удалённое управление, блокировка от детей, ошибки; запуск, пауза и отмена программ — бета, на машине не проверены |
 | Стиральная машина | HW90-B14367U1 | 🟢 данные облака | то же; управление — бета, на машине не проверено |
 | Стиральная машина | HW70-BP12929E | ⚪ сообщение | дамп в upstream-issue #63, по формату как HW60 |
@@ -107,6 +108,12 @@
 - диагностические датчики «Связь с облаком» и «Обновление прошивки».
 
 Интеграция соблюдает облачные ограничения приложения Evo: пока бойлер выключен, нельзя менять температуру и включать дезинфекцию, во время дезинфекции нельзя менять температуру, при ошибке устройства управление заблокировано. В этих случаях Home Assistant покажет понятную ошибку вместо команды, которую бойлер проигнорирует. Выбор режима Eco/Max у выключенного бойлера сначала включает его.
+
+### Духовые шкафы
+
+У HOQ-F6QSB4GBU отображаются режим приготовления, заданная температура и оставшееся время. Если Evo прислал ссылку на датчик камеры, видна и фактическая температура. В режиме «Гриль» шкала мощности 1–11 не имеет единицы °C, поэтому температурные датчики показывают `unknown`.
+
+Если облако описывает питание, дистанционное управление и блокировку панели, Home Assistant добавляет переключатель питания и регулятор температуры. Команды доступны, когда духовка в сети, разрешено дистанционное управление и снята блокировка панели. Температуру можно менять во время программы в пределах, заданных Evo для текущего режима. Эти команды проверены в тестах на имитации ответов облака. Проверка на самой духовке пока требуется.
 
 ### Стиральные и сушильные машины
 Интеграция показывает, что делает машина. Управление — запуск, пауза, продолжение и отмена программы — бета: по умолчанию оно выключено, ниже — как его включить.
