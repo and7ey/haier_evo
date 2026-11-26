@@ -222,22 +222,6 @@ class HaierWMDryRemainingTimeSensor(HaierWMTimeSensor):
     feature, fallback = "dry_remaining_time", "Осталось до конца сушки"
 
 
-class HaierWMWashStartSensor(HaierWMSensor):
-    """When a delayed washing starts, estimated (HaierWM._note_wash_start); empty otherwise."""
-
-    _attr_device_class = SensorDeviceClass.TIMESTAMP
-    _attr_icon = "mdi:timer-play-outline"
-    feature, fallback = "wash_phase", "Начало стирки"
-
-    def __init__(self, device: api.HaierWM) -> None:
-        super().__init__(device)
-        self._attr_unique_id = f"{device.device_id}_{device.device_model}_wash_start"
-
-    @property
-    def native_value(self):
-        return self._device.wash_start
-
-
 # in the order the entities are created
 WM_SENSORS: tuple[type[HaierWMSensor], ...] = (
     HaierWMWashPhaseSensor,
@@ -245,7 +229,6 @@ WM_SENSORS: tuple[type[HaierWMSensor], ...] = (
     HaierWMWashTemperatureSensor,
     HaierWMWashSpinSpeedSensor,
     HaierWMWashRemainingTimeSensor,
-    HaierWMWashStartSensor,
     HaierWMDryPhaseSensor,
     HaierWMDryModeSensor,
     HaierWMDryProgramSensor,

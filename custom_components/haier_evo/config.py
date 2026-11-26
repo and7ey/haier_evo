@@ -13,6 +13,8 @@ from .logger import _LOGGER
 
 # The model comes from the cloud and becomes a part of a file name (1.7).
 SAFE_MODEL = re.compile(r"[A-Za-z0-9()_.-]{1,32}")
+# Profiles of models that 1.5.2 did not find a profile for: it copied default.yaml for them.
+PROFILES_AFTER_1_5_2 = frozenset({"CASWD129C1C"})
 
 # The Haier app draws its louver screens from modes.itemsV2 of the device
 # description: groups (auto / direction / comfort flow) with the angle or the
@@ -153,13 +155,14 @@ class HaierDeviceConfig:
         userfname = f"{self._userpath}.{self._model}.yaml"
         if not self._userpath or not exists(userfname):
             return fname
-        default = join(_CONFIG_DIR, 'default') + '.yaml'
+        # A model that had no reachable profile of its own in 1.5.2 got a copy
+        # of default.yaml; elsewhere such a file is the user's choice (the
+        # cloud's codes instead of the bundled ones) and stays.
+        copies = [fname] + ([join(_CONFIG_DIR, 'default') + '.yaml'] if self._model in PROFILES_AFTER_1_5_2 else [])
         try:
             # Such an automatic copy of versions up to 0.3.15 / 1.5.2: nothing
-            # of the user's is lost, and the bundled profile gets its fixes. A
-            # model without a profile of its own then got default.yaml, and the
-            # copy outlives a profile added later (CASWD129C1C.yaml).
-            if any(filecmp.cmp(userfname, bundled, shallow=False) for bundled in dict.fromkeys((fname, default))):
+            # of the user's is lost, and the bundled profile gets its fixes.
+            if any(filecmp.cmp(userfname, bundled, shallow=False) for bundled in copies):
                 os.remove(userfname)
                 _LOGGER.info("Removed %s, a copy of the bundled profile", userfname)
                 return fname

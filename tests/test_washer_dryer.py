@@ -9,7 +9,6 @@ drying level (48) were checked on the machine against the app.
 from __future__ import annotations
 
 import copy
-import itertools
 from types import SimpleNamespace
 
 import pytest
@@ -90,9 +89,7 @@ async def test_values_and_entities(hass):
     wm = washer(hass)
     sensors = {type(e): e for e in wm.create_entities_sensor()}
     flags = {type(e): e for e in wm.create_entities_binary_sensor()}
-    assert sensors[sensor.HaierWMWashStartSensor].native_value is None  # no delayed start
-    assert {cls.feature: sensors[cls].native_value for cls in sensor.WM_SENSORS
-            if cls is not sensor.HaierWMWashStartSensor} == {
+    assert {cls.feature: sensors[cls].native_value for cls in sensor.WM_SENSORS} == {
         "wash_phase": "finished",
         "wash_program": "wash_cotton",
         "wash_temperature": "30",
@@ -217,92 +214,6 @@ async def test_a_lagging_rest_status_does_not_undo_a_push(hass, clock):
     assert (wm.status, wm.status_data["status"]) == ("on", "ONLINE")
 
 
-@pytest.fixture
-def utcnow(monkeypatch):
-    from datetime import UTC, datetime
-
-    import custom_components.haier_evo.device_wm as device_wm
-
-    now = [datetime(2026, 11, 18, 0, 0, 30, tzinfo=UTC)]
-    monkeypatch.setattr(device_wm.dt_util, "utcnow", lambda: now[0])
-    return now
-
-
-async def test_the_start_of_a_delayed_washing(hass, utcnow):
-    """The machine reports the time to the end only: the start is the end minus the program."""
-    from datetime import UTC, datetime, timedelta
-
-    wm = washer(hass)
-    start = sensor.HaierWMWashStartSensor(wm)
-    assert start.unique_id == f"{MAC}_CASWD129C1C_wash_start"
-    assert start.device_class == "timestamp"
-    # "Хлопок" chosen and not started: 1 h 15 min is the program's length
-    push(wm, {"22": "0", "18": "0", "43": "1", "45": "15"})
-    assert start.native_value is None
-    # the delay being set: the time to its end shows, the length stays
-    push(wm, {"18": "1", "43": "3", "45": "0"})
-    assert start.native_value is None
-    # started: waiting, 3 h to the end, so the washing starts in 1 h 45 min
-    push(wm, {"22": "15"})
-    assert start.native_value == datetime(2026, 11, 18, 1, 45, tzinfo=UTC)
-    # the countdown does not move it
-    utcnow[0] += timedelta(minutes=30)
-    push(wm, {"43": "2", "45": "30"})
-    assert start.native_value == datetime(2026, 11, 18, 1, 45, tzinfo=UTC)
-    # the washing began
-    push(wm, {"22": "4"})
-    assert start.native_value is None
-
-
-@pytest.mark.parametrize("order", list(itertools.permutations(("18", "22", "43", "45"))))
-async def test_the_start_whatever_the_order_of_a_message(hass, utcnow, order):
-    """The delay and the wait in one message: the start is taken after all of its values."""
-    from datetime import UTC, datetime
-
-    wm = washer(hass)
-    start = sensor.HaierWMWashStartSensor(wm)
-    push(wm, {"22": "0", "18": "0", "43": "1", "45": "15"})
-    values = {"18": "1", "22": "15", "43": "3", "45": "0"}
-    push(wm, {code: values[code] for code in order})
-    assert start.native_value == datetime(2026, 11, 18, 1, 45, tzinfo=UTC)
-
-
-async def test_the_start_of_a_rest_status(hass, utcnow):
-    """The same in a REST status, in the order of the description."""
-    from datetime import UTC, datetime
-
-    wm = washer(hass)
-    for values in ({"22": "0", "18": "0", "43": "1", "45": "15"}, {"18": "1", "22": "15", "43": "3", "45": "0"}):
-        wm.update_from_backend(rest(**values))
-        wm.notify()
-    assert wm.wash_start == datetime(2026, 11, 18, 1, 45, tzinfo=UTC)
-
-
-async def test_no_start_from_the_length_of_another_cycle(hass, utcnow):
-    """"Хлопок" (75 min) ran; the choice of "Быстрая" (25 min) was missed: the start is not guessed."""
-    wm = washer(hass)
-    start = sensor.HaierWMWashStartSensor(wm)
-    push(wm, {"22": "0", "18": "0", "0": "10", "43": "1", "45": "15"})
-    push(wm, {"22": "4"})  # it ran
-    push(wm, {"22": "14", "43": "0", "45": "0"})
-    push(wm, {"0": "4", "18": "1", "22": "15", "43": "3", "45": "0"})  # "Быстрая", set late
-    assert start.native_value is None
-    # chosen, not run, then another program set with the delay: not the length of the first one
-    push(wm, {"0": "10", "22": "0", "18": "0", "43": "1", "45": "15"})
-    push(wm, {"0": "4", "18": "1", "22": "15", "43": "3", "45": "0"})
-    assert start.native_value is None
-
-
-async def test_no_start_without_the_programs_length(hass):
-    """Home Assistant started during the wait: the length was never seen, nothing is guessed."""
-    data = copy.deepcopy(ITEM["backend_data"])
-    for attr in data["attributes"]:
-        if attr["name"] in ("22", "18", "43", "45"):
-            attr["currentValue"] = {"22": "15", "18": "1", "43": "2", "45": "30"}[attr["name"]]
-    wm = washer(hass, data)
-    assert sensor.HaierWMWashStartSensor(wm).native_value is None
-
-
 async def test_a_drying_seen_on_the_machine(hass):
     """"Быстрая" after a washing: drying, final drying 15 min before the end, finishing, finished."""
     wm = washer(hass)
@@ -330,7 +241,7 @@ async def test_a_bad_time_does_not_block_the_next_message(hass):
     wm = washer(hass)
     left = sensor.HaierWMWashRemainingTimeSensor(wm)
     push(wm, {"45": "NaN"})
-    assert left.native_value is None and wm.wash_start is None
+    assert left.native_value is None
     push(wm, {"22": "0", "45": "1"})
     assert (left.native_value, wm.value_of("wash_phase")) == (1, "none")
 
@@ -348,6 +259,21 @@ async def test_the_hours_and_minutes_are_one_reading(hass, clock):
     assert left.native_value == 60
     saved = {a["name"]: a.get("currentValue") for a in wm.status_data["attributes"]}
     assert (saved["43"], saved["45"]) == ("1", "0")
+
+
+async def test_a_rest_status_that_agrees_with_the_pushed_minutes_brings_the_hour(hass, clock):
+    """1:00, the push of the hour 0 lost, the minutes pushed on; REST of 0:44 with the pushed 44: 44 min."""
+    wm = washer(hass)
+    left = sensor.HaierWMWashRemainingTimeSensor(wm)
+    wm.update_from_backend(rest(**{"43": "1", "45": "0"}))
+    for minutes in range(59, 43, -1):
+        clock[0] += 60
+        push(wm, {"45": str(minutes)})
+    assert left.native_value == 104
+    wm.update_from_backend(rest(**{"43": "0", "45": "44"}))
+    assert left.native_value == 44
+    saved = {a["name"]: a.get("currentValue") for a in wm.status_data["attributes"]}
+    assert (saved["43"], saved["45"]) == ("0", "44")
 
 
 async def test_a_lagging_rest_status_does_not_clear_a_pushed_alarm(hass, clock):
@@ -368,6 +294,19 @@ async def test_a_lagging_rest_status_does_not_clear_a_pushed_alarm(hass, clock):
     assert filter_sensor.is_on is False
 
 
+async def test_alarms_null_are_not_a_pushed_list(hass, clock):
+    """E6, a push with "alarms": null, a REST status with none: the alarm does not come back."""
+    wm = washer(hass)
+    filter_sensor = binary_sensor.HaierWMDryerFilterSensor(wm)
+    wm.update_from_backend(rest())
+    push(wm, alarms=["dryerFilterBlockedAlarm"])
+    clock[0] += 20
+    push(wm, alarms=None)
+    clock[0] += 20
+    wm.update_from_backend(rest())
+    assert filter_sensor.is_on is False
+
+
 async def test_a_restart_keeps_a_fresh_push(hass, clock):
     """Off, a restart from the saved description, a lagging REST before the first WebSocket message."""
     from custom_components.haier_evo.api import cacheable_description
@@ -385,6 +324,30 @@ async def test_a_restart_keeps_a_fresh_push(hass, clock):
     clock[0] += again.PUSH_WINS_FOR
     again.update_from_backend(rest(**{"8": "1"}))
     assert (again.status, again.status_data["status"]) == ("on", "ONLINE")
+
+
+async def test_a_rebuild_from_the_cloud_keeps_a_fresh_push(hass, clock):
+    """Another unit added: the entry reads the cloud, the lagging REST must not undo off and E6."""
+    from custom_components.haier_evo.api import Haier, cacheable_description
+
+    wm = washer(hass)
+    push(wm, {"8": "0"}, alarms=["dryerFilterBlockedAlarm"])
+    wm.on_message({"event": "deviceStatusEvent", "macAddress": MAC, "payload": {"status": "TURNED_OFF"}})
+    cached = {"devices": [{"mac": MAC.upper(), "status": cacheable_description(wm.status_data)}]}
+    clock[0] += 60
+    rebuilt = washer(hass, rest(**{"8": "1"}))  # what the cloud said at the rebuild
+    assert rebuilt.status == "on"
+    hub = SimpleNamespace(devices=[rebuilt])
+    Haier.carry_fresh(hub, cached)
+    assert (rebuilt.status, rebuilt.status_data["status"], rebuilt.alarms) == (
+        "off", "TURNED_OFF", ["dryerFilterBlockedAlarm"])
+    # and the cache it saves next keeps them, with the times
+    assert rebuilt.status_data["pushedAt"].keys() >= {"8", "status", "alarms"}
+    # pushed longer ago than PUSH_WINS_FOR: the cloud's state stays
+    clock[0] += rebuilt.PUSH_WINS_FOR
+    later = washer(hass, rest(**{"8": "1"}))
+    Haier.carry_fresh(SimpleNamespace(devices=[later]), cached)
+    assert (later.status, later.alarms) == ("on", [])
 
 
 async def test_without_the_profile_flag_rest_is_taken(hass, clock):

@@ -595,3 +595,34 @@ async def test_caswd_of_pr_88(hass, aioclient_mock, ws_factory):
     assert {k: v for k, v in states().items() if k in ("wash_phase", "washer_running", "connected")} == {
         "wash_phase": "washing", "washer_running": "on", "connected": "on"}
     await stop(hass, entry)
+
+
+async def test_caswd_rebuild_from_the_cloud_keeps_a_fresh_push(hass, aioclient_mock, ws_factory):
+    """Another unit added reloads the entry from the cloud: its lagging REST must not undo off and E6."""
+    from custom_components.haier_evo import api
+
+    entry = await start(hass, aioclient_mock, ws_factory, CASWD)
+    mac = CASWD["devices"][0]["device_id"]
+    ws_factory.current.feed({"event": "status", "macAddress": mac, "payload": {
+        "statuses": [{"properties": {"8": "0"}, "alarms": ["dryerFilterBlockedAlarm"]}]}})
+    ws_factory.current.feed({"event": "deviceStatusEvent", "macAddress": mac, "payload": {"status": "TURNED_OFF"}})
+    await hass.async_block_till_done()
+    haier = entry.runtime_data
+    await haier.cache_store.async_save(haier.cache_dict())
+    await stop(hass, entry)
+
+    lagging = copy.deepcopy(CASWD)
+    data = lagging["devices"][0]["backend_data"]
+    data["status"] = "ONLINE"
+    for attr in data["attributes"]:
+        if attr["name"] == "8":
+            attr["currentValue"] = "1"
+    mock_account(aioclient_mock, lagging)
+    api.RELOAD_FROM_CLOUD.add(entry.entry_id)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    washer = device_by_mac(entry, mac)
+    assert (washer.status, washer.alarms) == ("off", ["dryerFilterBlockedAlarm"])
+    prefix = f"{washer.device_id}_{washer.device_model}"
+    assert hass.states.get(eid(hass, "binary_sensor", f"{prefix}_dryer_filter")).state == "on"
+    await stop(hass, entry)

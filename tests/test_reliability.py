@@ -333,6 +333,16 @@ def test_old_copy_of_the_default_profile_gives_way_to_a_new_profile(tmp_path):
     assert CFG.HaierWMConfig("CASWD129C1C", user)._find_config_file() == copy_path
 
 
+def test_default_profile_chosen_for_a_model_with_its_own_is_kept(tmp_path):
+    """default.yaml put as haier_evo.AS25PHP2HRA.yaml to take the cloud's codes: the user's choice."""
+    default = CFG.HaierACConfig("NOPROFILE", "")._find_config_file()
+    user = str(tmp_path / "haier_evo")
+    own = f"{user}.AS25PHP2HRA.yaml"
+    shutil.copyfile(default, own)
+    assert CFG.HaierACConfig("AS25PHP2HRA", user)._find_config_file() == own
+    assert os.path.exists(own)
+
+
 def test_own_profile_is_kept(tmp_path):
     bundled = CFG.HaierACConfig("AS25PHP2HRA", "")._find_config_file()
     user = str(tmp_path / "haier_evo")

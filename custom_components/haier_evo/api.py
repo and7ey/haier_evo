@@ -381,6 +381,17 @@ class Haier:
             raise failure
         return devices
 
+    def carry_fresh(self, cached: Any) -> None:
+        """A start that read the cloud: the units keep what the saved descriptions say was pushed lately."""
+        items = cached.get("devices") if isinstance(cached, dict) else None
+        saved = {
+            str(item.get("mac")).lower(): item.get("status")
+            for item in (items if isinstance(items, list) else []) if isinstance(item, dict)
+        }
+        for device in self.devices:
+            if (status := saved.get(str(device.device_id).lower())) is not None and hasattr(device, "carry_fresh"):
+                device.carry_fresh(status)
+
     def cache_dict(self) -> dict:
         """What the next start needs when the cloud does not answer."""
         return {
