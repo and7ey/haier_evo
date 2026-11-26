@@ -130,6 +130,96 @@
                     "finished": "Завершена",
                     "cancelled": "Отменена"
                 }
+            },
+            "wm_wash_program": {
+                "state": {
+                    "wash_auto": "Авто",
+                    "wash_shirts": "Рубашки",
+                    "wash_bulky": "Объёмные вещи",
+                    "wash_silk": "Шёлк",
+                    "wash_baby": "Детская одежда",
+                    "wash_spin": "Отжим",
+                    "wash_cotton": "Хлопок",
+                    "wash_quick": "Быстрая",
+                    "wash_wool": "Шерсть",
+                    "wash_down": "Пуховые вещи",
+                    "wash_delicate": "Деликатная",
+                    "wash_drum_clean": "Очистка барабана",
+                    "wash_app": "Программа приложения"
+                }
+            },
+            "wm_dry_mode": {
+                "state": {
+                    "dry": "Сушка",
+                    "care": "Уход"
+                }
+            },
+            "wm_dry_program": {
+                "state": {
+                    "dry_none": "Не выбрано",
+                    "dry_auto": "Авто",
+                    "dry_shirts": "Рубашки",
+                    "dry_bulky": "Объёмные вещи",
+                    "dry_silk": "Шёлк",
+                    "dry_baby": "Детская одежда",
+                    "dry_cotton": "Хлопок",
+                    "dry_quick": "Быстрая",
+                    "dry_wool": "Шерсть",
+                    "dry_down": "Пуховые вещи",
+                    "dry_app": "Программа приложения"
+                }
+            },
+            "wm_care_program": {
+                "state": {
+                    "care_none": "Не выбрано",
+                    "care_shirts": "Рубашки",
+                    "care_bulky": "Объёмные вещи",
+                    "care_silk": "Шёлк",
+                    "care_baby": "Детская одежда",
+                    "care_wool": "Шерсть",
+                    "care_down": "Пуховые вещи",
+                    "care_delicate": "Деликатная",
+                    "care_fur": "Меховые изделия"
+                }
+            },
+            "wm_dry_level": {
+                "state": {
+                    "dry_iron": "Под утюг",
+                    "dry_wear": "К носке",
+                    "dry_closet": "В шкаф",
+                    "dry_extra": "Экстрасухая"
+                }
+            },
+            "wm_wash_temperature": {
+                "state": {
+                    "cold": "Без нагрева"
+                }
+            },
+            "wm_wash_spin_speed": {
+                "state": {
+                    "no_spin": "Без отжима"
+                }
+            },
+            "wm_wash_phase": {
+                "state": {
+                    "none": "Нет программы",
+                    "washing": "Стирка",
+                    "rinsing": "Полоскание",
+                    "final_rinse": "Последнее полоскание",
+                    "spinning": "Отжим",
+                    "finished": "Завершено",
+                    "delayed_start": "Ожидание отложенного старта"
+                }
+            },
+            "wm_dry_phase": {
+                "state": {
+                    "none": "Нет программы",
+                    "drying": "Сушка",
+                    "care": "Уход",
+                    "final_drying": "Досушивание",
+                    "finishing": "Завершение",
+                    "finished": "Завершено"
+                }
             }
         },
         "event": {

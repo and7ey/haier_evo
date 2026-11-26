@@ -13,6 +13,8 @@ from .logger import _LOGGER
 
 # The model comes from the cloud and becomes a part of a file name (1.7).
 SAFE_MODEL = re.compile(r"[A-Za-z0-9()_.-]{1,32}")
+# Profiles of models that 1.5.2 did not find a profile for: it copied default.yaml for them.
+PROFILES_AFTER_1_5_2 = frozenset({"CASWD129C1C"})
 
 # The Haier app draws its louver screens from modes.itemsV2 of the device
 # description: groups (auto / direction / comfort flow) with the angle or the
@@ -153,10 +155,14 @@ class HaierDeviceConfig:
         userfname = f"{self._userpath}.{self._model}.yaml"
         if not self._userpath or not exists(userfname):
             return fname
+        # A model that had no reachable profile of its own in 1.5.2 got a copy
+        # of default.yaml; elsewhere such a file is the user's choice (the
+        # cloud's codes instead of the bundled ones) and stays.
+        copies = [fname] + ([join(_CONFIG_DIR, 'default') + '.yaml'] if self._model in PROFILES_AFTER_1_5_2 else [])
         try:
-            if filecmp.cmp(userfname, fname, shallow=False):
-                # Such an automatic copy of versions up to 0.3.15 / 1.5.2: nothing
-                # of the user's is lost, and the bundled profile gets its fixes.
+            # Such an automatic copy of versions up to 0.3.15 / 1.5.2: nothing
+            # of the user's is lost, and the bundled profile gets its fixes.
+            if any(filecmp.cmp(userfname, bundled, shallow=False) for bundled in copies):
                 os.remove(userfname)
                 _LOGGER.info("Removed %s, a copy of the bundled profile", userfname)
                 return fname
@@ -379,6 +385,47 @@ class HaierWMConfig(HaierDeviceConfig):
             f"remaining_time={self['remaining_time']!r}"
             f")"
         )
+
+    @property
+    def attributes_by_code(self) -> bool:
+        """The profile names every attribute by code (attributes_by_code: true)."""
+        return bool(self._config.get('attributes_by_code'))
+
+    @property
+    def rest_lags_behind_push(self) -> bool:
+        """The cloud's REST state of the model lags behind its pushes (rest_lags_behind_push: true)."""
+        return bool(self._config.get('rest_lags_behind_push'))
+
+    def merge_attributes(self) -> None:
+        """With attributes_by_code a profile names the attributes by code, not by description.
+
+        The descriptions of the old format do not tell the values of a
+        washer-dryer apart (it has a temperature, programs and times of its
+        own for washing and for drying), so a description such as
+        "Температура" names nothing: an attribute the profile does not name is
+        left "unknown", and no control is made for it. Without the flag (a
+        user's profile that changes one code) the descriptions still name the
+        rest, as before.
+        """
+        if not self.attributes_by_code:
+            super().merge_attributes()
+            return
+        profile = {str(a.code): a for a in self.get_config_attributes()}
+        for i, attr in enumerate(self.attrs[:]):
+            config_attr = profile.pop(str(attr.code), None)
+            if config_attr is not None:
+                config_attr.description = attr.description
+                config_attr.current = attr.current
+                config_attr.range = attr.range
+                config_attr.list = config_attr.list or attr.list
+                self.attrs[i] = config_attr
+            else:
+                attr.name = "unknown"
+            if attr.command_name and not self.command_name:
+                self.command_name = attr.command_name
+        self.attrs.extend(profile.values())
+        self.extend_attributes()
+        self.attrs.sort(key=lambda a: a.code)
 
 
 class HaierWHConfig(HaierDeviceConfig):

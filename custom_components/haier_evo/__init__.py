@@ -210,6 +210,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: HaierConfigEntry) -> boo
                 raise ConfigEntryNotReady(f"Haier Evo cloud is unavailable: {err}") from err
         else:
             await _async_check_complete(hass, entry, haier, cache)
+            if from_cloud:
+                # what was pushed lately is not in the lagging REST state (CASWD129C1C)
+                try:
+                    haier.carry_fresh(await cache.async_load())
+                except Exception as carry_err:  # noqa: BLE001 - only a bonus to a start that read the cloud
+                    _LOGGER.debug("Saved Haier Evo state not carried over: %s", carry_err)
             await cache.async_save(haier.cache_dict())
             _forget_password(hass, entry, client)
             _CLOUD_FALLBACKS.pop(entry.entry_id, None)

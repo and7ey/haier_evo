@@ -5,7 +5,6 @@ custom_components/haier_evo/api.py: [union-attr] Item "None" of "Any | dict[Any,
 custom_components/haier_evo/binary_sensor.py: [arg-type] Argument 2 to "getattr" has incompatible type "str | None"; expected "str"
 custom_components/haier_evo/binary_sensor.py: [attr-defined] "HaierDevice" has no attribute "child_lock"
 custom_components/haier_evo/binary_sensor.py: [attr-defined] "HaierDevice" has no attribute "remote_control"
-custom_components/haier_evo/binary_sensor.py: [override] Signature of "is_on" incompatible with supertype "HaierBinarySensor"
 custom_components/haier_evo/config.py: [arg-type] Argument 1 to "append" of "list" has incompatible type "tuple[str, None]"; expected "tuple[str, str]"
 custom_components/haier_evo/config.py: [arg-type] Argument 1 to "dict" has incompatible type "Any | dict[Any, Any] | None"; expected "SupportsKeysAndGetItem[str, Any]"
 custom_components/haier_evo/config.py: [arg-type] Argument 1 to "get" of "dict" has incompatible type "Any | None"; expected "str"
