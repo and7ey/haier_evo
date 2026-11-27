@@ -491,6 +491,10 @@ class HaierDevice:
         if alarms is not None:
             data["alarms"] = alarms
 
+    def _pushed_properties(self, status: dict) -> dict:
+        properties = status.get("properties")
+        return properties if isinstance(properties, dict) else {}
+
     def _handle_status_update(self, received_message: dict) -> None:
         statuses = (received_message.get("payload") or {}).get("statuses") or []
         self.changed_at = time.monotonic()
@@ -498,8 +502,7 @@ class HaierDevice:
             for status in statuses:
                 if not isinstance(status, dict):
                     continue
-                properties = status.get("properties")
-                properties = properties if isinstance(properties, dict) else {}
+                properties = self._pushed_properties(status)
                 for key, value in properties.items():
                     self._apply_value(key, value)
                 if properties:

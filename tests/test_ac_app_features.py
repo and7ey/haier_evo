@@ -7,6 +7,7 @@ screens (modes.itemsV2), which name louver positions and features.
 from __future__ import annotations
 
 import copy
+import time
 
 import pytest
 from homeassistant.exceptions import HomeAssistantError
@@ -100,6 +101,46 @@ async def test_named_louver_position_sends_its_code(hass, s2sf_entry, ws_factory
     )
     commands = ws.sent[-1]["commands"]
     assert {"commandName": "1", "value": "5"} in commands
+
+
+@pytest.mark.parametrize(
+    ("axis", "code", "wanted", "old", "other_code", "other_axis", "other_value"),
+    [("swing_mode", "1", "angle_90", "5", "24", "swing_horizontal_mode", "center"),
+     ("swing_horizontal_mode", "24", "far_right", "4", "1", "swing_mode", "off")],
+)
+async def test_delayed_louver_echo_after_a_new_command(
+    hass, s2sf_entry, ws_factory, axis, code, wanted, old, other_code, other_axis, other_value
+):
+    ws = ws_factory.current
+    device = device_of(s2sf_entry)
+    entity = eid(hass, "climate")
+
+    async def report(properties, ts=None):
+        sample = {"properties": properties}
+        if ts is not None:
+            sample["ts"] = str(ts)
+        ws.feed({"event": "status", "macAddress": MAC_1, "payload": {"statuses": [sample]}})
+        await hass.async_block_till_done()
+
+    await report({"21": "1", "2": "1"})
+    before = time.time_ns() // 1_000_000 - 1000
+    await hass.services.async_call("climate", f"set_{axis}", {"entity_id": entity, axis: wanted}, blocking=True)
+    ws.feed({"event": "command_response", "trace": ws.sent[-1]["trace"], "macAddress": MAC_1, "errNo": 0})
+
+    await report({code: old, other_code: "0", "36": "23"}, before)
+    state = hass.states.get(entity)
+    assert state.attributes[axis] == wanted
+    assert state.attributes[other_axis] == other_value
+    assert state.attributes["current_temperature"] == 23
+    assert device._raw[code] != old
+    assert next(a for a in device.status_data["attributes"] if a["name"] == code)["currentValue"] != old
+
+    # A later change from the app and firmware that sends no timestamp still work.
+    await report({code: old}, time.time_ns() // 1_000_000)
+    assert device._raw[code] == old
+    assert hass.states.get(entity).attributes[axis] != wanted
+    await report({code: ws.sent[-1]["commands"][0]["value"]})
+    assert hass.states.get(entity).attributes[axis] == wanted
 
 
 def test_louver_layout_reads_the_screens():

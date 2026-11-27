@@ -1,6 +1,8 @@
 """Air conditioners."""
 from __future__ import annotations
 
+import time
+
 from homeassistant.components.climate.const import (
     PRESET_NONE,
     SWING_OFF,
@@ -59,6 +61,7 @@ class HaierAC(HaierDevice):
         self.eco_sensor = None
         # Set on an off unit: the cloud refuses it until the unit runs.
         self._deferred_temperature: float | None = None
+        self._louver_sent_ms: dict[str, int] = {}
         self._get_status(backend_data)
 
     @property
@@ -216,6 +219,9 @@ class HaierAC(HaierDevice):
 
     async def _send_commands(self, commands: list[dict]) -> None:
         await super()._send_commands(commands)
+        self._remember_commands(commands)
+
+    def _remember_commands(self, commands: list[dict]) -> None:
         # Keep modifiers honest until the unit echoes the new state.
         for command in commands:
             if command.get("commandName") is not None:
@@ -402,17 +408,39 @@ class HaierAC(HaierDevice):
             await self._send_commands(commands)
             self.fan_mode = value
 
+    def _pushed_properties(self, status: dict) -> dict:
+        properties = super()._pushed_properties(status)
+        ts = str(status.get("ts", ""))
+        if not self._louver_sent_ms or len(ts) != 13 or not ts.isascii() or not ts.isdigit():
+            return properties
+        # The gateway can deliver a report minutes after the unit produced it.
+        # Drop only pre-command values for the axis we moved. Other fields in
+        # the same report still update both the entities and the saved snapshot.
+        # A unit with a slow clock must still recover on its usual refresh cycle.
+        oldest_write = time.time_ns() // 1_000_000 - C.REST_REFRESH_INTERVAL.total_seconds() * 1000
+        cutoff = max(int(ts), oldest_write)
+        return {code: value for code, value in properties.items() if self._louver_sent_ms.get(code, 0) <= cutoff}
+
+    async def _set_louver(self, name: str, value: str) -> None:
+        self._check_writable(name, value)
+        commands = self.get_commands(name, value)
+        if not commands:
+            return
+        code = self.config[name]
+        sent_ms = time.time_ns() // 1_000_000
+        await super()._send_commands(commands)
+        if code is not None:
+            if sent_ms < self._louver_sent_ms.get(code, 0):
+                return  # A later command to this axis finished first.
+            self._louver_sent_ms[code] = sent_ms
+        self._remember_commands(commands)
+        setattr(self, name, value)
+
     async def set_swing_horizontal_mode(self, value: str) -> None:
-        self._check_writable("swing_horizontal_mode", value)
-        if commands := self.get_commands("swing_horizontal_mode", value):
-            await self._send_commands(commands)
-            self.swing_horizontal_mode = value
+        await self._set_louver("swing_horizontal_mode", value)
 
     async def set_swing_mode(self, value: str) -> None:
-        self._check_writable("swing_mode", value)
-        if commands := self.get_commands("swing_mode", value):
-            await self._send_commands(commands)
-            self.swing_mode = value
+        await self._set_louver("swing_mode", value)
 
     async def set_preset_mode(self, value: str) -> None:
         if value != PRESET_NONE:
